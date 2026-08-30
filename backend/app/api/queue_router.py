@@ -1,8 +1,8 @@
 """Queue router. List / mine / cancel / PATCH priority.
 
-The truth-source is ``QueueEntry`` (PG); the Redis ZSET ``gshare:queue`` mirrors it for dequeue
-(ZPOPMAX, highest score = top priority). Score = priority_weight*priority + aging(now-enqueued_at).
-``position`` is the 1-based rank by descending score among queued entries.
+``QueueEntry`` (PG) IS the queue; ordering comes from app.domain.queue_ranking, the same module
+the dequeue ticker uses, so the position shown here is exactly the dequeue order. ``position`` is
+the 1-based rank by descending score among queued entries.
 """
 from __future__ import annotations
 
@@ -19,17 +19,14 @@ from app.auth.rbac import Principal
 from app.core.errors import DomainError, NotFound
 from app.core.redis import get_redis
 from app.db.base import get_db
-from app.db.models import QueueEntry, Session
+from app.db.models import Offering, QueueEntry, Session, User
+from app.domain import queue_ranking
 from app.domain.audit_service import AuditService
 from app.domain.credit_engine import CreditEngine
+from app.domain.session_events import record_session_event
 
 router = APIRouter(prefix="/queue", tags=["queue"])
 
-# scoring knobs (sched.* defaults).
-QUEUE_ZSET = "gshare:queue"
-PRIORITY_WEIGHT = 10
-AGING_PER_MIN = 1
-AGING_CAP = 100
 PRIORITY_MAX = 10  # manual_priority policy ceiling
 
 
@@ -45,23 +42,29 @@ class QueuePriorityPatch(BaseModel):
     priority: int = Field(ge=0)
 
 
-def _score(entry: QueueEntry, now: datetime) -> float:
-    """priority_weight*priority + capped aging(now - enqueued_at)."""
-    enq = entry.enqueued_at
-    if enq.tzinfo is None:
-        enq = enq.replace(tzinfo=UTC)
-    waited_min = max((now - enq).total_seconds() / 60.0, 0.0)
-    aging = min(waited_min * AGING_PER_MIN, float(AGING_CAP))
-    return PRIORITY_WEIGHT * entry.priority + aging
-
-
 async def _ranked(db: AsyncSession) -> list[tuple[QueueEntry, float]]:
-    """All queued entries ordered by descending score (FIFO tiebreak on enqueued_at)."""
-    rows = (await db.scalars(select(QueueEntry))).all()
-    now = datetime.now(UTC)
-    scored = [(e, _score(e, now)) for e in rows]
-    scored.sort(key=lambda t: (-t[1], t[0].enqueued_at))
-    return scored
+    """All queued entries ordered by descending score — delegated to queue_ranking."""
+    return await queue_ranking.rank(db)
+
+
+async def _decorate(db: AsyncSession, views: list[dict]) -> list[dict]:
+    """Attach the human context (session name, owner, GPU model) the raw entry lacks."""
+    sids = [v["session_id"] for v in views]
+    if not sids:
+        return views
+    rows = (
+        await db.execute(
+            select(Session.id, Session.name, User.name, Offering.gpu_model)
+            .join(User, User.id == Session.owner_user_id, isouter=True)
+            .join(Offering, Offering.id == Session.offering_id, isouter=True)
+            .where(Session.id.in_(sids))
+        )
+    ).all()
+    meta = {sid: (sn, un, gm) for sid, sn, un, gm in rows}
+    for v in views:
+        sn, un, gm = meta.get(v["session_id"], (None, None, None))
+        v["session_name"], v["owner_name"], v["gpu_model"] = sn, un, gm
+    return views
 
 
 def _entry_view(entry: QueueEntry, score: float, position: int) -> dict:
@@ -103,8 +106,8 @@ async def list_queue(
         for pos, (e, s) in enumerate(ranked[page.offset:page.offset + page.size],
                                      start=page.offset + 1)
     ]
-    return {"data": data, "pagination": {"page": page.page, "size": page.size,
-                                         "total": len(ranked)}}
+    return {"data": await _decorate(db, data), "pagination": {
+        "page": page.page, "size": page.size, "total": len(ranked)}}
 
 
 @router.get("/mine", response_model=QueueMineList)
@@ -123,12 +126,27 @@ async def my_queue(
             )
         ).all()
         owners = {sid: oid for sid, oid in owner_rows}
-    data = [
-        _entry_view(e, s, pos)
-        for pos, (e, s) in enumerate(ranked, start=1)
-        if owners.get(e.session_id) == principal.user_id
-    ]
-    return {"data": data}
+    # Rough wait estimate from the median of the last realized queue waits: position × median.
+    # Deliberately labelled an estimate in the UI; None until enough samples exist.
+    median_wait_sec: float | None = None
+    try:
+        samples = [float(x) for x in await get_redis().lrange("gshare:queue:wait_samples", 0, 99)]
+        if len(samples) >= 5:
+            samples.sort()
+            median_wait_sec = samples[len(samples) // 2]
+    except Exception:  # noqa: BLE001 — the ETA is a convenience only
+        median_wait_sec = None
+
+    data = []
+    for pos, (e, s) in enumerate(ranked, start=1):
+        if owners.get(e.session_id) != principal.user_id:
+            continue
+        view = _entry_view(e, s, pos)
+        view["eta_minutes"] = (
+            round(pos * median_wait_sec / 60) if median_wait_sec is not None else None
+        )
+        data.append(view)
+    return {"data": await _decorate(db, data)}
 
 
 @router.delete("/{queue_entry_id}", status_code=status.HTTP_204_NO_CONTENT)
@@ -158,14 +176,11 @@ async def cancel_queue_entry(
         await CreditEngine(db).settle(session, key=f"settle:{session.id}")
 
     session.status = "terminated"
+    session.status_reason = session.status_reason or "user_stopped"
     session.terminated_at = datetime.now(UTC)
     await db.delete(entry)
-
-    # Mirror removal from the Redis ZSET (truth-source already updated in PG).
-    try:
-        await get_redis().zrem(QUEUE_ZSET, entry.id)
-    except Exception:  # noqa: BLE001  (Redis best-effort mirror; PG is source of truth)
-        pass
+    # The timeline must not end on 'queued' for a session the user just cancelled.
+    record_session_event(db, session.id, "terminated", reason=session.status_reason)
 
     await AuditService(db).record(
         actor=principal.user_id, action="queue.cancel", target=entry.id,
@@ -182,7 +197,7 @@ async def update_priority(
     principal: Principal = Depends(get_current_principal),
     db: AsyncSession = Depends(get_db),
 ):
-    """Admin reorders the queue. Updates QueueEntry.priority + gshare:queue ZSET score."""
+    """Admin reorders the queue: QueueEntry.priority sets the priority band."""
     principal.require(action="queue.update")
     entry = await db.get(QueueEntry, queue_entry_id)
     if entry is None:
@@ -207,14 +222,7 @@ async def update_priority(
 
     entry.priority = body.priority
     await db.flush()
-
-    now = datetime.now(UTC)
-    new_score = _score(entry, now)
-    # Update the Redis ZSET score so dequeue order is re-derived immediately.
-    try:
-        await get_redis().zadd(QUEUE_ZSET, {entry.id: new_score})
-    except Exception:  # noqa: BLE001  (best-effort mirror; PG is source of truth)
-        pass
+    new_score = queue_ranking.score(entry)
 
     await AuditService(db).record(
         actor=principal.user_id, action="queue.priority.set", target=entry.id,

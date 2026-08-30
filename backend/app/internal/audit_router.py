@@ -23,4 +23,7 @@ async def audit_operator(
     db: AsyncSession = Depends(get_db),
 ):
     await AuditService(db).record_operator_action(ev)
+    # _append only flushes; without an explicit commit the row rolls back when the request
+    # session closes — a 202 with nothing persisted.
+    await db.commit()
     return {"accepted": True}
