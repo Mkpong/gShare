@@ -28,6 +28,10 @@ jobs:
 
       - name: Trivy — dependencies, secrets, IaC misconfiguration
         uses: aquasecurity/trivy-action@v0.36.0
+        # Scoped, justified exceptions live in .trivyignore.yaml (per rule AND per path), so a
+        # finding in code that is not listed there still fails the scan.
+        env:
+          TRIVY_IGNOREFILE: .trivyignore.yaml
         with:
           scan-type: fs
           scanners: vuln,secret,misconfig

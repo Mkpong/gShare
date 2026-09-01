@@ -30,3 +30,7 @@ COPY docker-entrypoint.d/30-session-proxy.sh /docker-entrypoint.d/30-session-pro
 RUN chmod +x /docker-entrypoint.d/30-session-proxy.sh
 EXPOSE 80
 CMD ["nginx", "-g", "daemon off;"]
+
+# nginx here serves on an unprivileged port and the chart runs it as uid 1000; declare the same
+# default in the image so it never starts as root outside the cluster either.
+USER 1000

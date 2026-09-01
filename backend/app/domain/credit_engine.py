@@ -90,12 +90,18 @@ class CreditEngine:
         When concurrent callers insert the same idempotency_key and one hits the unique violation,
         the operation is treated as already applied and the error is swallowed, which makes repeated
         keyed operations safe. The context manager rolls back the savepoint or transaction, so the
-        loser's balance change is undone too and nothing is applied twice."""
+        loser's balance change is undone too and nothing is applied twice.
+
+        ONLY the idempotency-key duplicate is swallowed. Any other IntegrityError — most
+        importantly the wallet_sigma CHECK (0 <= reserved <= balance) — must surface: reporting a
+        constraint violation as success would silently drop a money movement."""
         try:
             async with self._atomic():
                 yield
-        except IntegrityError:
-            pass
+        except IntegrityError as exc:
+            detail = str(exc.orig or exc).lower()
+            if "idempotency" not in detail and "uq_" not in detail and "unique" not in detail:
+                raise
 
     async def hold(self, wallet_id: str, amount: Decimal, key: str) -> None:
         """Reserve ``amount`` against the wallet (idempotent on ``key``).
@@ -156,14 +162,20 @@ class CreditEngine:
             if delta <= _ZERO:
                 return
 
-            wallet.balance -= delta
-            # release the matching slice of the reservation as it converts to spend.
-            wallet.reserved = max(_ZERO, wallet.reserved - delta)
-            await self._record(
-                wallet, type="consume", amount=-delta, ref=session.id, key=key
-            )
-            # exhaustion: available balance hit zero.
-            if wallet.balance - wallet.reserved <= _ZERO:
+            # The wallet_sigma constraint forbids balance < 0. A charge larger than what was
+            # left used to violate it right here, aborting this session's charge every minute:
+            # nothing was billed, exhaustion never fired, and the session ran on for free.
+            # Charge what the wallet still has; the grace pipeline handles the shortfall.
+            debit = min(delta, wallet.balance)
+            if debit > _ZERO:
+                wallet.balance -= debit
+                # release the matching slice of the reservation as it converts to spend.
+                wallet.reserved = max(_ZERO, wallet.reserved - debit)
+                await self._record(
+                    wallet, type="consume", amount=-debit, ref=session.id, key=key
+                )
+            # exhaustion: the wallet could not cover the minute, or available hit zero.
+            if debit < delta or wallet.balance - wallet.reserved <= _ZERO:
                 exhausted = True
 
         if exhausted:
@@ -197,8 +209,12 @@ class CreditEngine:
             await self._record(wallet, type=type, amount=-debit, ref=ref, key=key)
             return debit >= owed
 
-    async def settle(self, session, key: str) -> None:
-        """Finalize remaining consume + release/refund the hold. key=settle:{ses}."""
+    async def settle(self, session, key: str, *, final_consume: bool = True) -> None:
+        """Finalize remaining consume + release/refund the hold. key=settle:{ses}.
+
+        ``final_consume=False`` skips step 1: a session terminated FROM PAUSED was already trued
+        up by stop(), and recomputing owed from started_at to now() would bill the whole paused
+        interval (the clock kept ticking while nothing ran)."""
         if session.billing_wallet_id is None:
             return
         async with self._keyed_atomic():
@@ -211,15 +227,17 @@ class CreditEngine:
                 return
 
             # 1 finalize remaining consume (close out the final partial minute) — inline so it
-            # shares this single FOR UPDATE / transaction boundary.
-            if session.credit_per_hour_snapshot != _ZERO:
+            # shares this single FOR UPDATE / transaction boundary. Clamped at the remaining
+            # balance: wallet_sigma forbids balance < 0, and an unclamped debit aborted the whole
+            # terminate with a 500, leaving the session stuck in `terminating`.
+            if final_consume and session.credit_per_hour_snapshot != _ZERO:
                 now = datetime.now(UTC)
                 occ = _occupancy(session)
                 owed = _round2(
                     Decimal(session.credit_per_hour_snapshot) * occ * _active_hours(session, now)
                 )
-                already = await self._sum_consumed(session)
-                delta = owed - already
+                already = await self._sum_consumed(session, since=session.started_at)
+                delta = min(owed - already, wallet.balance)
                 if delta > _ZERO:
                     wallet.balance -= delta
                     wallet.reserved = max(_ZERO, wallet.reserved - delta)
@@ -241,28 +259,6 @@ class CreditEngine:
             # 3 terminal settle marker (zero-amount, idempotency anchor).
             await self._record(wallet, type="settle", amount=_ZERO, ref=session.id, key=key)
 
-    async def refund(self, wallet_id: str, amount: Decimal, ref: str, key: str) -> None:
-        """Refund credit back to the wallet (e.g. on session error). """
-        amount = _round2(Decimal(amount))
-        async with self._keyed_atomic():
-            if await self._txn_exists(key):
-                return  # idempotent
-            wallet = await self.db.get(CreditWallet, wallet_id, with_for_update=True)
-            if wallet is None:
-                return
-            if amount <= _ZERO:
-                # still anchor the idempotency key so retries are no-ops.
-                await self._record(wallet, type="refund", amount=_ZERO, ref=ref, key=key)
-                return
-            # A refund that returns reserved credit to availability: release any held
-            # reservation up to amount, the remainder is a balance top-up.
-            release = min(wallet.reserved, amount)
-            wallet.reserved -= release
-            balance_credit = amount - release
-            wallet.balance += balance_credit
-            await self._record(wallet, type="refund", amount=amount, ref=ref, key=key)
-
-    # ── internal helpers ──
     async def _txn_exists(self, key: str) -> bool:
         result = await self.db.execute(
             select(CreditTransaction.id).where(CreditTransaction.idempotency_key == key).limit(1)

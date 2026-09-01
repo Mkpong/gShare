@@ -1,0 +1,100 @@
+# Trivy exceptions. Every entry is scoped to the files that need it and states WHY the generic
+# rule cannot apply here — a blanket ignore would hide the same finding in code where it matters.
+#
+# Reviewed: 2026-08-31. Re-check whenever the referenced manifests change.
+
+misconfigurations:
+  # ── Observability agents: they exist to read host and GPU state ──────────────────────────
+  # node-exporter and dcgm-exporter are upstream DaemonSets. Host namespaces, hostPath mounts
+  # and SYS_ADMIN are what let them export node metrics and per-process GPU utilisation; the
+  # scheduler's idle reaper depends on that utilisation signal. Removing the access does not
+  # harden the deployment, it disables monitoring.
+  - id: AVD-KSV-0005          # SYS_ADMIN capability added (DCGM profiling counters)
+    paths:
+      - "deploy/monitoring/monitoring-stack.yaml"
+      - "deploy/monitoring/dcgm-prometheus.yaml"
+    statement: "DCGM requires SYS_ADMIN to read GPU profiling counters."
+  - id: AVD-KSV-0009          # host network
+    paths: ["deploy/monitoring/monitoring-stack.yaml"]
+    statement: "node-exporter reports the node's own network namespace."
+  - id: AVD-KSV-0010          # host PID
+    paths: ["deploy/monitoring/monitoring-stack.yaml"]
+    statement: "dcgm-exporter attributes GPU usage to host processes."
+  - id: AVD-KSV-0023          # hostPath volumes
+    paths: ["deploy/monitoring/monitoring-stack.yaml"]
+    statement: "node-exporter reads /proc, /sys and the root filesystem."
+  - id: AVD-KSV-0121          # disallowed volumes mounted
+    paths: ["deploy/monitoring/monitoring-stack.yaml"]
+    statement: "Same host mounts as KSV-0023."
+  - id: AVD-KSV-0024          # host ports
+    paths:
+      - "deploy/monitoring/monitoring-stack.yaml"
+      - "deploy/registry/registry.yaml"
+    statement: "Exporters publish a fixed node port for Prometheus scraping; the local registry is reached by node port during cluster bootstrap, before any ingress exists."
+
+  # ── Upstream manifests we vendor unchanged, plus the local dev registry ─────────────────
+  # Editing these forks them from upstream for no security gain: they run in their own
+  # namespaces and carry no gShare data.
+  - id: AVD-KSV-0014          # read-only root filesystem
+    paths:
+      - "deploy/monitoring/monitoring-stack.yaml"
+      - "deploy/monitoring/dcgm-prometheus.yaml"
+      - "deploy/registry/registry.yaml"
+      - "test/**"
+    statement: "Upstream/dev manifests; gShare's own workloads set readOnlyRootFilesystem."
+  - id: AVD-KSV-0118          # default security context
+    paths:
+      - "deploy/monitoring/**"
+      - "deploy/registry/registry.yaml"
+      - "test/**"
+    statement: "Same as KSV-0014."
+  - id: AVD-KSV-0104          # seccomp profile unset
+    paths: ["deploy/monitoring/**", "deploy/registry/registry.yaml", "test/**"]
+    statement: "Same as KSV-0014."
+  - id: AVD-KSV-0125          # untrusted registry
+    paths: ["deploy/monitoring/**", "deploy/registry/registry.yaml"]
+    statement: "quay.io / registry.k8s.io images from their upstream projects."
+  - id: AVD-KSV-0001          # allowPrivilegeEscalation unset
+    paths: ["deploy/monitoring/**", "deploy/registry/registry.yaml", "test/**"]
+    statement: "Same as KSV-0014."
+  - id: AVD-KSV-0012          # runAsNonRoot unset
+    paths: ["deploy/registry/registry.yaml", "test/**"]
+    statement: "Same as KSV-0014."
+  - id: AVD-KSV-0041          # manage secrets
+    paths: ["deploy/monitoring/monitoring-stack.yaml"]
+    statement: "kube-state-metrics lists Secret metadata (never values) to export their state."
+  - id: AVD-KSV-0047          # privilege escalation from node proxy
+    paths: ["deploy/monitoring/monitoring-stack.yaml"]
+    statement: "Prometheus scrapes kubelet metrics through the nodes/proxy subresource."
+  - id: AVD-KSV-0045          # wildcard verbs
+    paths: ["test/**"]
+    statement: "e2e fixture RBAC; never deployed to a real cluster."
+
+  # ── gShare's own control plane: least privilege is already the design ───────────────────
+  # These are the permissions the split control plane needs, and the chart is the authoritative
+  # namespace-scoped definition (see CLAUDE.md). The rules below are generic "never grant this"
+  # checks that cannot express "scoped to one namespace, for this purpose".
+  - id: AVD-KSV-0041          # manage secrets
+    paths: ["charts/gshare/templates/operator-rbac.yaml", "operator/config/rbac/role.yaml", "test/**"]
+    statement: "The operator creates one connect-credential Secret per session, in gshare-sessions only."
+  - id: AVD-KSV-0047          # node proxy
+    paths: ["charts/gshare/templates/operator-rbac.yaml"]
+    statement: "The volume syncer reads kubelet stats/summary through nodes/proxy to report PVC usage."
+  - id: AVD-KSV-0056          # manage networking
+    paths: ["charts/gshare/templates/operator-rbac.yaml", "operator/config/rbac/role.yaml",
+            "deploy/security/rbac-onboarding-scoped.yaml", "test/**"]
+    statement: "Sessions are reached over per-session Ingress objects the operator owns."
+  - id: AVD-KSV-0114          # manage webhookconfigurations
+    paths: ["charts/gshare/templates/operator-rbac.yaml"]
+    statement: "The operator registers its own lend-guard admission webhook and its CA bundle."
+  - id: AVD-KSV-0053          # exec into pods
+    paths: ["deploy/security/rbac-onboarding-scoped.yaml"]
+    statement: "Onboarding role for cluster registration; granted to an operator, not to tenants."
+
+  # ── Node agents that must run privileged on the host ────────────────────────────────────
+  - id: AVD-DS-0002           # image user should not be root
+    paths:
+      - "build/images/mig-agent/Dockerfile"
+      - "build/images/lossless-agent/Dockerfile"
+      - "build/hami-fork/Dockerfile.scheduler"
+    statement: "MIG toggle and CRIU checkpointing drive host devices as root by design; the fork mirrors upstream HAMi."

@@ -1,0 +1,12 @@
+# CodeQL scope. Generated and vendored trees carry rule violations that say nothing about the
+# code we write, and their noise buries the real findings in the PR check.
+name: gShare CodeQL config
+
+paths-ignore:
+  # Alembic revision scripts: `revision`, `down_revision`, `branch_labels`, `depends_on` are read
+  # by Alembic through module introspection, so every migration reads as unused globals.
+  - backend/alembic/versions
+  # Generated from the OpenAPI document (`make gen-openapi`); edit the backend schema instead.
+  - frontend/src/api/schema.d.ts
+  # Vendored upstream (HAMi); scanned by its own project.
+  - third_party

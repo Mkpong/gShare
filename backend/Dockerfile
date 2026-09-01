@@ -35,3 +35,7 @@ EXPOSE 8000
 
 # Default to the API; docker-compose overrides `command` for the worker.
 CMD ["uvicorn", "app.main:app", "--host", "0.0.0.0", "--port", "8000"]
+
+# The chart pins runAsUser 1000; matching it here keeps `docker run` and the cluster identical
+# and satisfies the "image must not default to root" scanner rule.
+USER 1000

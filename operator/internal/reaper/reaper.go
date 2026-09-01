@@ -18,7 +18,10 @@ package reaper
 
 import (
 	"context"
+	"fmt"
+	logf "sigs.k8s.io/controller-runtime/pkg/log"
 	"strconv"
+	"strings"
 	"sync"
 	"time"
 
@@ -49,6 +52,10 @@ const defaultGPUIdleTimeout = time.Hour
 
 // Workload-aware deferral tunables.
 const (
+	// pauseReasonAnnotation carries WHY the reaper paused a session; the session
+	// controller forwards it as the Paused callback's message.
+	pauseReasonAnnotation = "gshare.io/pause-reason"
+
 	// recurrenceWindow is the look-back over which recurring GPU bursts are detected.
 	recurrenceWindow = 2 * time.Hour
 	// minBurstEpisodes is the number of distinct busy episodes in the window that
@@ -68,6 +75,9 @@ const (
 	// last pause.
 	minPauseInterval = 10 * time.Minute
 )
+
+// idleWarnLead is how long before an idle pause the owner gets a heads-up notification.
+const idleWarnLead = 5 * time.Minute
 
 // sample is one util observation: whether the GPU was busy at time t.
 type sample struct {
@@ -102,6 +112,7 @@ type IdleReaper struct {
 	history      map[string][]sample
 	ewma         map[string]float64
 	lastPausedAt map[string]time.Time
+	warned       map[string]bool
 }
 
 // Start runs the reaper loop until ctx is cancelled (manager Runnable).
@@ -145,10 +156,13 @@ func (r *IdleReaper) tick(ctx context.Context) {
 
 		reason := ""
 		pause := false
-		// A GPU session's idle is judged by util — with no util source (DCGM nil) it is unknowable, so
-		// do NOT idle-reap GPU sessions (only max-runtime applies); else util=0 would pause every active
-		// session. CPU (free) sessions have no GPU util and idle-terminate on the wall-clock window.
-		gpuIdleUnknowable := s.Spec.ResourceClass == "gpu" && r.DCGM == nil
+		// A GPU session's idle is judged by util — with no util source it is unknowable, so do NOT
+		// idle-reap GPU sessions (only max-runtime applies); else util=0 would pause every active
+		// session. Unknowable means DCGM is absent OR the session has no bound GPU UUID: a card
+		// outside HAMi's annotations (a MIG instance, a non-HAMi cluster) never reports a UUID, and
+		// its util would read as a permanent 0 here. CPU (free) sessions have no GPU util and
+		// idle-terminate on the wall-clock window.
+		gpuIdleUnknowable := s.Spec.ResourceClass == "gpu" && (r.DCGM == nil || s.Status.BoundGpuUuid == "")
 		switch {
 		case maxRuntimeExceeded(&s, now):
 			reason = "max-runtime-exceeded" // hard lifetime cap -> terminate
@@ -159,6 +173,23 @@ func (r *IdleReaper) tick(ctx context.Context) {
 			pause = s.Spec.ResourceClass == "gpu" && !s.Spec.Paused
 		}
 		if reason == "" {
+			// Heads-up: idle and inside the warning window before the pause would fire.
+			// Only once per idle streak; any busy sample clears the streak (forgetWarn).
+			if !gpuIdleUnknowable && s.Spec.ResourceClass == "gpu" && !s.Spec.Paused {
+				window := r.effectiveIdleTimeout(&s, now)
+				if window > 2*idleWarnLead {
+					idle := r.idleFor(&s)
+					if idle > 0 && idle >= window-idleWarnLead && !r.hasWarned(uid) {
+						left := window - idle
+						_ = r.SoT.Report(ctx, s.Name, sot.StatusEvent{
+							Phase:   "IdleWarning",
+							PodRef:  s.Status.PodRef,
+							Message: fmt.Sprintf("%d", int(left.Seconds())),
+						})
+						r.markWarned(uid)
+					}
+				}
+			}
 			continue
 		}
 
@@ -170,8 +201,15 @@ func (r *IdleReaper) tick(ctx context.Context) {
 		if pause {
 			// spec.paused=true -> reconcile deletes the Pod (frees the GPU), keeps the CR, reports
 			// Paused; the control plane releases the GPU reservation + pauses billing. Resumable.
+			// The pause-reason annotation rides along so the Paused callback can say WHY — the
+			// control plane surfaces it to the owner ("idle GPU reclaimed").
 			s.Spec.Paused = true
+			if s.Annotations == nil {
+				s.Annotations = map[string]string{}
+			}
+			s.Annotations[pauseReasonAnnotation] = reason
 			if err := r.Update(ctx, &s); err != nil && !apierrors.IsNotFound(err) {
+				logf.FromContext(ctx).Error(err, "reaper pause failed", "session", s.Name, "reason", reason)
 				continue // retry next tick (idle streak intact)
 			}
 			r.recordPause(uid, now) // anti-thrash: rate-limit the next pause
@@ -190,6 +228,9 @@ func (r *IdleReaper) tick(ctx context.Context) {
 		// Terminate path (max-runtime cap, or idle CPU session): delete CR -> finalizer cleans the
 		// Pod and reports Terminated (-> settle in the control plane).
 		if err := r.Delete(ctx, &s); err != nil && !apierrors.IsNotFound(err) {
+			// RBAC/webhook refusals land here: without a log line a Forbidden repeats
+			// silently every tick while the session runs past its cap.
+			logf.FromContext(ctx).Error(err, "reaper terminate failed", "session", s.Name, "reason", reason)
 			continue
 		}
 		_ = r.SoT.Report(ctx, s.Name, sot.StatusEvent{
@@ -304,13 +345,17 @@ func (r *IdleReaper) shouldReapIdle(s *gsharev1.GShareSession, util float64, now
 	}
 	idle := r.idleFor(s)
 	base := r.effectiveIdleTimeout(s, now)
+	if base <= 0 { // explicit 0 = idle reaping disabled for this session
+		return false
+	}
 	if idle > base {
 		return true
 	}
-	if r.WorkloadAware && !r.recurringWorkload(string(s.UID), now) &&
+	if _, explicit := s.Annotations[idleTimeoutAnnotation]; !explicit &&
+		r.WorkloadAware && !r.recurringWorkload(string(s.UID), now) &&
 		r.ewmaUtil(string(s.UID)) < idleThreshold &&
 		idle > time.Duration(float64(base)*earlyIdleFactor) {
-		return true // EWMA confirms decay → reclaim sooner
+		return true // EWMA confirms decay → reclaim sooner (fallback windows only)
 	}
 	return false
 }
@@ -348,6 +393,23 @@ func (r *IdleReaper) forget(uid string) {
 	delete(r.idleSince, uid)
 	delete(r.history, uid)
 	delete(r.ewma, uid)
+	delete(r.warned, uid)
+}
+
+// hasWarned reports whether the current idle streak already produced a heads-up.
+func (r *IdleReaper) hasWarned(uid string) bool {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	return r.warned[uid]
+}
+
+func (r *IdleReaper) markWarned(uid string) {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	if r.warned == nil {
+		r.warned = make(map[string]bool)
+	}
+	r.warned[uid] = true
 }
 
 // prune drops per-session state for sessions no longer Running, keeping the maps bounded.
@@ -427,6 +489,11 @@ func maxRuntimeExceeded(s *gsharev1.GShareSession, now time.Time) bool {
 // idleTimeout returns the session's idle timeout from the CR annotation, falling back
 // to the resource-class default (shorter for CPU sessions).
 func idleTimeout(s *gsharev1.GShareSession) time.Duration {
+	// An EXPLICIT "0" disables idle reaping for this session (policy idle_timeout=0 = 무제한);
+	// a missing/invalid annotation still falls back to the class default.
+	if raw, ok := s.Annotations[idleTimeoutAnnotation]; ok && strings.TrimSpace(raw) == "0" {
+		return 0
+	}
 	if secs := annotationSeconds(s, idleTimeoutAnnotation); secs > 0 {
 		return time.Duration(secs) * time.Second
 	}
