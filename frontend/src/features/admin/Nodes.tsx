@@ -8,6 +8,7 @@ import {
   useGpuDevices,
   useSetDeviceMode,
   useCordonNode,
+  useDeleteNode,
   useDrainNode,
   type GpuNode,
   type GpuDevice,
@@ -397,6 +398,7 @@ export function AdminNodes() {
   const poolsData = useNodePools(undefined, { enabled: isSuper }).data;
   const pools = useMemo(() => poolsData ?? [], [poolsData]);
   const cordon = useCordonNode();
+  const removeNode = useDeleteNode();
   const pushToast = useUiStore((s) => s.pushToast);
 
   const summary = useMemo(() => {
@@ -411,7 +413,25 @@ export function AdminNodes() {
     };
   }, [nodes]);
 
-  // Cordon confirms; uncordon does not.
+// Removing a node is inventory bookkeeping after it has left the cluster: the API refuses while
+  // live sessions remain, and a node still in the cluster reappears on the next inventory report.
+  const onDeleteNode = useCallback(async (n: GpuNode) => {
+    const ok = await confirm({
+      title: t('admin.nodes.confirmDeleteTitle', { name: n.hostname }),
+      body: t('admin.nodes.confirmDeleteBody'),
+      consequences: [t('admin.nodes.consequenceDelete', { count: n.device_count ?? 0 })],
+      confirmLabel: t('common.delete'),
+      destructive: true,
+      confirmText: n.hostname,
+    });
+    if (!ok) return;
+    removeNode.mutate(n.id, {
+      onSuccess: () => pushToast('success', t('admin.nodes.deletedToast', { name: n.hostname })),
+      onError: (e) => pushToast('error', humanizeError(asApiError(e))),
+    });
+  }, [confirm, pushToast, removeNode, t]);
+
+    // Cordon confirms; uncordon does not.
   const toggleCordon = useCallback(async (n: GpuNode) => {
     const next = n.status !== 'cordoned';
     if (next) {
@@ -491,17 +511,26 @@ export function AdminNodes() {
       render: (n) => (
         // gShare cordon/drain act on the GPU placement ledger — a GPU-less node has
         // nothing to place, so the actions are no-ops and only invite mistakes.
-        (n.device_count ?? 0) === 0 ? <span className="text-muted text-xs">-</span> : (
         <div className="flex gap-2 justify-end">
-          <button type="button" className="gs-btn gs-btn-sm" onClick={() => toggleCordon(n)} disabled={cordon.isPending}>
-            {n.status === 'cordoned' ? t('admin.nodes.uncordon') : t('admin.nodes.cordon')}
-          </button>
-          <Link to={`/admin/nodes/${n.id}/drain`} className="gs-btn gs-btn-sm gs-btn-danger">{t('admin.nodes.drain')}</Link>
+          {(n.device_count ?? 0) > 0 && (
+            <>
+              <button type="button" className="gs-btn gs-btn-sm" onClick={() => toggleCordon(n)} disabled={cordon.isPending}>
+                {n.status === 'cordoned' ? t('admin.nodes.uncordon') : t('admin.nodes.cordon')}
+              </button>
+              <Link to={`/admin/nodes/${n.id}/drain`} className="gs-btn gs-btn-sm gs-btn-danger">{t('admin.nodes.drain')}</Link>
+            </>
+          )}
+          {/* Offline only: a node the operator still reports would come straight back. */}
+          {n.status === 'offline' && (
+            <button type="button" className="gs-btn gs-btn-sm gs-btn-danger" disabled={removeNode.isPending} onClick={() => onDeleteNode(n)}>
+              {t('common.delete')}
+            </button>
+          )}
+          {(n.device_count ?? 0) === 0 && n.status !== 'offline' && <span className="text-muted text-xs">-</span>}
         </div>
-        )
       ),
     },
-  ], [t, cordon.isPending, toggleCordon, pools, isSuper]);
+  ], [t, cordon.isPending, toggleCordon, pools, isSuper, removeNode.isPending, onDeleteNode]);
 
   const all = nodes ?? [];
   const matched = all.filter((n) => {

@@ -7,6 +7,7 @@ const raw = api as unknown as {
   GET: (path: string, init?: { params?: { query?: Record<string, unknown>; path?: Record<string, string> } }) => Promise<{ data?: unknown }>;
   POST: (path: string, init?: { body?: unknown; params?: { path?: Record<string, string> } }) => Promise<{ data?: unknown }>;
   PUT: (path: string, init?: { body?: unknown; params?: { path?: Record<string, string> } }) => Promise<{ data?: unknown }>;
+  DELETE: (path: string, init?: { params?: { path?: Record<string, string> } }) => Promise<{ data?: unknown; error?: unknown }>;
 };
 
 export type NodeStatus = 'ready' | 'busy' | 'cordoned' | 'offline';
@@ -160,6 +161,21 @@ export function useDrainNode() {
         body: { mode: mode ?? 'reschedule', reason },
       });
       return data as { node_id: string; status: string; drain_id: string; affected_sessions: string[] };
+    },
+    onSuccess: () => qc.invalidateQueries({ queryKey: nodeKeys.all }),
+  });
+}
+
+// DELETE /nodes/{id} — drop the inventory rows of a node that has left the cluster. Refused
+// (409 node_busy) while it still carries live sessions, so drain first.
+export function useDeleteNode() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: async (nodeId: string) => {
+      const { error } = await raw.DELETE('/api/v1/nodes/{node_id}', {
+        params: { path: { node_id: nodeId } },
+      });
+      if (error) throw error;
     },
     onSuccess: () => qc.invalidateQueries({ queryKey: nodeKeys.all }),
   });

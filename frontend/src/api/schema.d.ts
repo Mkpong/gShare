@@ -2458,7 +2458,19 @@ export interface paths {
         get: operations["get_node_api_v1_nodes__node_id__get"];
         put?: never;
         post?: never;
-        delete?: never;
+        /**
+         * Delete Node
+         * @description Remove a node's inventory rows after it has left the cluster. super_admin only.
+         *
+         *     Refuses while the node still carries live work — a live allocation on one of its cards, or a
+         *     non-terminal session the operator placed there — so removal can never strand a running
+         *     session's ledger. Ended allocations keep their history: the row survives with device_id NULL
+         *     and its gpu_uuid intact, since the card it names no longer exists.
+         *
+         *     Deleting a node that is still IN the cluster is pointless rather than harmful: the operator's
+         *     next inventory report recreates it (upsert by cluster + hostname).
+         */
+        delete: operations["delete_node_api_v1_nodes__node_id__delete"];
         options?: never;
         head?: never;
         patch?: never;
@@ -11315,6 +11327,41 @@ export interface operations {
                 content: {
                     "application/json": unknown;
                 };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    delete_node_api_v1_nodes__node_id__delete: {
+        parameters: {
+            query?: {
+                /** @description Token fallback for clients that cannot set custom headers, such as EventSource (SSE) */
+                access_token?: string | null;
+            };
+            header?: {
+                /** @description Bearer <jwt> */
+                authorization?: string | null;
+            };
+            path: {
+                node_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
             };
             /** @description Validation Error */
             422: {
