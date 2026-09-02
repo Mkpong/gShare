@@ -17,7 +17,7 @@ import { PasswordPage } from '@/features/account/PasswordPage';
 
 import { AdminDashboard } from '@/features/admin/Dashboard';
 import { AdminOrgs, OrgAdminsPage } from '@/features/admin/Orgs';
-import { AdminUsers, NewUserPage, DeleteUserPage } from '@/features/admin/Users';
+import { AdminUsers, DeleteUserPage } from '@/features/admin/Users';
 import { UsersBulkImportPage } from '@/features/admin/UsersBulkImport';
 import { AdminGroups, GroupAdminsPage, DeleteGroupPage } from '@/features/admin/Groups';
 import { AdminResources, AdminPolicies, EditPolicyPage, CreatePolicyPage } from '@/features/admin/Resources';
@@ -70,7 +70,6 @@ export const router = createBrowserRouter(
             { path: 'orgs', element: <RequireRole role="super_admin"><AdminOrgs /></RequireRole> }, // organizations
             { path: 'orgs/:orgId/admins', element: <RequireRole role="super_admin"><OrgAdminsPage /></RequireRole> },
             { path: 'users', element: <RequireRole min="group_admin"><AdminUsers /></RequireRole> },
-            { path: 'users/new', element: <RequireRole min="group_admin"><NewUserPage /></RequireRole> },
             { path: 'users/bulk', element: <RequireRole min="group_admin"><UsersBulkImportPage /></RequireRole> },
             { path: 'users/:userId/delete', element: <RequireRole min="group_admin"><DeleteUserPage /></RequireRole> },
             { path: 'groups', element: <RequireRole min="group_admin"><AdminGroups /></RequireRole> },

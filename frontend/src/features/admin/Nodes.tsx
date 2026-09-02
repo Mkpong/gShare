@@ -164,19 +164,21 @@ function GrantForm({ pool, isSuper, orgs, groups, onDone }: {
   };
 
   return (
-    <form className="mt-1.5 flex flex-wrap items-center gap-1.5" noValidate onSubmit={(e) => { e.preventDefault(); submit(); }}>
+    // Labels sit ABOVE their control, so the selects and the buttons share one baseline —
+    // an inline label pushed each select down by its own width and staggered the row.
+    <form className="mt-2 flex flex-wrap items-end gap-2" noValidate onSubmit={(e) => { e.preventDefault(); submit(); }}>
       {isSuper && (
-        <label className="text-xs text-muted">
+        <label className="flex flex-col gap-1 text-xs text-muted">
           {t('admin.nodes.pools.grantScope')}
-          <Select className="gs-input gs-input-sm w-auto ml-2" value={scope} onChange={(e) => { setScope(e.target.value as PoolGrantScope); setScopeId(''); }}>
+          <Select className="gs-input gs-input-sm w-36" value={scope} onChange={(e) => { setScope(e.target.value as PoolGrantScope); setScopeId(''); }}>
             <option value="org">{t('enum.scope.org')}</option>
             <option value="group">{t('enum.scope.group')}</option>
           </Select>
         </label>
       )}
-      <label className="text-xs text-muted">
+      <label className="flex flex-col gap-1 text-xs text-muted">
         {t('admin.nodes.pools.grantTarget')}
-        <Select className="gs-input gs-input-sm w-auto ml-2" value={effectiveId} onChange={(e) => setScopeId(e.target.value)}>
+        <Select className="gs-input gs-input-sm w-56" value={effectiveId} onChange={(e) => setScopeId(e.target.value)}>
           {targets.length === 0 && <option value="">{t('admin.nodes.pools.noTarget')}</option>}
           {targets.map((x) => <option key={x.id} value={x.id}>{x.label}</option>)}
         </Select>
