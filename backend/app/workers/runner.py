@@ -21,6 +21,7 @@ from app.workers import (
     budget_rollup,
     credit_refill,
     grace_enforcer,
+    node_liveness,
     pool_rebalancer,
     queue_ticker,
     token_expiry,
@@ -42,6 +43,7 @@ JOBS: list[tuple[Job, int, str]] = [
     (audit_retention.run, 86400, "audit_retention"),   # prune audit rows past the retention window
     (webhook_dispatcher.run, 15, "webhook_dispatcher"),  # deliver the webhook outbox
     (pool_rebalancer.run, 30, "pool_rebalancer"),   # drive hami-core<->mig card transitions
+    (node_liveness.run, 60, "node_liveness"),   # heartbeat -> node status (offline / back to ready)
 ]
 
 

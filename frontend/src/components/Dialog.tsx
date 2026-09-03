@@ -18,13 +18,26 @@ export function Dialog({ open, title, onClose, children, wide }: {
   const { t } = useTranslation();
   const panelRef = useRef<HTMLDivElement>(null);
 
+  // Escape reads the latest handler through a ref, so the effects below do NOT depend on
+  // `onClose`. Callers pass an inline arrow (`onClose={() => setOpen(false)}`), whose identity
+  // changes on every parent render — with it in the dependency list the focus effect re-ran and
+  // pulled focus back to the panel, so typing in a dialog on a screen with a ticking parent
+  // (the wallet re-renders once a second) lost the caret every second.
+  const closeRef = useRef(onClose);
+  closeRef.current = onClose;
+
+  // Focus lands on the panel when the dialog OPENS, once.
   useEffect(() => {
     if (!open) return;
     panelRef.current?.focus();
-    const onKey = (e: KeyboardEvent) => { if (e.key === 'Escape') onClose(); };
+  }, [open]);
+
+  useEffect(() => {
+    if (!open) return;
+    const onKey = (e: KeyboardEvent) => { if (e.key === 'Escape') closeRef.current(); };
     window.addEventListener('keydown', onKey);
     return () => window.removeEventListener('keydown', onKey);
-  }, [open, onClose]);
+  }, [open]);
 
   if (!open) return null;
   return (

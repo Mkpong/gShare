@@ -7,9 +7,11 @@ from __future__ import annotations
 from datetime import UTC, datetime, timedelta
 from decimal import ROUND_HALF_UP, Decimal
 
-from fastapi import APIRouter, Depends, Query, status
+from fastapi import APIRouter, Depends, Query, Response, status
 from pydantic import BaseModel, Field
+from sqlalchemy import delete as sa_delete
 from sqlalchemy import func, select
+from sqlalchemy import update as sa_update
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.api.deps import get_current_principal
@@ -326,6 +328,79 @@ async def register_node(
     await db.commit()
     await db.refresh(node)  # pick up server defaults such as updated_at before serialising, avoiding MissingGreenlet
     return _node_out(node, [])
+
+
+class _NodeBusy(DomainError):
+    """The node still carries live work; drain it before removing it (409)."""
+
+    code, http = "node_busy", 409
+
+
+@router.delete("/nodes/{node_id}", status_code=status.HTTP_204_NO_CONTENT)
+async def delete_node(
+    node_id: str,
+    principal: Principal = Depends(get_current_principal),
+    db: AsyncSession = Depends(get_db),
+):
+    """Remove a node's inventory rows after it has left the cluster. super_admin only.
+
+    Refuses while the node still carries live work — a live allocation on one of its cards, or a
+    non-terminal session the operator placed there — so removal can never strand a running
+    session's ledger. Ended allocations keep their history: the row survives with device_id NULL
+    and its gpu_uuid intact, since the card it names no longer exists.
+
+    Deleting a node that is still IN the cluster is pointless rather than harmful: the operator's
+    next inventory report recreates it (upsert by cluster + hostname).
+    """
+    principal.require(action="node.delete")
+    node = await _load_node(db, node_id)
+    devices = await _node_devices(db, node_id)
+    device_ids = [d.id for d in devices]
+
+    live_allocs = 0
+    if device_ids:
+        live_allocs = int(
+            await db.scalar(
+                select(func.count())
+                .select_from(Allocation)
+                .where(Allocation.device_id.in_(device_ids), Allocation.ended_at.is_(None))
+            )
+            or 0
+        )
+    live_sessions = int(
+        await db.scalar(
+            select(func.count())
+            .select_from(Session)
+            .where(
+                Session.node_hostname == node.hostname,
+                Session.status.in_(("pending", "preparing", "running", "paused", "terminating")),
+                Session.deleted_at.is_(None),
+            )
+        )
+        or 0
+    )
+    if live_allocs or live_sessions:
+        raise _NodeBusy(
+            "node still has live sessions; drain it first",
+            {"node_id": node_id, "hostname": node.hostname,
+             "live_allocations": live_allocs, "live_sessions": live_sessions},
+        )
+
+    if device_ids:
+        # Detach history instead of deleting it: the allocation rows carry the billing trail.
+        await db.execute(
+            sa_update(Allocation)
+            .where(Allocation.device_id.in_(device_ids))
+            .values(device_id=None)
+        )
+        await db.execute(sa_delete(GpuDevice).where(GpuDevice.id.in_(device_ids)))
+    await db.delete(node)
+    await AuditService(db).record(
+        actor=principal.user_id, action="node.delete", target=node_id, result="ok",
+        hostname=node.hostname, cluster_id=node.cluster_id, devices=len(device_ids),
+    )
+    await db.commit()
+    return Response(status_code=status.HTTP_204_NO_CONTENT)
 
 
 @router.post("/nodes/{node_id}/cordon")

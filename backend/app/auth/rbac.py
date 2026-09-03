@@ -98,6 +98,7 @@ _ACTION_MATRIX: dict[str, tuple] = {
     "node.create": ("super_admin",),
     "node.cordon": ("super_admin",),
     "node.drain": ("super_admin",),
+    "node.delete": ("super_admin",),
     # Node pools — pools/node assignment are super_admin only; an org_admin reads the pools granted
     # to their organization and sub-assigns them to their own groups (rule in domain.node_pools).
     "pool.read": ("super_admin", ("scoped", "org_admin")),

@@ -108,6 +108,10 @@ class Settings(BaseSettings):
     # Host headroom kept out of admission on every node, covering the kubelet/system reserve and
     # daemonset pods, so a session admitted against inventory capacity still schedules. A card only
     # counts as a placement candidate when its node has cpu/mem left for the session's request.
+    # A node whose operator inventory report has not arrived within this window is marked
+    # offline (and back to ready when reports resume). Reports land every inventory tick, so
+    # this only needs to outlast a slow tick, not a slow cluster.
+    NODE_STALE_SEC: int = 300
     NODE_RESERVED_CPU: int = 1
     NODE_RESERVED_MEM_GB: int = 2
     # Rate for keeping persistent storage (data volumes), billed continuously per GB-hour against

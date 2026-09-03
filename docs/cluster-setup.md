@@ -204,6 +204,119 @@ REG=<storage-ip>:5000 build/images/build.sh push   # builds all catalogue images
 then register them in the console (Images → the registry reference is
 `<storage-ip>:5000/gshare-session:<tag>`); nodes pull straight from the LAN.
 
+## Growing or shrinking a running cluster
+
+The steps above describe a first build, but each subcommand is idempotent and stands on its
+own, so the same pieces add a machine to a cluster that is already serving sessions. Nothing
+here interrupts running work: existing nodes are untouched.
+
+### Adding a node
+
+1. **On the new node — prerequisites.** Swap off, kernel modules and sysctls, containerd,
+   `nfs-common`, and — for a GPU node — the NVIDIA runtime (and the driver, if `nvidia-smi` is
+   missing):
+
+   ```bash
+   sudo ./hack/cluster-bootstrap.sh prereqs        # add `gpu` on a GPU node
+   ```
+
+2. **On the control plane — mint a join command**, then run it on the new node:
+
+   ```bash
+   kubeadm token create --print-join-command       # control plane
+   sudo ./hack/cluster-bootstrap.sh join "kubeadm join 10.x.x.x:6443 --token ... --discovery-token-ca-cert-hash sha256:..."
+   ```
+
+3. **On the control plane — label it.** Skipping this is the usual reason a new GPU node
+   advertises no capacity: HAMi only claims cards on nodes labelled `gpu=on`, and placement
+   reads `gshare.io/gpu-mode`.
+
+   ```bash
+   ./hack/cluster-bootstrap.sh label <node> fractional    # or: exclusive | cpu | storage
+   ```
+
+4. **On the new node — the LAN registry, if the cluster uses one.** `prereqs` writes this from
+   `LOCAL_REGISTRY`, so a node joined by hand misses it and every session image pull fails with
+   `http: server gave HTTP response to HTTPS client` — the node has no reason to know the
+   registry speaks plain HTTP. Re-running `prereqs` with the variable set is the safe way:
+
+   ```bash
+   sudo LOCAL_REGISTRY=<registry-ip>:5000 LOCAL_REGISTRY_MIRROR=<registry-ip>:5001 \
+        ./hack/cluster-bootstrap.sh prereqs
+   ```
+
+   Doing it by hand instead? Copy `/etc/containerd/certs.d/` from a working node and set
+   `config_path = "/etc/containerd/certs.d"` in `/etc/containerd/config.toml`. Two rules that
+   cost an outage once: **back the file up first** (`cp config.toml config.toml.bak`), and write
+   the value with an editor rather than a `sed`/regex substitution — the file also contains
+   `plugin_config_path`, and a pattern that matches the shorter key corrupts the longer one,
+   after which containerd refuses to start. **Restart containerd from the node's own console**
+   (`sudo systemctl restart containerd`), never from a pod on that node: stopping containerd
+   kills the pod issuing the command, the start half never runs, and the node then has no
+   working `kubectl exec` to repair it with.
+
+5. **Verify** — nodes Ready, `nvidia.com/gpu` and `nvidia.com/gpumem` advertised, addons Running:
+
+   ```bash
+   ./hack/cluster-bootstrap.sh verify
+   ```
+
+6. **Record it in `hack/cluster-info`** (`WORKER_NODES`, `CPU_WORKERS`, …) so a later `up` run
+   keeps the file and the cluster in step.
+
+Then, in GShare itself:
+
+7. **Nothing to register.** The operator's inventory controller reports the node and its cards
+   on its next tick; the control plane upserts them by (cluster, hostname) and the node appears
+   under **Nodes** on its own. `node_liveness` moves it to `ready` as the heartbeats arrive
+   (and back to `offline` if they stop for `NODE_STALE_SEC`, 5 minutes by default).
+
+8. **Check the offering for that GPU model.** Admission matches `offering.gpu_model` to the
+   device model by **string equality**, so a card whose model has no active offering is visible
+   to administrators but unusable — session creation answers `409 unserviceable`. The catalogue
+   row's "in cluster" tag under **Resources → GPU offerings** tells you which models are backed
+   by real cards; create or activate an offering for a new model before announcing the capacity.
+
+9. **Optional, in the console:**
+   - **Node pool** — assign the node to a dedicated pool if a department should get it first;
+     unassigned nodes are shared by everyone.
+   - **Pre-pull the session images** on the node so the first session does not wait on a
+     5–15 GiB pull (with the LAN registry configured in step 4 this is fast, but not instant).
+   - **Lossless pause** — label the node `gshare.io/criu=ready` and
+     `gshare.io/cuda-checkpoint=ready` once CRIU and cuda-checkpoint are in place, or sessions
+     there fall back to a cold pause.
+
+### Removing a node
+
+Drain first, delete second: the ledger must not be left holding a session on hardware that is
+gone.
+
+1. **In the console** — terminate or pause the sessions still on the node (Sessions, filtered by
+   node), so their credits settle.
+2. **On the control plane:**
+
+   ```bash
+   kubectl cordon <node>
+   kubectl drain <node> --ignore-daemonsets --delete-emptydir-data --timeout=300s
+   kubectl delete node <node>
+   ```
+
+   DaemonSets (calico, kube-proxy, the HAMi device plugin, dcgm-exporter, node-exporter, the CSI
+   node plugin) are expected to stay; that is what `--ignore-daemonsets` is for.
+3. **On the removed machine**, if it is leaving for good: `sudo kubeadm reset -f` and clear
+   `/etc/cni/net.d`.
+4. **In the console — Nodes → Delete.** The button appears once the node reads `offline`
+   (`node_liveness` marks it after the heartbeat stops). Deletion is refused with `409 node_busy`
+   while any live allocation or non-terminal session remains on it, and it removes the node and
+   its card records while keeping the billing history — past allocations survive with their
+   `gpu_uuid`, detached from the card that no longer exists.
+5. **Tidy up** — a dedicated pool that just lost its last node stays behind as an empty pool;
+   delete it or assign another node. Sessions of a tenant whose pool went empty keep running and
+   fall back to shared nodes, provided the tenant's policy allows the spill (`shared_pool`).
+
+Deleting a node that is still in the cluster is pointless rather than dangerous: the operator's
+next inventory report recreates the row.
+
 ## Next — deploy GShare
 
 With the cluster ready, the all-in-one install is the simplest path. The chart brings up

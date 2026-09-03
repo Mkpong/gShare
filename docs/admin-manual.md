@@ -142,6 +142,26 @@ including their occupancy and mode.
 ![Nodes](screenshots/32-superadmin-admin-nodes.png)
 ![GPU devices on a node](screenshots/33-superadmin-admin-node-devices.png)
 
+Node status is driven by the operator's inventory heartbeat: a node that stops reporting for
+`NODE_STALE_SEC` (5 minutes) is marked **offline** automatically, and returns to **ready** when
+reports resume. Cordon is yours, not the heartbeat's — a cordoned node stays cordoned either way.
+
+Per-node actions:
+
+- **Cordon / uncordon** — stop or resume new placements. Sessions already running stay.
+- **Drain** — cordon, then move or end the sessions on the node. Rescheduling needs another node
+  with the same GPU model, free capacity, and pool access; sessions that cannot move are left
+  paused rather than lost.
+- **Delete** — appears only on an **offline** node, because a node the operator still reports
+  would simply reappear on its next inventory tick. It removes the node and its GPU card records
+  after refusing (`node_busy`) while any live allocation or non-terminal session remains, and it
+  keeps the billing history: past allocations survive, holding their `gpu_uuid`, detached from
+  the card that no longer exists. Deleting a node's last card also empties any dedicated pool it
+  belonged to — reassign or delete that pool.
+
+The full machine-level procedure for adding or removing a node — join, labels, drain, `kubeadm
+reset` — is in [cluster-setup.md](cluster-setup.md#growing-or-shrinking-a-running-cluster).
+
 ---
 
 ## 9. Images and templates (super admin)

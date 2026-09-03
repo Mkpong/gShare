@@ -57,6 +57,7 @@ export function AdminUsers() {
   // Row click opens the detail drawer; the row's edit/delete buttons stay as the fast path.
   const [detail, setDetail] = useState<AdminUser | null>(null);
   const [editing, setEditing] = useState<AdminUser | null>(null);
+  const [createOpen, setCreateOpen] = useState(false);
   const search = table.query;
   const statusFilter = (table.tab ?? '') as UserStatus | '';
 
@@ -250,7 +251,7 @@ export function AdminUsers() {
         actions={canCreate && (hasGroups ? (
           <div className="flex gap-2">
             <Link to="/admin/users/bulk" className="gs-btn">{t('admin.users.bulk.title')}</Link>
-            <Link to="/admin/users/new" className="gs-btn gs-btn-primary"><Plus size={15} weight="bold" aria-hidden="true" />{t('admin.users.add')}</Link>
+            <button type="button" className="gs-btn gs-btn-primary" onClick={() => setCreateOpen(true)}><Plus size={15} weight="bold" aria-hidden="true" />{t('admin.users.add')}</button>
           </div>
         ) : (
           <button type="button" className="gs-btn gs-btn-primary" disabled title={t('admin.users.addDisabledHint')}><Plus size={15} weight="bold" aria-hidden="true" />{t('admin.users.add')}</button>
@@ -392,6 +393,9 @@ export function AdminUsers() {
           </div>
         </Dialog>
       )}
+      <Dialog open={createOpen} wide title={t('admin.users.newTitle')} onClose={() => setCreateOpen(false)}>
+        <NewUserForm onDone={() => setCreateOpen(false)} />
+      </Dialog>
       {editing && (
         <Dialog open wide title={`${t('admin.users.editTitle')} - ${editing.name}`} onClose={() => setEditing(null)}>
           <EditUserModalBody userId={editing.id} onDone={() => setEditing(null)} />
@@ -430,10 +434,9 @@ function UserUsageBlock({ userId }: { userId: string }) {
   );
 }
 
-// Adding a user, at /admin/users/new.
-export function NewUserPage() {
+// Adding a user, shown as a modal from the list.
+function NewUserForm({ onDone }: { onDone: () => void }) {
   const { t } = useTranslation();
-  const navigate = useNavigate();
   const claims = useAuthStore((s) => s.claims);
   const orgAdminOrgs = useAuthStore((s) => s.orgAdminOrgs);
   const memberships = useAuthStore((s) => s.memberships);
@@ -457,7 +460,7 @@ export function NewUserPage() {
     create.mutate(
       { email: email.trim(), name: name.trim(), group_id: groupId, initial_role: 'member', password },
       {
-        onSuccess: () => { pushToast('success', t('admin.users.created', { name })); navigate('/admin/users'); },
+        onSuccess: () => { pushToast('success', t('admin.users.created', { name })); onDone(); },
         onError: (e) => pushToast('error', humanizeError(asApiError(e))),
       },
     );
@@ -476,11 +479,6 @@ export function NewUserPage() {
   useUnsavedGuard((!!email || !!name || !!password) && !create.isPending);
 
   return (
-    <div className="w-full max-w-2xl">
-      <PageHeader
-        title={t('admin.users.newTitle')}
-        crumbs={[{ label: t('admin.users.title'), to: '/admin/users' }, { label: t('admin.users.newTitle') }]}
-      />
       <form className="gs-card" noValidate {...unsavedGuardProps} onSubmit={(e) => { e.preventDefault(); setTouched({ email: true, password: true }); submit(); }}>
       <div className="grid gap-3">
         <Field label={t('common.email')} required error={emailError}>
@@ -550,7 +548,7 @@ export function NewUserPage() {
             </Select>
           )}
         </Field>
-        <Field label={t('admin.users.initialPassword')} required error={passwordError} hint={t('auth.passwordRule')}>
+        <Field label={t('admin.users.initialPassword')} required error={passwordError}>
           {(ids) => (
             <input
               {...ids}
@@ -570,10 +568,9 @@ export function NewUserPage() {
         <DisabledReason reasons={valid ? [] : blockers} />
         <button type="submit" className="gs-btn gs-btn-primary disabled:opacity-50" disabled={!valid || create.isPending}>
           {create.isPending ? t('admin.users.creating') : t('admin.users.create')}</button>
-        <button type="button" className="gs-btn" onClick={() => navigate('/admin/users')}>{t('common.cancel')}</button>
+        <button type="button" className="gs-btn" onClick={onDone}>{t('common.cancel')}</button>
       </div>
       </form>
-    </div>
   );
 }
 

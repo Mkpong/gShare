@@ -8,6 +8,7 @@ import {
   useGpuDevices,
   useSetDeviceMode,
   useCordonNode,
+  useDeleteNode,
   useDrainNode,
   type GpuNode,
   type GpuDevice,
@@ -163,19 +164,21 @@ function GrantForm({ pool, isSuper, orgs, groups, onDone }: {
   };
 
   return (
-    <form className="mt-1.5 flex flex-wrap items-center gap-1.5" noValidate onSubmit={(e) => { e.preventDefault(); submit(); }}>
+    // Labels sit ABOVE their control, so the selects and the buttons share one baseline —
+    // an inline label pushed each select down by its own width and staggered the row.
+    <form className="mt-2 flex flex-wrap items-end gap-2" noValidate onSubmit={(e) => { e.preventDefault(); submit(); }}>
       {isSuper && (
-        <label className="text-xs text-muted">
+        <label className="flex flex-col gap-1 text-xs text-muted">
           {t('admin.nodes.pools.grantScope')}
-          <Select className="gs-input gs-input-sm w-auto ml-2" value={scope} onChange={(e) => { setScope(e.target.value as PoolGrantScope); setScopeId(''); }}>
+          <Select className="gs-input gs-input-sm w-36" value={scope} onChange={(e) => { setScope(e.target.value as PoolGrantScope); setScopeId(''); }}>
             <option value="org">{t('enum.scope.org')}</option>
             <option value="group">{t('enum.scope.group')}</option>
           </Select>
         </label>
       )}
-      <label className="text-xs text-muted">
+      <label className="flex flex-col gap-1 text-xs text-muted">
         {t('admin.nodes.pools.grantTarget')}
-        <Select className="gs-input gs-input-sm w-auto ml-2" value={effectiveId} onChange={(e) => setScopeId(e.target.value)}>
+        <Select className="gs-input gs-input-sm w-56" value={effectiveId} onChange={(e) => setScopeId(e.target.value)}>
           {targets.length === 0 && <option value="">{t('admin.nodes.pools.noTarget')}</option>}
           {targets.map((x) => <option key={x.id} value={x.id}>{x.label}</option>)}
         </Select>
@@ -397,6 +400,7 @@ export function AdminNodes() {
   const poolsData = useNodePools(undefined, { enabled: isSuper }).data;
   const pools = useMemo(() => poolsData ?? [], [poolsData]);
   const cordon = useCordonNode();
+  const removeNode = useDeleteNode();
   const pushToast = useUiStore((s) => s.pushToast);
 
   const summary = useMemo(() => {
@@ -411,7 +415,25 @@ export function AdminNodes() {
     };
   }, [nodes]);
 
-  // Cordon confirms; uncordon does not.
+// Removing a node is inventory bookkeeping after it has left the cluster: the API refuses while
+  // live sessions remain, and a node still in the cluster reappears on the next inventory report.
+  const onDeleteNode = useCallback(async (n: GpuNode) => {
+    const ok = await confirm({
+      title: t('admin.nodes.confirmDeleteTitle', { name: n.hostname }),
+      body: t('admin.nodes.confirmDeleteBody'),
+      consequences: [t('admin.nodes.consequenceDelete', { count: n.device_count ?? 0 })],
+      confirmLabel: t('common.delete'),
+      destructive: true,
+      confirmText: n.hostname,
+    });
+    if (!ok) return;
+    removeNode.mutate(n.id, {
+      onSuccess: () => pushToast('success', t('admin.nodes.deletedToast', { name: n.hostname })),
+      onError: (e) => pushToast('error', humanizeError(asApiError(e))),
+    });
+  }, [confirm, pushToast, removeNode, t]);
+
+    // Cordon confirms; uncordon does not.
   const toggleCordon = useCallback(async (n: GpuNode) => {
     const next = n.status !== 'cordoned';
     if (next) {
@@ -491,17 +513,26 @@ export function AdminNodes() {
       render: (n) => (
         // gShare cordon/drain act on the GPU placement ledger — a GPU-less node has
         // nothing to place, so the actions are no-ops and only invite mistakes.
-        (n.device_count ?? 0) === 0 ? <span className="text-muted text-xs">-</span> : (
         <div className="flex gap-2 justify-end">
-          <button type="button" className="gs-btn gs-btn-sm" onClick={() => toggleCordon(n)} disabled={cordon.isPending}>
-            {n.status === 'cordoned' ? t('admin.nodes.uncordon') : t('admin.nodes.cordon')}
-          </button>
-          <Link to={`/admin/nodes/${n.id}/drain`} className="gs-btn gs-btn-sm gs-btn-danger">{t('admin.nodes.drain')}</Link>
+          {(n.device_count ?? 0) > 0 && (
+            <>
+              <button type="button" className="gs-btn gs-btn-sm" onClick={() => toggleCordon(n)} disabled={cordon.isPending}>
+                {n.status === 'cordoned' ? t('admin.nodes.uncordon') : t('admin.nodes.cordon')}
+              </button>
+              <Link to={`/admin/nodes/${n.id}/drain`} className="gs-btn gs-btn-sm gs-btn-danger">{t('admin.nodes.drain')}</Link>
+            </>
+          )}
+          {/* Offline only: a node the operator still reports would come straight back. */}
+          {n.status === 'offline' && (
+            <button type="button" className="gs-btn gs-btn-sm gs-btn-danger" disabled={removeNode.isPending} onClick={() => onDeleteNode(n)}>
+              {t('common.delete')}
+            </button>
+          )}
+          {(n.device_count ?? 0) === 0 && n.status !== 'offline' && <span className="text-muted text-xs">-</span>}
         </div>
-        )
       ),
     },
-  ], [t, cordon.isPending, toggleCordon, pools, isSuper]);
+  ], [t, cordon.isPending, toggleCordon, pools, isSuper, removeNode.isPending, onDeleteNode]);
 
   const all = nodes ?? [];
   const matched = all.filter((n) => {
