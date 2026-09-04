@@ -36,6 +36,9 @@ class OperatorGpuDeviceUpsert(BaseModel):
     model: str | None = None            # GPU model if known (node label nvidia.com/gpu.product)
     cluster_id: str | None = None       # operator injects cfg.ClusterID
     node_cpu: int | None = None         # node CPU cores
+    # The node's Ready condition as the operator saw it. None = an operator too old to report it,
+    # treated as ready. False withholds the liveness heartbeat and marks the node offline at once.
+    node_ready: bool | None = None
     node_mem_gb: int | None = None      # node memory in GiB
     node_disk_gb: int | None = None     # node ephemeral storage in GiB
 
@@ -48,6 +51,7 @@ class OperatorNodeUpsert(BaseModel):
     node_id: str                        # k8s node name
     cluster_id: str | None = None       # operator injects cfg.ClusterID
     node_cpu: int | None = None
+    node_ready: bool | None = None      # see OperatorGpuDeviceUpsert.node_ready
     node_mem_gb: int | None = None
     node_disk_gb: int | None = None
     lossless_capable: bool = False      # lossless-pause prerequisites (cuda-checkpoint plus CRIU) are labelled ready on the node

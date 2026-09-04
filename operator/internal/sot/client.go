@@ -334,9 +334,12 @@ type GpuDevice struct {
 	TotalCores int    `json:"total_cores"`
 	UsedCores  int    `json:"used_cores"`
 	Status     string `json:"status"`
-	NodeCPU    int    `json:"node_cpu,omitempty"`     // node CPU cores
-	NodeMemGB  int    `json:"node_mem_gb,omitempty"`  // node memory (GiB)
-	NodeDiskGB int    `json:"node_disk_gb,omitempty"` // node ephemeral-storage (GiB)
+	NodeCPU    int    `json:"node_cpu,omitempty"` // node CPU cores
+	// NodeReady is the node's Ready condition. The control plane takes a heartbeat only from a
+	// ready node: a dead kubelet leaves its Node object behind, which must not count as alive.
+	NodeReady  bool `json:"node_ready"`
+	NodeMemGB  int  `json:"node_mem_gb,omitempty"`  // node memory (GiB)
+	NodeDiskGB int  `json:"node_disk_gb,omitempty"` // node ephemeral-storage (GiB)
 }
 
 // NodeHealthEvent is a health transition reported to the control plane.
@@ -369,6 +372,8 @@ type Node struct {
 	Role string `json:"role,omitempty"`
 	// LosslessCapable: true when the node labels mark lossless-pause prerequisites (cuda-checkpoint + CRIU) ready.
 	LosslessCapable bool `json:"lossless_capable,omitempty"`
+	// NodeReady: see GpuDevice.NodeReady.
+	NodeReady bool `json:"node_ready"`
 }
 
 func (c *Client) UpsertNode(ctx context.Context, n Node) error {

@@ -1432,6 +1432,8 @@
       "user_stopped": "stopped by you",
       "max_runtime": "runtime limit reached",
       "max_runtimeHint": "The session hit the maximum allowed lifetime and was terminated.",
+      "node_offline": "Ended: node went offline",
+      "node_offlineHint": "The node hosting the session stopped answering, so the platform ended it. Your data volumes remain; start a new session to continue.",
       "preempted": "preempted by a higher-priority session",
       "disk_exceeded": "Scratch disk limit exceeded",
       "disk_exceededHint": "The container's scratch disk went over its limit, so the session was terminated. Data on mounted volumes is safe; files inside the container are gone. Keep large data on a volume.",

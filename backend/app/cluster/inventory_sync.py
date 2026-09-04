@@ -15,6 +15,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.api.schemas.internal import OperatorGpuDeviceUpsert, OperatorNodeUpsert
 from app.core import ids
 from app.db.models import Cluster, GpuDevice, GpuNode
+from app.domain import node_status
 
 
 class InventorySync:
@@ -39,14 +40,16 @@ class InventorySync:
             ).scalar_one_or_none()
             if node is None:
                 self.db.add(GpuNode(
-                    id=ids.new("node"), cluster_id=cluster_id, hostname=ev.node_id, status="ready",
+                    id=ids.new("node"), cluster_id=cluster_id, hostname=ev.node_id,
+                    status="offline" if ev.node_ready is False else "ready",
                     cpu=ev.node_cpu, mem=ev.node_mem_gb, disk=ev.node_disk_gb,
                     lossless_capable=ev.lossless_capable,
-                    last_seen_at=datetime.now(UTC),
+                    last_seen_at=None if ev.node_ready is False else datetime.now(UTC),
                 ))
             else:
-                # Liveness: the operator SAW this node just now, whether or not anything changed.
-                node.last_seen_at = datetime.now(UTC)
+                # Liveness comes from the node's Ready condition, not from the report itself: the
+                # operator lists Node objects, and a dead kubelet leaves its object behind.
+                await self._touch(node, ev.node_ready)
                 if ev.node_cpu is not None:
                     node.cpu = ev.node_cpu
                 if ev.node_mem_gb is not None:
@@ -56,6 +59,13 @@ class InventorySync:
                 node.lossless_capable = ev.lossless_capable
                 if ev.role:
                     node.role = ev.role
+
+    async def _touch(self, node: GpuNode, ready: bool | None) -> None:
+        moved = node_status.touch(node, ready)
+        if moved == "offline":
+            await node_status.notify_transitions(self.db, [node], [])
+        elif moved == "ready":
+            await node_status.notify_transitions(self.db, [], [node])
 
     async def upsert_device(self, ev: OperatorGpuDeviceUpsert, cluster_id: str) -> None:
         async with self.db.begin():
@@ -89,17 +99,17 @@ class InventorySync:
                     id=ids.new("node"),
                     cluster_id=cluster_id,
                     hostname=ev.node_id,
-                    status="ready",
+                    status="offline" if ev.node_ready is False else "ready",
                     cpu=ev.node_cpu,
                     mem=ev.node_mem_gb,
                     disk=ev.node_disk_gb,
                 )
-                node.last_seen_at = datetime.now(UTC)
+                node.last_seen_at = None if ev.node_ready is False else datetime.now(UTC)
                 self.db.add(node)
                 await self.db.flush()   # materialise node.id, which GpuDevice references
             else:
-                # Liveness: the operator SAW this node just now, whether or not anything changed.
-                node.last_seen_at = datetime.now(UTC)
+                # Liveness comes from the node's Ready condition (see upsert_node).
+                await self._touch(node, ev.node_ready)
                 # Apply the capacity. Status is owned by the health controller and is not
                 # overwritten.
                 if ev.node_cpu is not None:

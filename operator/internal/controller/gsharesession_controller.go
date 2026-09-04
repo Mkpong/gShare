@@ -480,7 +480,13 @@ func (r *SessionReconciler) cleanupChildren(ctx context.Context, s *gsharev1.GSh
 		&corev1.Secret{ObjectMeta: metav1.ObjectMeta{Namespace: ns, Name: "ses-" + s.Name + "-secret"}},
 	}
 	for _, obj := range children {
-		if err := r.Delete(ctx, obj); err != nil && !apierrors.IsNotFound(err) {
+		var opts []client.DeleteOption
+		if pod, ok := obj.(*corev1.Pod); ok && r.podNodeUnreachable(ctx, pod) {
+			// The kubelet will never confirm the deletion; without a zero grace period the pod
+			// sits in Terminating until someone deletes the Node object.
+			opts = append(opts, client.GracePeriodSeconds(0))
+		}
+		if err := r.Delete(ctx, obj, opts...); err != nil && !apierrors.IsNotFound(err) {
 			return err
 		}
 	}
@@ -767,4 +773,23 @@ func (r *SessionReconciler) SetupWithManager(mgr ctrl.Manager) error {
 		Owns(&corev1.Secret{}).
 		Owns(&netv1.Ingress{}).
 		Complete(r)
+}
+
+// podNodeUnreachable reports whether the pod's node has stopped answering (Ready != True), in
+// which case a graceful delete can never complete.
+func (r *SessionReconciler) podNodeUnreachable(ctx context.Context, key *corev1.Pod) bool {
+	var live corev1.Pod
+	if err := r.Get(ctx, client.ObjectKeyFromObject(key), &live); err != nil || live.Spec.NodeName == "" {
+		return false
+	}
+	var node corev1.Node
+	if err := r.Get(ctx, client.ObjectKey{Name: live.Spec.NodeName}, &node); err != nil {
+		return false
+	}
+	for _, c := range node.Status.Conditions {
+		if c.Type == corev1.NodeReady {
+			return c.Status != corev1.ConditionTrue
+		}
+	}
+	return true
 }

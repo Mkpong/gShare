@@ -121,9 +121,10 @@ func (r *InventoryReconciler) Reconcile(ctx context.Context, req ctrl.Request) (
 		role = "gpu"
 	}
 	// Report capacity for every node, GPU-less ones included, independently of the device loop.
+	nodeReady := nodeIsReady(&node)
 	_ = r.SoT.UpsertNode(ctx, sot.Node{
 		NodeID: node.Name, NodeCPU: nodeCPU, NodeMemGB: nodeMemGB, NodeDiskGB: nodeDiskGB,
-		LosslessCapable: losslessCapable, Role: role,
+		LosslessCapable: losslessCapable, Role: role, NodeReady: nodeReady,
 	})
 	for _, d := range devs {
 		_ = r.SoT.UpsertGpuDevice(ctx, sot.GpuDevice{
@@ -136,6 +137,7 @@ func (r *InventoryReconciler) Reconcile(ctx context.Context, req ctrl.Request) (
 			TotalCores: 100,
 			UsedCores:  d.UsedCores,
 			Status:     d.Status,
+			NodeReady:  nodeReady,
 			NodeCPU:    nodeCPU,
 			NodeMemGB:  nodeMemGB,
 			NodeDiskGB: nodeDiskGB,
@@ -260,4 +262,15 @@ func (r *InventoryReconciler) SetupWithManager(mgr ctrl.Manager) error {
 	return ctrl.NewControllerManagedBy(mgr).
 		For(&corev1.Node{}).
 		Complete(r)
+}
+
+// nodeIsReady reads the kubelet's own verdict. A node with no Ready condition yet (just joined)
+// or with Ready=Unknown (kubelet silent past the node-monitor grace period) is not ready.
+func nodeIsReady(node *corev1.Node) bool {
+	for _, c := range node.Status.Conditions {
+		if c.Type == corev1.NodeReady {
+			return c.Status == corev1.ConditionTrue
+		}
+	}
+	return false
 }

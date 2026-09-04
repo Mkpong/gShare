@@ -150,7 +150,11 @@ including their occupancy and mode.
 
 Node status is driven by the operator's inventory heartbeat: a node that stops reporting for
 `NODE_STALE_SEC` (5 minutes) is marked **offline** automatically, and returns to **ready** when
-reports resume. Cordon is yours, not the heartbeat's — a cordoned node stays cordoned either way. Every
+reports resume. Cordon is yours, not the heartbeat's — a cordoned node stays cordoned either way.
+The operator reports the node's own Ready condition, so a machine whose kubelet stops answering
+goes offline at once — a Node object that merely still exists is not liveness. Sessions that
+were running on an offline node are ended (`node_offline`), their credits settled and their GPU
+released; paused sessions are left to resume elsewhere. Every
 super_admin gets a notification (bell and history) on each transition — *Node offline: gpu3*
 and *Node back online: gpu3* — so a machine that silently drops out of the fleet is noticed
 without watching the screen.
