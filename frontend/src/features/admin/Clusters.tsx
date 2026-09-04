@@ -39,7 +39,8 @@ export function AdminClusters() {
   const [selCluster, setSelCluster] = useState<Cluster | null>(null);
 
   // The node inventory feeds the per-cluster GPU totals and the detail panel.
-  const nodes = ((useNodes().data ?? []) as GpuNode[]);
+  const nodesData = useNodes().data;
+  const nodes = useMemo(() => (nodesData ?? []) as GpuNode[], [nodesData]);
   const byCluster = useMemo(() => {
     const m: Record<string, GpuNode[]> = {};
     for (const n of nodes) {

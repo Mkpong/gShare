@@ -4,10 +4,11 @@ from __future__ import annotations
 from datetime import UTC, datetime, timedelta
 
 import pytest
+from sqlalchemy import select
 
 from app.core import ids
 from app.core.config import settings
-from app.db.models import GpuNode
+from app.db.models import GpuNode, Notification, User
 from app.workers import node_liveness
 
 
@@ -36,3 +37,19 @@ async def test_stale_node_goes_offline_and_recovers(db, monkeypatch):
     assert (await db.get(GpuNode, fresh.id)).status == "ready"
     # A cordon is an operator decision; the heartbeat must not lift or override it.
     assert (await db.get(GpuNode, cordoned.id)).status == "cordoned"
+
+
+@pytest.mark.asyncio
+async def test_transitions_notify_super_admins_once(db, monkeypatch):
+    monkeypatch.setattr(node_liveness, "get_sessionmaker", lambda: (lambda: db))
+    root = User(id=ids.new("user"), email=f"{ids.new('user')}@t", name="root", global_role="super_admin")
+    async with db.begin():
+        db.add(root)
+    stale = await _node(db, status="ready", seen_delta_sec=settings.NODE_STALE_SEC + 60)
+
+    await node_liveness.run()
+    await node_liveness.run()   # no change the second time → no second notification
+
+    rows = (await db.execute(select(Notification).where(Notification.user_id == root.id))).scalars().all()
+    assert [r.type for r in rows] == ["node_offline"]
+    assert rows[0].payload["params"]["hostname"] == stale.hostname

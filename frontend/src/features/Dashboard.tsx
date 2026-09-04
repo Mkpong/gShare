@@ -128,7 +128,7 @@ export function Dashboard() {
       </Dialog>
       {/* Headline figures. One panel, hairline-divided, so the eye reads left to right instead of
           scanning four competing boxes. */}
-      <section className="gs-panel grid md:grid-cols-4 mb-5" aria-label={t('dashboard.title')}>
+      <section className="gs-panel grid md:grid-cols-2 lg:grid-cols-4 mb-5" aria-label={t('dashboard.title')}>
         <Figure
           label={t('dashboard.creditBalance')}
           value={credit.available != null ? formatCredit(credit.available) : '-'}

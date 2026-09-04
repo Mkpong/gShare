@@ -124,10 +124,11 @@ export function useSetPoolTargets() {
 }
 
 // GET /gpu-devices — the devices on each node, with their VRAM and core occupancy.
-export function useGpuDevices(nodeId?: string) {
+export function useGpuDevices(nodeId?: string, opts?: { enabled?: boolean }) {
   const query: Record<string, unknown> = { page: 1, size: 200 };
   if (nodeId) query.node_id = nodeId;
   return useQuery({
+    enabled: opts?.enabled ?? true,
     queryKey: nodeKeys.devices(nodeId),
     queryFn: async () => {
       const { data } = await raw.GET('/api/v1/gpu-devices', { params: { query } });

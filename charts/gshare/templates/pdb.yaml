@@ -1,0 +1,29 @@
+{{- /*
+PodDisruptionBudgets: a node drain (kernel update, hardware swap) must not take BOTH replicas of
+the api or the console down at once. Only rendered for a component that runs more than one
+replica — a minAvailable of 1 on a single replica would block the drain forever.
+*/ -}}
+{{- if and .Values.controlPlane.enabled (dig "podDisruptionBudget" "enabled" true (.Values | toYaml | fromYaml)) }}
+{{- $root := . }}
+{{- range $c := list
+      (dict "name" "gshare-api" "replicas" .Values.api.replicas)
+      (dict "name" "gshare-worker" "replicas" .Values.worker.replicas)
+      (dict "name" "gshare-frontend" "replicas" .Values.frontend.replicas) }}
+{{- if gt (int $c.replicas) 1 }}
+---
+apiVersion: policy/v1
+kind: PodDisruptionBudget
+metadata:
+  name: {{ $c.name }}
+  namespace: {{ $root.Values.global.namespaces.system }}
+  labels:
+    {{- include "gshare.labels" $root | nindent 4 }}
+    app.kubernetes.io/name: {{ $c.name }}
+spec:
+  minAvailable: 1
+  selector:
+    matchLabels:
+      {{- include "gshare.selectorLabels" (dict "component" $c.name) | nindent 6 }}
+{{- end }}
+{{- end }}
+{{- end }}

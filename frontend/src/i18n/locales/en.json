@@ -175,6 +175,7 @@
         "node_set_pool": "Node pool set",
         "session_pause": "Session paused",
         "pod_delete": "Pod deleted",
+        "audit_export": "Audit log exported",
         "audit_retention": "Audit retention sweep",
         "user_bulk_create": "Users bulk-created",
         "credit_bulk_allocate": "Credits bulk-allocated",
@@ -242,6 +243,9 @@
       "resultPending": "Pending",
       "resultReady": "Complete",
       "subtitle": "Permission changes · credit adjustments · session and policy events (immutable record)",
+      "exportCsv": "Export CSV",
+      "exporting": "Exporting…",
+      "exportFailed": "The CSV export failed.",
       "summary": "{{total}} entries · page {{page}} of {{pages}}",
       "target": "Target",
       "targetKind": {
@@ -465,7 +469,7 @@
       "queuedSessions": "Queued sessions",
       "runningOfTotal": "running / total",
       "runningSessions": "Running sessions",
-      "scopedSubtitle": "Your scope at a glance (operations and audit in the left menu)",
+      "scopedSubtitle": "Sessions across the departments and organizations you manage (operations and audit are in the menu)",
       "superOnly": "Cluster-wide metrics are for system administrators only.",
       "title": "Admin dashboard",
       "totalNodes": "{{count}} nodes total",
@@ -630,6 +634,7 @@
     "monitor": {
       "allStatuses": "All states",
       "bulkTerminated": "{{count}} sessions force-terminated.",
+      "colLastChange": "Last change",
       "colActions": "Actions",
       "colCluster": "Cluster",
       "colEnqueued": "Queued at",
@@ -2180,6 +2185,8 @@
       "title": "Idle pause ahead",
       "body": "Session '{{session_name}}' is idle and will be auto-paused in about {{minutes_left}} minutes. Any GPU activity resets the timer."
     },
+    "node_offline": { "title": "Node offline: {{hostname}}", "body": "No inventory report for {{stale_min}} minutes; the node is out of placement. Check it under Nodes." },
+    "node_online": { "title": "Node back online: {{hostname}}", "body": "Inventory reports resumed; the node takes placements again." },
     "session_paused": {
       "title": "Session paused",
       "body": "Session '{{session_name}}' paused: GPU returned, billing stopped.",

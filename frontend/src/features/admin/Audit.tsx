@@ -8,7 +8,9 @@ import { Timestamp } from '@/components/Timestamp';
 import { CopyableId } from '@/components/CopyButton';
 import { useTranslation } from 'react-i18next';
 import i18n from '@/i18n';
-import { useAuditLogs, type AuditFilter } from '@/api/hooks/useAudit';
+import { useAuditLogs, exportAuditCsv, type AuditFilter } from '@/api/hooks/useAudit';
+import { useUiStore } from '@/store/uiStore';
+import { DownloadSimple } from '@/components/icons';
 import { formatDateTime } from '@/lib/format';
 import { CaretDown, ClipboardText } from '@/components/icons';
 
@@ -134,7 +136,7 @@ const AUDIT_ACTIONS: Record<string, string[]> = {
   catalog: ['policy.create', 'policy.update', 'policy.delete', 'policy.request', 'policy.request.approve', 'policy.request.reject', 'image.create', 'image.update', 'image.delete', 'image.import', 'image.build.create', 'image.build.finish', 'session.create', 'session.start', 'session.stop', 'session.restart', 'session.terminate', 'offering.create', 'offering.update', 'offering.delete', 'preset.create', 'preset.update', 'preset.delete'],
   storage: ['storage.volume.delete', 'storage.quota.approve', 'storage.quota.reject', 'storage.snapshot.restore', 'storage.snapshot.delete'],
   boards: ['notice.create', 'notice.update', 'notice.delete', 'inquiry.create', 'inquiry.reply'],
-  system: ['webhook.create', 'webhook.delete', 'audit.retention'],
+  system: ['webhook.create', 'webhook.delete', 'audit.retention', 'audit.export'],
 };
 
 // Quick ranges: most audit questions are "what just happened", not a calendar exercise.
@@ -203,6 +205,14 @@ export function AdminAudit() {
   );
 
   const { data, isLoading, isError, error, isFetching, refetch } = useAuditLogs(filter);
+  const pushToast = useUiStore((st) => st.pushToast);
+  const [exporting, setExporting] = useState(false);
+  const onExport = async () => {
+    setExporting(true);
+    try { await exportAuditCsv(filter); }
+    catch { pushToast('error', t('admin.audit.exportFailed')); }
+    finally { setExporting(false); }
+  };
   const rows = (data?.data ?? []) as AuditRow[];
   const names = ((data as { names?: Record<string, string> })?.names) ?? {};
   const pagination = data?.pagination ?? { page: 1, size: PAGE_SIZE, total: 0, total_pages: 1 };
@@ -365,6 +375,11 @@ export function AdminAudit() {
           disabled={!actor && !action && !target && !from && !to && !period}
         >
           {t('table.clearFilters')}
+        </button>
+        {/* The current view, every page of it, as a file — for the semester report and the auditor. */}
+        <button type="button" className="gs-btn ml-auto" onClick={onExport} disabled={exporting || (pagination.total ?? 0) === 0}>
+          <DownloadSimple size={15} aria-hidden="true" />
+          {exporting ? t('admin.audit.exporting') : t('admin.audit.exportCsv')}
         </button>
         {/* The filter is applied as it is typed, so this is the only live region the form needs. */}
         <p role="status" aria-live="polite" className="gs-sr-only">

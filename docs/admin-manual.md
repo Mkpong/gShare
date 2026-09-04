@@ -37,6 +37,12 @@ A summary of resources and sessions within your scope.
 
 ---
 
+An org_admin or group_admin sees the same page scoped to the people they manage: running and
+active sessions, the VRAM those sessions hold, and their host CPU — summed over every member of
+their groups (org_admin: every group of the organization), never over other tenants. Cluster-wide
+figures stay super_admin-only.
+
+
 ## 2. Live session monitoring
 
 Watch sessions and the queue in real time: owner, organization, group, resources, and state
@@ -144,7 +150,10 @@ including their occupancy and mode.
 
 Node status is driven by the operator's inventory heartbeat: a node that stops reporting for
 `NODE_STALE_SEC` (5 minutes) is marked **offline** automatically, and returns to **ready** when
-reports resume. Cordon is yours, not the heartbeat's — a cordoned node stays cordoned either way.
+reports resume. Cordon is yours, not the heartbeat's — a cordoned node stays cordoned either way. Every
+super_admin gets a notification (bell and history) on each transition — *Node offline: gpu3*
+and *Node back online: gpu3* — so a machine that silently drops out of the fleet is noticed
+without watching the screen.
 
 Per-node actions:
 
@@ -183,6 +192,12 @@ the same rows. Open an entry for the full before-and-after and the identifiers t
 ![Audit log, organization](screenshots/44-orgadmin-audit.png)
 
 ---
+
+**Export CSV** downloads the current view — every page of it, with the same scope and filters —
+as a UTF-8 (BOM) file Excel opens directly: time, actor, action, result, target, organization,
+group, and the JSON detail. The export is itself written to the log (`audit.export`, with the
+filters and the row count), so a file leaving the system is as traceable as any other action.
+
 
 ## Appendix — capabilities by role
 

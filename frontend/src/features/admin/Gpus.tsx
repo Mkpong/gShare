@@ -30,8 +30,10 @@ const MODES: GpuMode[] = ['fractional', 'exclusive', 'mig'];
 export function AdminGpus() {
   const { t } = useTranslation();
   const pushToast = useUiStore((s) => s.pushToast);
-  const devices = (useGpuDevices().data ?? []) as DeviceRow[];
-  const nodes = useNodes().data ?? [];
+  const devicesData = useGpuDevices().data;
+  const devices = useMemo(() => (devicesData ?? []) as DeviceRow[], [devicesData]);
+  const nodesData = useNodes().data;
+  const nodes = useMemo(() => nodesData ?? [], [nodesData]);
   const setMode = useSetDeviceMode();
   const [modelFilter, setModelFilter] = useState('');
 

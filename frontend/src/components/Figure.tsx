@@ -20,13 +20,15 @@ export function Figure({ label, value, unit, foot, bar, hero, help }: {
   hero?: boolean;
 }) {
   return (
-    <div className="px-5 py-4 border-border md:border-l first:md:border-l-0 max-md:border-t max-md:first:border-t-0">
+    <div className="min-w-0 px-5 py-4 border-border md:border-l first:md:border-l-0 max-md:border-t max-md:first:border-t-0">
       <div className="text-muted text-xs font-semibold inline-flex items-center gap-1">
         {label}
         {help && <HelpTip text={help} />}
       </div>
-      <div className="mt-2 flex items-baseline gap-1.5">
-        <span className={`gs-num text-kpi leading-none tracking-[-0.03em] ${hero ? 'text-primary' : ''}`}>{value}</span>
+      {/* Wraps and steps down below lg: a 7-digit balance in a quarter-width tile overran its
+          neighbour at tablet widths. */}
+      <div className="mt-2 flex flex-wrap items-baseline gap-x-1.5 gap-y-0.5">
+        <span className={`gs-num text-kpi max-lg:text-2xl leading-none tracking-[-0.03em] break-all ${hero ? 'text-primary' : ''}`}>{value}</span>
         {unit && <span className="text-muted text-xs font-semibold">{unit}</span>}
       </div>
       {bar && <Meter value={bar.value} variant={bar.variant} />}

@@ -268,7 +268,7 @@ export function Layout({ children, variant = 'user' }: { children: ReactNode; va
           {isAdminConsole ? (
             <button type="button" className="gs-btn" onClick={() => navigate('/')} title={t('nav.switchToUser')}>
               <UserCircle size={16} aria-hidden="true" />
-              {t('nav.switchToUser')}
+              <span className="max-md:hidden">{t('nav.switchToUser')}</span>
             </button>
           ) : (
             adminRole && (
@@ -279,11 +279,13 @@ export function Layout({ children, variant = 'user' }: { children: ReactNode; va
                 title={`${t('nav.switchToAdmin')} (${roleLabel(adminRole)})`}
               >
                 <Gear size={16} aria-hidden="true" />
-                {t('nav.switchToAdmin')}
+                <span className="max-md:hidden">{t('nav.switchToAdmin')}</span>
               </button>
             )
           )}
-          {!isAdminConsole && <WalletChip />}
+          {/* The balance also heads the dashboard; on a tablet the chip pushed the language and
+              theme controls off the bar. */}
+          {!isAdminConsole && <div className="max-md:hidden"><WalletChip /></div>}
           <NotificationBell />
           <LanguageToggle />
           <ThemeToggle />

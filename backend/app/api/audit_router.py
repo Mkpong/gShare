@@ -1,10 +1,14 @@
 """Audit router. Read hash-chained audit logs."""
 from __future__ import annotations
 
+import csv
+import io
+import json
 import re
-from datetime import datetime
+from datetime import UTC, datetime
 
 from fastapi import APIRouter, Depends, Query
+from fastapi.responses import StreamingResponse
 from sqlalchemy import false, func, or_, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -180,22 +184,10 @@ def _audit_view(row: AuditLog) -> dict:
     }
 
 
-@router.get("/audit-logs", response_model=AuditLogList)
-async def list_audit_logs(
-    page: Pagination = Depends(),
-    actor_id: str | None = Query(default=None),
-    actor_q: str | None = Query(default=None),   # search by actor name or email, so no ULID is needed
-    action: str | None = Query(default=None),
-    target: str | None = Query(default=None),
-    at_gte: datetime | None = Query(default=None, alias="at[gte]"),
-    at_lt: datetime | None = Query(default=None, alias="at[lt]"),
-    sort: str = Query(default="-at"),
-    verify: bool = Query(default=False),
-    principal: Principal = Depends(get_current_principal),
-    db: AsyncSession = Depends(get_db),
-):
-    principal.require(action="audit.read")
 
+def _scoped_query(principal: Principal, actor_id, actor_q, action, target, at_gte, at_lt):
+    """The audit rows this principal may see, narrowed by the list filters. Shared by the pager
+    and the CSV export so the file can never contain a row the screen would not show."""
     base = select(AuditLog)
     # Hierarchy scope, based on the audit row's scope columns: super_admin sees everything,
     # org_admin their own organization, group_admin only their own group.
@@ -225,6 +217,106 @@ async def list_audit_logs(
         base = base.where(AuditLog.created_at >= at_gte)
     if at_lt is not None:
         base = base.where(AuditLog.created_at < at_lt)
+    return base
+
+
+# A semester of a busy college is a few thousand rows; the cap keeps a runaway filter from
+# streaming the whole table while still covering any sensible report.
+EXPORT_MAX_ROWS = 50_000
+_CSV_COLUMNS = (
+    "at", "actor_id", "actor_name", "actor_email", "action", "result",
+    "target", "target_name", "org_id", "group_id", "detail",
+)
+
+
+@router.get("/audit-logs/export", response_class=StreamingResponse)
+async def export_audit_logs(
+    actor_id: str | None = Query(default=None),
+    actor_q: str | None = Query(default=None),
+    action: str | None = Query(default=None),
+    target: str | None = Query(default=None),
+    at_gte: datetime | None = Query(default=None, alias="at[gte]"),
+    at_lt: datetime | None = Query(default=None, alias="at[lt]"),
+    principal: Principal = Depends(get_current_principal),
+    db: AsyncSession = Depends(get_db),
+):
+    """The current audit view as a CSV file, newest first, same scope and filters as the list.
+
+    UTF-8 with a BOM so Excel opens Korean names correctly; ``detail`` is the JSON blob verbatim.
+    Taking the export is itself audited (``audit.export``, with the filters and the row count):
+    a file leaving the system is exactly the kind of event the log exists for.
+    """
+    principal.require(action="audit.read")
+    base = _scoped_query(principal, actor_id, actor_q, action, target, at_gte, at_lt)
+    rows = (
+        await db.scalars(
+            base.order_by(AuditLog.created_at.desc(), AuditLog.id.desc()).limit(EXPORT_MAX_ROWS)
+        )
+    ).all()
+
+    actor_ids = {r.actor for r in rows if r.actor}
+    names: dict[str, str] = {}
+    emails: dict[str, str] = {}
+    if actor_ids:
+        for uid, nm, em in (await db.execute(
+            select(User.id, User.name, User.email).where(User.id.in_(actor_ids))
+        )).all():
+            names[uid] = nm
+            if em:
+                emails[uid] = em
+    target_names = await _resolve_target_names(db, list(rows))
+
+    filters = {k: v for k, v in {
+        "actor_id": actor_id, "actor_q": actor_q, "action": action, "target": target,
+        "at_gte": at_gte.isoformat() if at_gte else None,
+        "at_lt": at_lt.isoformat() if at_lt else None,
+    }.items() if v}
+    await AuditService(db).record(
+        actor=principal.user_id, action="audit.export", target="audit_log", result="ok",
+        rows=len(rows), filters=filters,
+    )
+    await db.commit()
+
+    def _lines():
+        buf = io.StringIO()
+        w = csv.writer(buf)
+        buf.write("\ufeff")
+        w.writerow(_CSV_COLUMNS)
+        yield buf.getvalue()
+        for r in rows:
+            buf.seek(0)
+            buf.truncate()
+            w.writerow((
+                r.created_at.isoformat() if r.created_at else "",
+                r.actor or "", names.get(r.actor, ""), emails.get(r.actor, ""),
+                r.action, r.result or "", r.target or "", target_names.get(r.target or "", ""),
+                r.org_id or "", r.group_id or "",
+                json.dumps(r.detail, ensure_ascii=False, separators=(",", ":")) if r.detail else "",
+            ))
+            yield buf.getvalue()
+
+    stamp = datetime.now(UTC).strftime("%Y%m%d-%H%M")
+    return StreamingResponse(
+        _lines(), media_type="text/csv; charset=utf-8",
+        headers={"Content-Disposition": f'attachment; filename="gshare-audit-{stamp}.csv"'},
+    )
+
+@router.get("/audit-logs", response_model=AuditLogList)
+async def list_audit_logs(
+    page: Pagination = Depends(),
+    actor_id: str | None = Query(default=None),
+    actor_q: str | None = Query(default=None),   # search by actor name or email, so no ULID is needed
+    action: str | None = Query(default=None),
+    target: str | None = Query(default=None),
+    at_gte: datetime | None = Query(default=None, alias="at[gte]"),
+    at_lt: datetime | None = Query(default=None, alias="at[lt]"),
+    sort: str = Query(default="-at"),
+    verify: bool = Query(default=False),
+    principal: Principal = Depends(get_current_principal),
+    db: AsyncSession = Depends(get_db),
+):
+    principal.require(action="audit.read")
+    base = _scoped_query(principal, actor_id, actor_q, action, target, at_gte, at_lt)
 
     total = await db.scalar(select(func.count()).select_from(base.subquery()))
 

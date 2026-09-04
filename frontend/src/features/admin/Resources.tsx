@@ -34,6 +34,7 @@ import { PageHeader } from '@/components/PageHeader';
 import { Field, DisabledReason } from '@/components/Field';
 import { useFormGuard } from '@/hooks/useUnsavedGuard';
 import { useUiStore } from '@/store/uiStore';
+import { useAuthStore } from '@/auth/authStore';
 import { humanizeError, asApiError } from '@/lib/errors';
 import { formatVram, scopeLabel, statusLabel } from '@/lib/format';
 import { Plus, Tag } from '@/components/icons';
@@ -753,6 +754,15 @@ function QuotaRequestsPanel() {
   );
 }
 
+// org.read admits super_admin and org_admin only; a group_admin fetching it just collects a 403.
+function useCanListOrgs(): boolean {
+  const claims = useAuthStore((s) => s.claims);
+  const orgAdminOrgs = useAuthStore((s) => s.orgAdminOrgs);
+  const memberships = useAuthStore((s) => s.memberships);
+  return claims.global_role === 'super_admin' || orgAdminOrgs.length > 0
+    || memberships.some((m) => m.role === 'org_admin');
+}
+
 function PolicyTab({ onEdit }: { onEdit: (p: ResourcePolicy) => void }) {
   const { t } = useTranslation();
   const [scope, setScope] = useState<PolicyScope | ''>('');
@@ -761,7 +771,8 @@ function PolicyTab({ onEdit }: { onEdit: (p: ResourcePolicy) => void }) {
   const pushToast = useUiStore((s) => s.pushToast);
   const confirm = useConfirm();
   // Resolve scope_id to a human name (org / group / user); the raw id stays in the tooltip.
-  const orgs = useOrganizations().data ?? [];
+  const canListOrgs = useCanListOrgs();
+  const orgs = useOrganizations({ enabled: canListOrgs }).data ?? [];
   const groups = useProjects().data ?? [];
   const users = useUsers({}).data ?? [];
   const targetLabel = (p: ResourcePolicy): string | undefined => {
@@ -1004,7 +1015,8 @@ function PolicyCreateForm({ onDone }: { onDone: () => void }) {
   const [scope, setScope] = useState<PolicyScope>('group');
   const [scopeId, setScopeId] = useState('');
   // Offer the candidate targets for the chosen scope - organizations, groups, or users.
-  const orgs = useOrganizations().data ?? [];
+  const canListOrgs = useCanListOrgs();
+  const orgs = useOrganizations({ enabled: canListOrgs }).data ?? [];
   const groups = useProjects().data ?? [];
   const users = useUsers({}).data ?? [];
   const isGlobal = scope === 'global';

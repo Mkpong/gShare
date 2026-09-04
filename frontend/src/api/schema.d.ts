@@ -2351,6 +2351,30 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/audit-logs/export": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Export Audit Logs
+         * @description The current audit view as a CSV file, newest first, same scope and filters as the list.
+         *
+         *     UTF-8 with a BOM so Excel opens Korean names correctly; ``detail`` is the JSON blob verbatim.
+         *     Taking the export is itself audited (``audit.export``, with the filters and the row count):
+         *     a file leaving the system is exactly the kind of event the log exists for.
+         */
+        get: operations["export_audit_logs_api_v1_audit_logs_export_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/audit-logs": {
         parameters: {
             query?: never;
@@ -11037,6 +11061,45 @@ export interface operations {
             };
         };
     };
+    export_audit_logs_api_v1_audit_logs_export_get: {
+        parameters: {
+            query?: {
+                actor_id?: string | null;
+                actor_q?: string | null;
+                action?: string | null;
+                target?: string | null;
+                "at[gte]"?: string | null;
+                "at[lt]"?: string | null;
+                /** @description Token fallback for clients that cannot set custom headers, such as EventSource (SSE) */
+                access_token?: string | null;
+            };
+            header?: {
+                /** @description Bearer <jwt> */
+                authorization?: string | null;
+            };
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
     list_audit_logs_api_v1_audit_logs_get: {
         parameters: {
             query?: {
@@ -11194,6 +11257,7 @@ export interface operations {
     dashboard_summary_api_v1_dashboard_summary_get: {
         parameters: {
             query?: {
+                scope?: "mine" | "managed";
                 /** @description Token fallback for clients that cannot set custom headers, such as EventSource (SSE) */
                 access_token?: string | null;
             };

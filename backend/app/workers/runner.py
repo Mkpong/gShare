@@ -8,8 +8,10 @@ inventory reconcile are the Go operator's responsibility, NOT here.
 from __future__ import annotations
 
 import asyncio
+import os
 import secrets
 from collections.abc import Awaitable, Callable
+from pathlib import Path
 
 from app.core.config import settings
 from app.core.logging import configure_logging, get_logger
@@ -56,6 +58,20 @@ return 0
 """
 
 
+# Liveness for a process with no listening port: every job loop touches this file once per
+# tick, and the chart's exec probe restarts the pod when it goes stale. A wedged event loop is the
+# failure this catches — a single job raising is already counted by WORKER_JOB_FAILURES and
+# does not stop the others.
+HEARTBEAT_FILE = Path(os.environ.get("GSHARE_WORKER_HEARTBEAT_FILE", "/tmp/gshare-worker-alive"))
+
+
+def heartbeat() -> None:
+    try:
+        HEARTBEAT_FILE.touch()
+    except OSError:  # a read-only or missing /tmp must never take the worker down
+        log.warning("worker heartbeat: cannot touch %s", HEARTBEAT_FILE)
+
+
 async def loop(job: Job, interval: int, name: str) -> None:
     """Run ``job`` every ``interval`` seconds under an owner-token Redis lock.
 
@@ -66,6 +82,7 @@ async def loop(job: Job, interval: int, name: str) -> None:
     """
     redis = get_redis()
     while True:
+        heartbeat()
         token = secrets.token_hex(8)
         ttl = max(interval * 3, 300)
         try:

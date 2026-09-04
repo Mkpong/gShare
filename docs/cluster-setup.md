@@ -54,8 +54,9 @@ join (GPU and CPU in parallel) → addons on the control plane → node labellin
 plane and CPU workers as `cpu`, GPU workers with their configured mode) → verification.
 
 `hack/cluster-info` contains real addresses and is git-ignored; only
-`cluster-info.example` is tracked. So is `hack/storage-csi-key`, the SSH key pair the script
-generates for democratic-csi when a storage node is configured.
+`cluster-info.example` is tracked. `hack/storage-csi-key` (the SSH key pair the script generates
+for democratic-csi when a storage node is configured) is git-ignored too — a fresh clone simply
+generates a new pair on the next `up`.
 
 > To run the steps by hand on each node, use the same subcommands directly — see below.
 

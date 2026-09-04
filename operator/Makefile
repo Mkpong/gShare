@@ -9,7 +9,7 @@ CONTROLLER_GEN ?= $(LOCALBIN)/controller-gen
 ENVTEST ?= $(LOCALBIN)/setup-envtest
 KUSTOMIZE ?= $(LOCALBIN)/kustomize
 
-CONTROLLER_TOOLS_VERSION ?= v0.15.0
+CONTROLLER_TOOLS_VERSION ?= v0.16.5
 # release-0.19 or newer: earlier setup-envtest resolves assets from the retired
 # storage.googleapis.com/kubebuilder-tools bucket, which now answers 401.
 ENVTEST_VERSION ?= release-0.19

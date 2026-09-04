@@ -175,6 +175,7 @@
         "node_set_pool": "노드 풀 지정",
         "session_pause": "세션 일시정지",
         "pod_delete": "파드 삭제",
+        "audit_export": "감사 로그 내보내기",
         "audit_retention": "감사 로그 보존 정리",
         "user_bulk_create": "사용자 대량 등록",
         "credit_bulk_allocate": "크레딧 일괄 배분",
@@ -242,6 +243,9 @@
       "resultPending": "대기",
       "resultReady": "완료",
       "subtitle": "권한 변경 · 크레딧 조정 · 세션/정책 이벤트 (불변 기록)",
+      "exportCsv": "CSV 내보내기",
+      "exporting": "내보내는 중…",
+      "exportFailed": "CSV 내보내기에 실패했습니다.",
       "summary": "총 {{total}}건 · {{page}}/{{pages}} 페이지",
       "target": "대상",
       "targetKind": {
@@ -465,7 +469,7 @@
       "queuedSessions": "대기 세션",
       "runningOfTotal": "실행 / 전체",
       "runningSessions": "실행 중 세션",
-      "scopedSubtitle": "내 컨텍스트 요약 (운영·감사는 좌측 메뉴)",
+      "scopedSubtitle": "내가 관리하는 부서·조직의 세션 요약 (운영·감사는 좌측 메뉴)",
       "superOnly": "클러스터 전역 지표는 시스템 관리자(super admin) 전용입니다.",
       "title": "관리자 대시보드",
       "totalNodes": "총 {{count}} 노드",
@@ -630,6 +634,7 @@
     "monitor": {
       "allStatuses": "전체 상태",
       "bulkTerminated": "세션 {{count}}개를 강제 종료했습니다.",
+      "colLastChange": "마지막 동작",
       "colActions": "작업",
       "colCluster": "클러스터",
       "colEnqueued": "등록",
@@ -2180,6 +2185,8 @@
       "title": "유휴 일시정지 예고",
       "body": "세션 '{{session_name}}'이(가) 유휴 상태입니다. 약 {{minutes_left}}분 후 자동 일시정지됩니다. GPU를 사용하면 타이머가 초기화됩니다."
     },
+    "node_offline": { "title": "노드 오프라인: {{hostname}}", "body": "인벤토리 보고가 {{stale_min}}분 이상 끊겨 배치 대상에서 제외했습니다. 노드 관리에서 확인하세요." },
+    "node_online": { "title": "노드 복귀: {{hostname}}", "body": "인벤토리 보고가 재개되어 다시 배치 대상입니다." },
     "session_paused": {
       "title": "세션 일시정지",
       "body": "세션 '{{session_name}}' 일시정지: GPU 반환, 과금 중지.",

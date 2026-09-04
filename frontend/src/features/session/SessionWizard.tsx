@@ -356,9 +356,11 @@ export function SessionWizard() {
     if (stepKey === 'review' || !offeringId || !imageId) return;
     const t = setTimeout(() => { void previewCost.mutateAsync(toBody() as never).catch(() => undefined); }, 300);
     return () => clearTimeout(t);
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   // selectedOffering rate in the deps: an admin price edit invalidates offerings, and the
   // refreshed rate must re-run the estimate — the review step used to keep quoting the old price.
+  // previewCost/toBody/stepKey are deliberately left out: they are re-created every render and
+  // would turn the 300 ms debounce into a request per keystroke.
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [step, offeringId, imageId, form.resource_class, effMode, effVram, effCores, form.compute_preset_id, form.cpu, form.mem_gb, form.disk_gb, activeProjectId, selectedOffering?.credit_per_hour]);
 
   const guard = useFormGuard(createSession.isPending);
