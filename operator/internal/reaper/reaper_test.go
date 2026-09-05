@@ -8,6 +8,8 @@ import (
 	"testing"
 	"time"
 
+	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+
 	"k8s.io/apimachinery/pkg/types"
 
 	gsharev1 "github.com/gshare/operator/api/v1"
@@ -197,5 +199,24 @@ func TestHistoryWindowTrim(t *testing.T) {
 		if sm.t.Before(T.Add(-recurrenceWindow)) {
 			t.Fatalf("sample older than window was not trimmed: %v", sm.t)
 		}
+	}
+}
+
+func TestMaxRuntimeCountsFromTheCurrentRun(t *testing.T) {
+	now := time.Now()
+	s := &gsharev1.GShareSession{}
+	s.CreationTimestamp = metav1.NewTime(now.Add(-48 * time.Hour))
+	s.Annotations = map[string]string{maxRuntimeAnnotation: "3600"}
+	if !maxRuntimeExceeded(s, now) {
+		t.Fatalf("a two-day-old CR with a 1h cap and no resume stamp must be over the cap")
+	}
+	// Resumed ten minutes ago: the paused days do not count.
+	s.Annotations[runStartedAtAnnotation] = now.Add(-10 * time.Minute).UTC().Format(time.RFC3339)
+	if maxRuntimeExceeded(s, now) {
+		t.Fatalf("the cap must be measured from run-started-at, not from creation")
+	}
+	s.Annotations[runStartedAtAnnotation] = "garbage"
+	if !maxRuntimeExceeded(s, now) {
+		t.Fatalf("an unparsable stamp falls back to the creation time")
 	}
 }

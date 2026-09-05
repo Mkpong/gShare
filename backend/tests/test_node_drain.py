@@ -9,6 +9,7 @@ import pytest
 from app.api.infra_router import _DrainBody, drain_node
 from app.auth.rbac import Principal
 from app.core import ids
+from app.core.config import settings
 from app.db.models import (
     Allocation,
     Cluster,
@@ -84,3 +85,9 @@ async def test_drain_reschedule_parks_paused_when_no_capacity(db, monkeypatch):
     db.expunge_all()
     row = await db.get(SessionRow, sess.id)
     assert row.status == "paused", row.status   # work preserved, never killed
+
+
+@pytest.fixture(autouse=True)
+def _fast_drain(monkeypatch):
+    # No operator in unit tests: do not wait for a pause ack that never comes.
+    monkeypatch.setattr(settings, "DRAIN_PAUSE_ACK_SEC", 0.05)

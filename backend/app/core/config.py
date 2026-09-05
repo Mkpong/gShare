@@ -112,6 +112,25 @@ class Settings(BaseSettings):
     # offline (and back to ready when reports resume). Reports land every inventory tick, so
     # this only needs to outlast a slow tick, not a slow cluster.
     NODE_STALE_SEC: int = 300
+    # Capacity of the volume backing pool (GB) for the admin dashboard's storage panel. The
+    # operator only sees a node's root disk, which is not the ZFS pool the volumes live on; 0 =
+    # unknown, and the panel then shows the storage nodes' disk, labelled as such.
+    STORAGE_POOL_CAPACITY_GB: int = 0
+    # Seed the boanlab/gshare-session catalogue images at startup. A site that serves session
+    # images from its own registry registers them by hand and turns this off, or the Docker Hub
+    # references would sit next to the local ones and fail to pull.
+    SEED_SESSION_IMAGES: bool = True
+    # A running/preparing session whose operator heartbeat is older than this is treated as lost
+    # (pod gone without a terminal phase) and settled. Only enforced while the operator itself is
+    # demonstrably alive (fresh node heartbeats), so an operator outage never mass-terminates.
+    SESSION_STALE_SEC: int = 300
+    # Container restarts (CrashLoopBackOff) after which a session is ended instead of billed.
+    SESSION_CRASH_LOOP_RESTARTS: int = 3
+    # A reason-less Paused report within this many seconds of a resume is treated as the echo of
+    # the backend stop the resume overtook, not as a reaper pause.
+    RESUME_ECHO_WINDOW_SEC: int = 60
+    # How long a drain waits for the operator to confirm each pause before resuming the session.
+    DRAIN_PAUSE_ACK_SEC: float = 15.0
     NODE_RESERVED_CPU: int = 1
     NODE_RESERVED_MEM_GB: int = 2
     # Rate for keeping persistent storage (data volumes), billed continuously per GB-hour against

@@ -58,11 +58,14 @@ export function useClusterMetrics(query: { region?: string } = {}, opts?: { enab
 }
 
 // GET /dashboard/summary — aggregates for the active context, feeding the credit-usage cards.
-export function useDashboardSummary() {
+// scope=managed widens the session figures to the people the caller administers (their groups /
+// organizations), which is what an org_admin or group_admin dashboard is about.
+export function useDashboardSummary(scope: 'mine' | 'managed' = 'mine') {
   return useQuery({
-    queryKey: ['dashboard', 'summary'],
+    queryKey: ['dashboard', 'summary', scope],
+    refetchInterval: 15000,
     queryFn: async () => {
-      const { data } = await raw.GET('/api/v1/dashboard/summary');
+      const { data } = await raw.GET('/api/v1/dashboard/summary', { params: { query: { scope } } });
       return data as DashboardSummary;
     },
   });

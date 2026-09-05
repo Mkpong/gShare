@@ -59,6 +59,7 @@ class GpuDeviceRow(BaseModel):
     desired_mode: str | None = None
     mode_state: str = "ready"
     status: str
+    node_status: str | None = None   # ready|busy|cordoned|offline of the hosting node
     gpu_uuid: str
     total_mem_mb: int
     used_mem_mb: int
@@ -117,7 +118,8 @@ class ClusterCompute(BaseModel):
 
 class ClusterStorageDisk(BaseModel):
     used: int   # provisioned volume quota (GiB) — allocation, not bytes on disk
-    total: int  # storage-server host disk capacity (GB)
+    total: int  # configured pool capacity (GB) when known, else the storage nodes' host disk
+    source: str = "node_disk"   # pool | node_disk — what `total` measures
 
 
 class ClusterStorage(BaseModel):

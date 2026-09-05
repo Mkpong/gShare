@@ -8,7 +8,7 @@ from pydantic import BaseModel
 
 class OperatorStatusEvent(BaseModel):
     """Status callback payload. Drives consume/settle triggers."""
-    phase: str                          # running|terminated|error|preparing|terminating
+    phase: str                          # running|terminated|error|preparing|terminating|heartbeat
     bound_gpu_uuid: str | None = None   # physical GPU bound on running
     node_name: str | None = None        # k8s node the pod landed on (pod.spec.nodeName)
     yield_state: str | None = None      # "Yielded" if operator did an in-place yield (not cold)
@@ -16,6 +16,10 @@ class OperatorStatusEvent(BaseModel):
     used_mem_mb: int | None = None      # measured occupancy (inventory reconciliation)
     message: str | None = None
     trace_id: str | None = None         # W3C traceparent trace-id
+    # Heartbeat facts (phase=heartbeat, also carried on phase changes when the pod exists).
+    restart_count: int | None = None    # kubelet container restartCount
+    generation: int | None = None       # CR generation the report describes
+    container_state: str | None = None  # Running|Waiting:<reason>|Terminated:<reason>
     ts: datetime                        # event time (UTC)
 
 
@@ -36,6 +40,9 @@ class OperatorGpuDeviceUpsert(BaseModel):
     model: str | None = None            # GPU model if known (node label nvidia.com/gpu.product)
     cluster_id: str | None = None       # operator injects cfg.ClusterID
     node_cpu: int | None = None         # node CPU cores
+    # The node's Ready condition as the operator saw it. None = an operator too old to report it,
+    # treated as ready. False withholds the liveness heartbeat and marks the node offline at once.
+    node_ready: bool | None = None
     node_mem_gb: int | None = None      # node memory in GiB
     node_disk_gb: int | None = None     # node ephemeral storage in GiB
 
@@ -48,6 +55,7 @@ class OperatorNodeUpsert(BaseModel):
     node_id: str                        # k8s node name
     cluster_id: str | None = None       # operator injects cfg.ClusterID
     node_cpu: int | None = None
+    node_ready: bool | None = None      # see OperatorGpuDeviceUpsert.node_ready
     node_mem_gb: int | None = None
     node_disk_gb: int | None = None
     lossless_capable: bool = False      # lossless-pause prerequisites (cuda-checkpoint plus CRIU) are labelled ready on the node
@@ -64,6 +72,7 @@ class OperatorNodeHealthEvent(BaseModel):
     kind: str                           # xid|ecc|temp|down
     severity: str = "critical"          # info|warning|critical
     action: str | None = None           # cordon|alert
+    gpu_uuid: str | None = None         # the faulting card when the source identifies one
     message: str | None = None
     cluster_id: str | None = None
     id: str | None = None

@@ -122,6 +122,13 @@ type GShareSessionSpec struct {
 	// +optional
 	PinnedGpuUuid string `json:"pinnedGpuUuid,omitempty"`
 
+	// ExcludedNodes lists hostnames the pod must not be scheduled on — the nodes the control
+	// plane holds as cordoned or offline at handoff time. A drain vacates a session with a
+	// cold pause and resumes it; without this a CPU session (placed by kube-scheduler, not by
+	// the ledger's card pin) could land straight back on the node being drained.
+	// +optional
+	ExcludedNodes []string `json:"excludedNodes,omitempty"`
+
 	// FullCard requests the whole physical card THROUGH hami-scheduler
 	// (gpumem-percentage=100 + gpucores=100) instead of the plain device plugin, so exclusive
 	// sessions flow through the same scheduler and UUID pinning as fractional ones and node-level

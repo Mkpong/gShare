@@ -67,6 +67,14 @@ api:
   buildRegistry: "registry.gshare.internal/gshare-user"
   # Audit-log retention in days (0 disables pruning).
   auditRetentionDays: 180
+  # Seconds without an operator inventory report before a node is marked offline (and back to
+  # ready when reports resume). super_admins are notified on each transition.
+  nodeStaleSec: 300
+  # Seed the boanlab/gshare-session catalogue images at startup. Sites serving session images
+  # from a private registry register them by hand and set this to false.
+  seedSessionImages: true
+  # Placement policy for fractional GPU slices when several cards fit: binpack | spread.
+  gpuPacking: binpack
   # Days-to-hours window a deleted volume's data is kept before the operator reclaims the PVC
   # (and the CSI driver the dataset). 0 reclaims on the next sync (about five minutes).
   volumeReclaimGraceHours: 24
@@ -204,6 +212,10 @@ postgres:
     schedule: "0 3 * * *"
     storage: 10Gi
     keep: 14
+  # Scheduling requests for the in-cluster instance. Deliberately no limits: an OOM-killed
+  # database is a worse failure than a busy one.
+  resources:
+    requests: { cpu: "250m", memory: 512Mi }
   host: gshare-pg-rw.gshare-system.svc  # matches this service name when inCluster
   port: 5432
   database: gshare
@@ -211,8 +223,19 @@ postgres:
 redis:
   inCluster: false                      # true → chart deploys redis Deployment+Service
   image: redis:7
+  resources:
+    requests: { cpu: "50m", memory: 64Mi }
   host: gshare-redis.gshare-system.svc
   port: 6379
+
+# ── Storage panel: capacity (GB) of the pool that backs user volumes (the ZFS pool, not the
+# storage node's root disk, which is all the operator can see). 0 = unknown.
+storage:
+  poolCapacityGb: 0
+
+# ── PodDisruptionBudgets: minAvailable 1 for api / worker / frontend when they run >1 replica ──
+podDisruptionBudget:
+  enabled: true
 
 # ── Secret auto-generation (dev/all-in-one) ──
 # true → chart creates+keeps auth-token / jwt-signing (RS256) / bootstrap-admin (+ pg-app when inCluster).

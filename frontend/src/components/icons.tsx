@@ -45,5 +45,5 @@ export {
   UserCircle,
   UsersThree,
   Warning,
-  X,
+  X, DownloadSimple,
 } from '@phosphor-icons/react';

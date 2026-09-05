@@ -42,6 +42,10 @@ spec:
       containers:
         - name: postgres
           image: {{ .Values.postgres.image }}
+          {{- with .Values.postgres.resources }}
+          resources:
+            {{- toYaml . | nindent 12 }}
+          {{- end }}
           env:
             - { name: POSTGRES_USER, value: {{ .Values.postgres.database | quote }} }
             - { name: POSTGRES_DB, value: {{ .Values.postgres.database | quote }} }
@@ -97,6 +101,10 @@ spec:
       containers:
         - name: redis
           image: {{ .Values.redis.image }}
+          {{- with .Values.redis.resources }}
+          resources:
+            {{- toYaml . | nindent 12 }}
+          {{- end }}
           ports:
             - { containerPort: 6379, name: redis }
           readinessProbe:

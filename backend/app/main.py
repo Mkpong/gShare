@@ -34,7 +34,8 @@ async def _lifespan(app: FastAPI):  # noqa: ANN202
         )
         await seed_bootstrap_admin()
         await seed_local_cluster()
-        await seed_base_images()
+        if settings.SEED_SESSION_IMAGES:
+            await seed_base_images()
         await seed_system_wallet()
         await seed_offerings()
         await seed_presets()

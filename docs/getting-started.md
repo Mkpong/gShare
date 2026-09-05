@@ -144,7 +144,7 @@ example in [`domain.example.yaml`](../deploy/values/domain.example.yaml)):
   kube-state exporters. It powers the admin monitoring page, the per-session live-usage
   panels, and (via `operator.prometheusUrl`) the idle reaper's utilisation source — on a
   cluster with more than one GPU node, set `prometheusUrl`; the HAMi-monitor fallback
-  round-robins per-node pods and idle sessions are then never auto-paused.
+  round-robins per-node pods and idle sessions are then never auto-paused. Prometheus keeps its data on a PVC of the cluster's **default StorageClass** — it does not need the optional storage node. (If an earlier install left a PVC pinned to `gshare-data`, delete that PVC before re-applying: `storageClassName` is immutable.)
 - **Mixed GPU fleet** — different card models in one cluster need
   `operator.perCardMode: true`, which pins each session pod to the exact card the ledger
   reserved. Without it a session priced for one model can land on another.

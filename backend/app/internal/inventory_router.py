@@ -59,6 +59,23 @@ async def upsert_node(
     return {"accepted": True}
 
 
+@router.get("/internal/nodes/cordoned")
+async def cordoned_nodes(
+    claims: dict = Depends(require_internal_jwt),
+    db: AsyncSession = Depends(get_db),
+):
+    """Hostnames the ledger holds as cordoned, for the operator to mirror onto the Kubernetes
+    nodes (spec.unschedulable). The control plane never touches Kubernetes itself; without this
+    mirror a gShare cordon only steered the ledger's card placement and kube-scheduler could still
+    put a CPU session — or a resumed one — straight back on a node being drained."""
+    sub = str(claims.get("sub", ""))
+    cluster_id = sub.split(":", 1)[1] if sub.startswith("operator:") else sub
+    rows = await db.scalars(
+        select(GpuNode.hostname).where(GpuNode.cluster_id == cluster_id, GpuNode.status == "cordoned")
+    )
+    return {"hostnames": sorted(set(rows.all()))}
+
+
 @router.post("/internal/inventory/drift", status_code=status.HTTP_202_ACCEPTED)
 async def report_drift(
     _claims: dict = Depends(require_internal_jwt),

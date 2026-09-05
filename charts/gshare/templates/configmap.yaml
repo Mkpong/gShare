@@ -24,6 +24,16 @@ data:
   GSHARE_DB_POOL_SIZE: {{ .Values.api.dbPoolSize | default 20 | quote }}
   # Audit-log retention in days; 0 keeps everything.
   GSHARE_AUDIT_RETENTION_DAYS: {{ .Values.api.auditRetentionDays | default 180 | quote }}
+  # A node whose operator inventory report has been silent this long is marked offline (and back
+  # to ready when reports resume); super_admins are notified on each transition.
+  GSHARE_NODE_STALE_SEC: {{ .Values.api.nodeStaleSec | default 300 | quote }}
+  # Capacity (GB) of the pool backing user volumes, for the admin dashboard; 0 = unknown.
+  # Seed the Docker Hub session catalogue at startup; false for sites that run their own registry.
+  GSHARE_SEED_SESSION_IMAGES: {{ dig "api" "seedSessionImages" true (.Values | toYaml | fromYaml) | quote }}
+  GSHARE_STORAGE_POOL_CAPACITY_GB: {{ dig "storage" "poolCapacityGb" 0 (.Values | toYaml | fromYaml) | quote }}
+  # Fractional-slice placement across identical cards: binpack (fill the fullest card that
+  # fits, keep empty cards for large/exclusive jobs) or spread (emptiest card, balance load).
+  GSHARE_GPU_PACKING: {{ .Values.api.gpuPacking | default "binpack" | quote }}
   # Console image builds: registry prefix kaniko pushes to; the final ref is
   # {prefix}/{user_id}/{name}:{tag}. Point at the local registry in plain-HTTP labs.
   GSHARE_BUILD_REGISTRY: {{ .Values.api.buildRegistry | default "registry.gshare.internal/gshare-user" | quote }}

@@ -14,6 +14,7 @@ import (
 	"sort"
 	"strconv"
 	"strings"
+	"time"
 
 	corev1 "k8s.io/api/core/v1"
 	netv1 "k8s.io/api/networking/v1"
@@ -106,7 +107,7 @@ func (r *SessionReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ct
 					logger.Error(cerr, "checkpoint cleanup on terminate failed (will leak)", "session", s.Name, "node", s.Status.CheckpointNode)
 				}
 			}
-			_ = r.SoT.Report(ctx, s.Name, sot.StatusEvent{Phase: "Terminated", TraceID: traceID})
+			_ = r.SoT.Report(ctx, s.Name, sot.StatusEvent{Generation: s.Generation, Phase: "Terminated", TraceID: traceID})
 			controllerutil.RemoveFinalizer(&s, finalizer)
 			if err := r.Update(ctx, &s); err != nil {
 				return ctrl.Result{}, err
@@ -192,7 +193,7 @@ func (r *SessionReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ct
 				if aerr := r.setNodeYielded(ctx, live.Spec.NodeName, s.Status.BoundGpuUuid, true); aerr != nil {
 					logger.Error(aerr, "publish yielded-gpus node annotation failed", "session", s.Name)
 				}
-				_ = r.SoT.Report(ctx, s.Name, sot.StatusEvent{Phase: "Paused", YieldState: "Yielded", TraceID: traceID, Message: s.Annotations[pauseReasonAnnotation]})
+				_ = r.SoT.Report(ctx, s.Name, sot.StatusEvent{Generation: s.Generation, Phase: "Paused", YieldState: "Yielded", TraceID: traceID, Message: s.Annotations[pauseReasonAnnotation]})
 				logger.Info("session yielded in-place (Pod alive, VRAM evicted)", "session", s.Name)
 				return ctrl.Result{}, nil
 			}
@@ -228,7 +229,7 @@ func (r *SessionReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ct
 			if err := r.Status().Update(ctx, &s); err != nil {
 				return ctrl.Result{}, err
 			}
-			_ = r.SoT.Report(ctx, s.Name, sot.StatusEvent{Phase: "Paused", TraceID: traceID, Message: s.Annotations[pauseReasonAnnotation]})
+			_ = r.SoT.Report(ctx, s.Name, sot.StatusEvent{Generation: s.Generation, Phase: "Paused", TraceID: traceID, Message: s.Annotations[pauseReasonAnnotation]})
 			logger.Info("session paused (pod released)", "session", s.Name, "lossless", checkpointRef != "")
 		}
 		return ctrl.Result{}, nil
@@ -294,6 +295,31 @@ func (r *SessionReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ct
 		return ctrl.Result{}, err
 	}
 
+	// 1.7) A live Pod sitting on a node the spec now excludes (a drain vacated the session and
+	// the resume arrived before the pause had torn the Pod down) is replaced: delete it here and
+	// let the next reconcile build the Pod elsewhere. Without this the "rescheduled" session
+	// quietly stays put on the node being drained.
+	{
+		var cur corev1.Pod
+		if err := r.Get(ctx, podKey(&s), &cur); err == nil && cur.DeletionTimestamp.IsZero() {
+			replace := ""
+			if cur.Spec.NodeName == "" && cur.Spec.Affinity != nil && cur.Spec.Affinity.NodeAffinity != nil {
+				// A Pending pod from an earlier operator that baked node exclusion into affinity:
+				// it would never schedule once the cordon lifted. Rebuild it without.
+				replace = "legacy node affinity"
+			} else if cur.Spec.NodeName != "" && r.nodeExcluded(ctx, cur.Spec.NodeName, s.Spec.ExcludedNodes) {
+				replace = "node " + cur.Spec.NodeName + " is cordoned/unready"
+			}
+			if replace != "" {
+				logger.Info("replacing pod", "session", s.Name, "why", replace)
+				if derr := r.Delete(ctx, &cur); derr != nil && !apierrors.IsNotFound(derr) {
+					return ctrl.Result{}, derr
+				}
+				return ctrl.Result{RequeueAfter: 3 * time.Second}, nil
+			}
+		}
+	}
+
 	// 2) desired Pod by mode.
 	pod := r.Builder.BuildPod(&s)
 	if err := controllerutil.SetControllerReference(&s, pod, r.Scheme); err != nil {
@@ -303,7 +329,7 @@ func (r *SessionReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ct
 		if apierrors.IsInvalid(err) {
 			// A structurally invalid pod will never succeed by retrying — tell the control plane
 			// (session -> error with the reason) instead of crash-looping into a silent pending.
-			_ = r.SoT.Report(ctx, s.Name, sot.StatusEvent{
+			_ = r.SoT.Report(ctx, s.Name, sot.StatusEvent{Generation: s.Generation,
 				Phase: "Error", Message: "pod rejected: " + err.Error(),
 			})
 			logger.Error(err, "pod spec rejected by the API server; reported error", "session", s.Name)
@@ -339,6 +365,25 @@ func (r *SessionReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ct
 		return ctrl.Result{}, err
 	}
 	phase, gpu := mapPhase(&live), boundGPU(&live)
+	if live.UID != "" && !live.DeletionTimestamp.IsZero() {
+		// The Pod is being torn down while the session is still desired: a manual delete, a
+		// node eviction, or a pause the resume overtook. Its exit is not the session's end — the
+		// next reconcile rebuilds it — so it must not surface as Terminated/Error, which would
+		// settle the bill and release the reservation out from under a session that continues.
+		phase = "Preparing"
+	}
+	restarts, cstate := containerFacts(&live)
+	if phase == s.Status.Phase && live.UID != "" && (phase == "Running" || phase == "Preparing") {
+		// Nothing changed: still a heartbeat. The control plane never inspects Kubernetes, so
+		// this is how it learns the pod is still there (and how a crash loop surfaces — a pod
+		// whose container keeps restarting stays Running from the phase's point of view).
+		_ = r.SoT.Report(ctx, s.Name, sot.StatusEvent{Generation: s.Generation,
+			Phase: "Heartbeat", BoundGpuUUID: gpu, NodeName: live.Spec.NodeName,
+			PodRef: live.Namespace + "/" + live.Name, RestartCount: restarts, ContainerState: cstate,
+			TraceID: traceID,
+		})
+		return ctrl.Result{RequeueAfter: heartbeatInterval}, nil
+	}
 	if phase != s.Status.Phase {
 		s.Status.Phase = phase
 		s.Status.BoundGpuUuid = gpu
@@ -358,13 +403,15 @@ func (r *SessionReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ct
 			return ctrl.Result{}, err
 		}
 		// running->consume / error->refund decision (made only in the control plane).
-		ev := sot.StatusEvent{
-			Phase:        phase,
-			BoundGpuUUID: gpu,
-			NodeName:     live.Spec.NodeName,
-			PodRef:       s.Status.PodRef,
-			UsedMemMB:    s.Status.UsedMemMb,
-			TraceID:      traceID,
+		ev := sot.StatusEvent{Generation: s.Generation,
+			Phase:          phase,
+			BoundGpuUUID:   gpu,
+			NodeName:       live.Spec.NodeName,
+			PodRef:         s.Status.PodRef,
+			UsedMemMB:      s.Status.UsedMemMb,
+			RestartCount:   restarts,
+			ContainerState: cstate,
+			TraceID:        traceID,
 		}
 		if live.Status.Phase == corev1.PodFailed || live.Status.Phase == corev1.PodSucceeded {
 			// Carry the kubelet's failure cause (e.g. "Evicted: Pod ephemeral local storage usage
@@ -381,8 +428,37 @@ func (r *SessionReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ct
 		_ = r.SoT.Report(ctx, s.Name, ev)
 		logger.Info("session phase changed", "session", s.Name, "phase", phase)
 	}
-
+	if live.UID != "" && (phase == "Running" || phase == "Preparing") {
+		return ctrl.Result{RequeueAfter: heartbeatInterval}, nil
+	}
 	return ctrl.Result{}, nil
+}
+
+// heartbeatInterval is how often a live session is re-reported to the control plane. The
+// control plane's SESSION_STALE_SEC must comfortably exceed it.
+const heartbeatInterval = 60 * time.Second
+
+// containerFacts reads the session container's restart count and a compact state string
+// ("Running", "Waiting:CrashLoopBackOff", "Terminated:OOMKilled") off the pod status.
+func containerFacts(p *corev1.Pod) (int, string) {
+	if p == nil || len(p.Status.ContainerStatuses) == 0 {
+		return 0, ""
+	}
+	cs := p.Status.ContainerStatuses[0]
+	for _, c := range p.Status.ContainerStatuses {
+		if c.Name == "session" {
+			cs = c
+			break
+		}
+	}
+	state := "Running"
+	switch {
+	case cs.State.Waiting != nil:
+		state = "Waiting:" + cs.State.Waiting.Reason
+	case cs.State.Terminated != nil:
+		state = "Terminated:" + cs.State.Terminated.Reason
+	}
+	return int(cs.RestartCount), state
 }
 
 // borrowGuard verifies the in-place-yield lend invariant before a borrow Pod is placed: the target
@@ -480,7 +556,13 @@ func (r *SessionReconciler) cleanupChildren(ctx context.Context, s *gsharev1.GSh
 		&corev1.Secret{ObjectMeta: metav1.ObjectMeta{Namespace: ns, Name: "ses-" + s.Name + "-secret"}},
 	}
 	for _, obj := range children {
-		if err := r.Delete(ctx, obj); err != nil && !apierrors.IsNotFound(err) {
+		var opts []client.DeleteOption
+		if pod, ok := obj.(*corev1.Pod); ok && r.podNodeUnreachable(ctx, pod) {
+			// The kubelet will never confirm the deletion; without a zero grace period the pod
+			// sits in Terminating until someone deletes the Node object.
+			opts = append(opts, client.GracePeriodSeconds(0))
+		}
+		if err := r.Delete(ctx, obj, opts...); err != nil && !apierrors.IsNotFound(err) {
 			return err
 		}
 	}
@@ -767,4 +849,53 @@ func (r *SessionReconciler) SetupWithManager(mgr ctrl.Manager) error {
 		Owns(&corev1.Secret{}).
 		Owns(&netv1.Ingress{}).
 		Complete(r)
+}
+
+// podNodeUnreachable reports whether the pod's node has stopped answering (Ready != True), in
+// which case a graceful delete can never complete.
+func (r *SessionReconciler) podNodeUnreachable(ctx context.Context, key *corev1.Pod) bool {
+	var live corev1.Pod
+	if err := r.Get(ctx, client.ObjectKeyFromObject(key), &live); err != nil || live.Spec.NodeName == "" {
+		return false
+	}
+	var node corev1.Node
+	if err := r.Get(ctx, client.ObjectKey{Name: live.Spec.NodeName}, &node); err != nil {
+		return false
+	}
+	for _, c := range node.Status.Conditions {
+		if c.Type == corev1.NodeReady {
+			return c.Status != corev1.ConditionTrue
+		}
+	}
+	return true
+}
+
+// nodeExcluded reports whether a pod on `hostname` must be moved: the control plane listed the
+// node in spec.excludedNodes AND the node is currently unschedulable (the mirrored cordon) or
+// not Ready. The second condition is what keeps a stale list harmless: once the cordon is lifted
+// a pod landing there is fine and must not be churned.
+func (r *SessionReconciler) nodeExcluded(ctx context.Context, hostname string, excluded []string) bool {
+	listed := false
+	for _, h := range excluded {
+		if h == hostname {
+			listed = true
+			break
+		}
+	}
+	if !listed {
+		return false
+	}
+	var node corev1.Node
+	if err := r.Get(ctx, client.ObjectKey{Name: hostname}, &node); err != nil {
+		return false
+	}
+	if node.Spec.Unschedulable {
+		return true
+	}
+	for _, c := range node.Status.Conditions {
+		if c.Type == corev1.NodeReady {
+			return c.Status != corev1.ConditionTrue
+		}
+	}
+	return false
 }

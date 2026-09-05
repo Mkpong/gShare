@@ -12,7 +12,7 @@ from app.core.logging import get_logger
 from app.core.metrics import QUEUE_DEPTH
 from app.db.base import get_sessionmaker
 from app.db.models import QueueEntry
-from app.domain.scheduler import SchedulerService
+from app.domain.scheduler import SchedulerService, resume_parked_from_queue
 
 log = get_logger(__name__)
 
@@ -36,5 +36,11 @@ async def run() -> None:
             scheduler = SchedulerService(db)
             outcome = await scheduler.reschedule_from_queue()
             await db.commit()
+        if outcome in ("blocked", "empty"):
+            break
+    # Second pass: sessions a drain parked (paused + queued) come back as capacity allows.
+    for _ in range(MAX_DEQUEUE_PER_TICK):
+        async with maker() as db:
+            outcome = await resume_parked_from_queue(db)
         if outcome in ("blocked", "empty"):
             return

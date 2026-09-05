@@ -97,6 +97,16 @@ body,
   height: 100%;
 }
 
+/* The app shell scrolls its own <main>; the document itself must not, or the wheel over a
+   long admin table also drags the window and leaves an unpainted band under the shell. The
+   html background matters for the same band and for overscroll bounce. */
+html {
+  background: var(--bg);
+}
+html:has(.gs-shell) {
+  overflow: hidden;
+}
+
 body {
   margin: 0;
   background: var(--bg);

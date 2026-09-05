@@ -1,7 +1,8 @@
 import { useMemo, useState } from 'react';
 import { Select } from '@/components/Select';
 import { useTranslation } from 'react-i18next';
-import { useGpuDevices, useNodes, useSetDeviceMode, type GpuMode } from '@/api/hooks/useNodes';
+import { useGpuDevices, useNodes, useSetDeviceMode, useSetDeviceHealth, type GpuMode } from '@/api/hooks/useNodes';
+import { useConfirm } from '@/components/ConfirmDialog';
 import { PageHeader } from '@/components/PageHeader';
 import { Table, type Column } from '@/components/Table';
 import { StatusPill } from '@/components/StatusPill';
@@ -17,6 +18,7 @@ interface DeviceRow {
   desired_mode?: string | null;
   mode_state?: string | null;
   status?: string | null;
+  node_status?: string | null;
   total_mem_mb?: number | null;
   used_mem_mb?: number | null;
   used_cores?: number | null;
@@ -30,9 +32,13 @@ const MODES: GpuMode[] = ['fractional', 'exclusive', 'mig'];
 export function AdminGpus() {
   const { t } = useTranslation();
   const pushToast = useUiStore((s) => s.pushToast);
-  const devices = (useGpuDevices().data ?? []) as DeviceRow[];
-  const nodes = useNodes().data ?? [];
+  const devicesData = useGpuDevices().data;
+  const devices = useMemo(() => (devicesData ?? []) as DeviceRow[], [devicesData]);
+  const nodesData = useNodes().data;
+  const nodes = useMemo(() => nodesData ?? [], [nodesData]);
   const setMode = useSetDeviceMode();
+  const setHealth = useSetDeviceHealth();
+  const confirm = useConfirm();
   const [modelFilter, setModelFilter] = useState('');
 
   const nodeName = useMemo(() => {
@@ -93,6 +99,10 @@ export function AdminGpus() {
       render: (d) => (
         <span className="inline-flex items-center gap-1.5">
           <StatusPill kind={d.status ?? 'unknown'} label={t(`enum.status.${d.status}`, { defaultValue: d.status ?? '-' })} />
+          {/* The node's state overrides what the card can do: no placements land on an offline or cordoned node. */}
+          {(d.node_status === 'offline' || d.node_status === 'cordoned') && (
+            <span className="gs-tag text-danger">{t(`enum.nodeStatus.${d.node_status}`, { defaultValue: d.node_status })}</span>
+          )}
           {d.mode_state && d.mode_state !== 'ready' && (
             <span className="gs-tag text-warn">{t(`enum.modeState.${d.mode_state}`, { defaultValue: d.mode_state })}</span>
           )}
@@ -112,6 +122,37 @@ export function AdminGpus() {
         >
           {MODES.map((m) => <option key={m} value={m}>{modeLabel(m)}</option>)}
         </Select>
+      ),
+    },
+    {
+      // Card health is an administrator's call: a faulted card leaves placement and its sessions
+      // are settled (gpu_fault); a repaired card is put back by hand.
+      key: 'health', header: t('admin.gpus.colHealth'), align: 'right', sortable: false,
+      render: (d) => d.status === 'unhealthy' ? (
+        <button type="button" className="gs-btn gs-btn-sm" disabled={setHealth.isPending} onClick={(e) => { e.stopPropagation();
+          setHealth.mutate({ deviceId: d.id, status: 'ready' }, {
+            onSuccess: () => pushToast('success', t('admin.gpus.healthRestored')),
+            onError: (err) => pushToast('error', humanizeError(asApiError(err))),
+          }); }}>
+          {t('admin.gpus.markHealthy')}
+        </button>
+      ) : (
+        <button type="button" className="gs-btn gs-btn-sm gs-btn-danger" disabled={setHealth.isPending} onClick={async (e) => {
+          e.stopPropagation();
+          const ok = await confirm({
+            title: t('admin.gpus.confirmFaultTitle', { model: d.model ?? d.id }),
+            body: t('admin.gpus.confirmFaultBody'),
+            confirmLabel: t('admin.gpus.markUnhealthy'),
+            destructive: true,
+          });
+          if (!ok) return;
+          setHealth.mutate({ deviceId: d.id, status: 'unhealthy' }, {
+            onSuccess: (r) => pushToast('success', t('admin.gpus.faultMarked', { count: r?.terminated_sessions?.length ?? 0 })),
+            onError: (err) => pushToast('error', humanizeError(asApiError(err))),
+          });
+        }}>
+          {t('admin.gpus.markUnhealthy')}
+        </button>
       ),
     },
   ];

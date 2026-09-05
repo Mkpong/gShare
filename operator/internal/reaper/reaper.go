@@ -181,7 +181,7 @@ func (r *IdleReaper) tick(ctx context.Context) {
 					idle := r.idleFor(&s)
 					if idle > 0 && idle >= window-idleWarnLead && !r.hasWarned(uid) {
 						left := window - idle
-						_ = r.SoT.Report(ctx, s.Name, sot.StatusEvent{
+						_ = r.SoT.Report(ctx, s.Name, sot.StatusEvent{Generation: s.Generation,
 							Phase:   "IdleWarning",
 							PodRef:  s.Status.PodRef,
 							Message: fmt.Sprintf("%d", int(left.Seconds())),
@@ -233,7 +233,7 @@ func (r *IdleReaper) tick(ctx context.Context) {
 			logf.FromContext(ctx).Error(err, "reaper terminate failed", "session", s.Name, "reason", reason)
 			continue
 		}
-		_ = r.SoT.Report(ctx, s.Name, sot.StatusEvent{
+		_ = r.SoT.Report(ctx, s.Name, sot.StatusEvent{Generation: s.Generation,
 			Phase:   "Terminating",
 			PodRef:  s.Status.PodRef,
 			Message: reason,
@@ -479,11 +479,25 @@ func maxRuntimeExceeded(s *gsharev1.GShareSession, now time.Time) bool {
 	if secs <= 0 {
 		return false
 	}
-	start := s.CreationTimestamp.Time
+	start := runStart(s)
 	if start.IsZero() {
 		return false
 	}
 	return now.Sub(start) > time.Duration(secs)*time.Second
+}
+
+// runStartedAtAnnotation is stamped by the control plane on every resume: the lifetime cap counts
+// from the current run, not from the CR's creation — a session paused for a week and resumed has
+// not "run" for a week.
+const runStartedAtAnnotation = "gshare.io/run-started-at"
+
+func runStart(s *gsharev1.GShareSession) time.Time {
+	if v, ok := s.Annotations[runStartedAtAnnotation]; ok && v != "" {
+		if t, err := time.Parse(time.RFC3339, v); err == nil {
+			return t
+		}
+	}
+	return s.CreationTimestamp.Time
 }
 
 // idleTimeout returns the session's idle timeout from the CR annotation, falling back

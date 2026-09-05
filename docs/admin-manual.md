@@ -37,6 +37,12 @@ A summary of resources and sessions within your scope.
 
 ---
 
+An org_admin or group_admin sees the same page scoped to the people they manage: running and
+active sessions, the VRAM those sessions hold, and their host CPU — summed over every member of
+their groups (org_admin: every group of the organization), never over other tenants. Cluster-wide
+figures stay super_admin-only.
+
+
 ## 2. Live session monitoring
 
 Watch sessions and the queue in real time: owner, organization, group, resources, and state
@@ -54,6 +60,23 @@ their group's.
 | ![Organization monitoring](screenshots/43-orgadmin-monitor.png) | ![Group monitoring](screenshots/48-groupadmin-monitor.png) |
 
 ---
+
+**Session liveness.** The operator re-reports every running session once a minute (a
+heartbeat carrying the container's restart count and state), and the control plane acts on
+what it hears — never on what it assumes:
+
+- *Crash loop* — a container restarted `SESSION_CRASH_LOOP_RESTARTS` (3) times and sitting in
+  `CrashLoopBackOff` ends the session (`crash_loop`), settled and notified, instead of billing
+  an endless restart cycle.
+- *Pod lost* — a session whose heartbeat has been silent for `SESSION_STALE_SEC` (5 min) while
+  the operator is otherwise alive (its node inventory is fresh) is settled (`pod_lost`). If the
+  operator itself is silent — every node of a cluster stale at once — nothing is touched: an
+  operator outage must never turn into mass termination.
+- *Node offline* — a node whose kubelet stops answering goes offline at once and its running
+  sessions end (`node_offline`); paused sessions are left to resume elsewhere.
+- A pod deleted by hand (or evicted) while the session is still wanted is simply rebuilt; its
+  exit is not reported as the session's end, so the bill and the reservation are untouched.
+
 
 ## 3. Organizations (super admin)
 
@@ -117,6 +140,20 @@ the environment. It has no admin UI by design.
 
 ---
 
+**GPU model names.** Admission matches an offering's `gpu_model` to the card's reported model
+string exactly. The seeded catalogue uses marketing names ("NVIDIA RTX PRO 6000 Blackwell");
+the driver may report a longer SKU ("… Max-Q Workstation Edition"). When the operator's inventory
+reports a model no offering names exactly and exactly one offering is a word-boundary prefix of
+it, that offering adopts the reported string automatically (audited as `offering.align_model`).
+If a session is still refused with `unserviceable`, the error now lists the models the fleet
+reports (`reported_models`) — copy one of them into the offering.
+
+**Session images.** The catalogue seeds `boanlab/gshare-session:<tag>` for the CUDA 12.4/12.5
+line and the Blackwell (CUDA 12.8/12.9) line. Those tags exist on Docker Hub only after the
+*Publish session images* workflow has run (on a release tag, or by hand from Actions); a fleet of
+Blackwell cards needs the 12.8 line — the older images are refused with `incompatible_image`.
+
+
 ## 7. Credit allocation and requests
 
 Allocate credits down the hierarchy — system → organization → group → individual — and
@@ -145,19 +182,43 @@ including their occupancy and mode.
 Node status is driven by the operator's inventory heartbeat: a node that stops reporting for
 `NODE_STALE_SEC` (5 minutes) is marked **offline** automatically, and returns to **ready** when
 reports resume. Cordon is yours, not the heartbeat's — a cordoned node stays cordoned either way.
+The operator reports the node's own Ready condition, so a machine whose kubelet stops answering
+goes offline at once — a Node object that merely still exists is not liveness. Sessions that
+were running on an offline node are ended (`node_offline`), their credits settled and their GPU
+released; paused sessions are left to resume elsewhere. Every
+super_admin gets a notification (bell and history) on each transition — *Node offline: gpu3*
+and *Node back online: gpu3* — so a machine that silently drops out of the fleet is noticed
+without watching the screen.
 
 Per-node actions:
 
 - **Cordon / uncordon** — stop or resume new placements. Sessions already running stay.
-- **Drain** — cordon, then move or end the sessions on the node. Rescheduling needs another node
-  with the same GPU model, free capacity, and pool access; sessions that cannot move are left
-  paused rather than lost.
+- **Drain** — cordon, then move or end the sessions on the node. *Reschedule* cold-pauses each
+  running session (`drained`) and resumes it at once; a GPU session needs another card of the
+  same model with room and pool access, a CPU session any other CPU node. A session with nowhere
+  to go is **parked**: it stays paused and holds a place in the queue, and the queue ticker
+  resumes it the moment room appears — when another session ends, or when you uncordon the node.
+  *Force terminate* settles every session like an administrator stop. The cordon is mirrored onto
+  the Kubernetes node within about fifteen seconds, so nothing — not even a CPU session placed by
+  kube-scheduler — lands back on it; a pod that slipped in before the mirror took effect is
+  replaced automatically. The node stays cordoned until you uncordon it.
 - **Delete** — appears only on an **offline** node, because a node the operator still reports
   would simply reappear on its next inventory tick. It removes the node and its GPU card records
   after refusing (`node_busy`) while any live allocation or non-terminal session remains, and it
   keeps the billing history: past allocations survive, holding their `gpu_uuid`, detached from
   the card that no longer exists. Deleting a node's last card also empties any dedicated pool it
   belonged to — reassign or delete that pool.
+
+The dashboard's **storage panel** shows provisioned volume quota against the pool that backs the
+volumes. The operator can only see a storage node's root disk, so set the real pool size once in
+the chart (`storage.poolCapacityGb`); until then the panel shows the nodes' disk and says so.
+
+**GPU devices** (the per-node card list) carry a per-card health action: **Mark faulty** takes one
+card out of placement and ends every session bound to it (`gpu_fault`, settled, owners notified)
+— a process whose CUDA context died cannot be resumed, so an honest end beats a session that
+bills for a dead card. **Restore** puts a repaired card back. Fatal Xid events from DCGM still
+cordon the whole node automatically; the card action is for the case where one card of several
+is bad.
 
 The full machine-level procedure for adding or removing a node — join, labels, drain, `kubeadm
 reset` — is in [cluster-setup.md](cluster-setup.md#growing-or-shrinking-a-running-cluster).
@@ -183,6 +244,12 @@ the same rows. Open an entry for the full before-and-after and the identifiers t
 ![Audit log, organization](screenshots/44-orgadmin-audit.png)
 
 ---
+
+**Export CSV** downloads the current view — every page of it, with the same scope and filters —
+as a UTF-8 (BOM) file Excel opens directly: time, actor, action, result, target, organization,
+group, and the JSON detail. The export is itself written to the log (`audit.export`, with the
+filters and the row count), so a file leaving the system is as traceable as any other action.
+
 
 ## Appendix — capabilities by role
 

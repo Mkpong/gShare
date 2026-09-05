@@ -18,6 +18,7 @@ import (
 	"k8s.io/apimachinery/pkg/runtime"
 	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/client"
+	"sigs.k8s.io/controller-runtime/pkg/log"
 
 	"github.com/gshare/operator/internal/sot"
 )
@@ -81,7 +82,7 @@ type InventoryReconciler struct {
 	ClusterID string
 }
 
-// +kubebuilder:rbac:groups="",resources=nodes,verbs=get;list;watch
+// +kubebuilder:rbac:groups="",resources=nodes,verbs=get;list;watch;patch
 
 // Reconcile collects devices for a node and upserts them into the control plane's ledger.
 func (r *InventoryReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctrl.Result, error) {
@@ -121,9 +122,11 @@ func (r *InventoryReconciler) Reconcile(ctx context.Context, req ctrl.Request) (
 		role = "gpu"
 	}
 	// Report capacity for every node, GPU-less ones included, independently of the device loop.
+	nodeReady := nodeIsReady(&node)
+	r.mirrorCordon(ctx, &node)
 	_ = r.SoT.UpsertNode(ctx, sot.Node{
 		NodeID: node.Name, NodeCPU: nodeCPU, NodeMemGB: nodeMemGB, NodeDiskGB: nodeDiskGB,
-		LosslessCapable: losslessCapable, Role: role,
+		LosslessCapable: losslessCapable, Role: role, NodeReady: nodeReady,
 	})
 	for _, d := range devs {
 		_ = r.SoT.UpsertGpuDevice(ctx, sot.GpuDevice{
@@ -136,6 +139,7 @@ func (r *InventoryReconciler) Reconcile(ctx context.Context, req ctrl.Request) (
 			TotalCores: 100,
 			UsedCores:  d.UsedCores,
 			Status:     d.Status,
+			NodeReady:  nodeReady,
 			NodeCPU:    nodeCPU,
 			NodeMemGB:  nodeMemGB,
 			NodeDiskGB: nodeDiskGB,
@@ -146,7 +150,9 @@ func (r *InventoryReconciler) Reconcile(ctx context.Context, req ctrl.Request) (
 		}
 	}
 
-	return ctrl.Result{RequeueAfter: 30 * time.Second}, nil
+	// 15s: this tick also mirrors cordons, and a drain resumes its sessions right away — the
+	// shorter the tick, the shorter the window in which a resumed pod can land back on the node.
+	return ctrl.Result{RequeueAfter: 15 * time.Second}, nil
 }
 
 // devicesFromCapacity derives a best-effort device snapshot from the Node when no
@@ -260,4 +266,63 @@ func (r *InventoryReconciler) SetupWithManager(mgr ctrl.Manager) error {
 	return ctrl.NewControllerManagedBy(mgr).
 		For(&corev1.Node{}).
 		Complete(r)
+}
+
+// nodeIsReady reads the kubelet's own verdict. A node with no Ready condition yet (just joined)
+// or with Ready=Unknown (kubelet silent past the node-monitor grace period) is not ready.
+func nodeIsReady(node *corev1.Node) bool {
+	for _, c := range node.Status.Conditions {
+		if c.Type == corev1.NodeReady {
+			return c.Status == corev1.ConditionTrue
+		}
+	}
+	return false
+}
+
+// annoCordoned marks a Node the operator cordoned on the control plane's behalf. Only nodes
+// carrying it are ever uncordoned here — an administrator's own `kubectl cordon` is left alone.
+const annoCordoned = "gshare.io/cordoned"
+
+// mirrorCordon makes Node.spec.unschedulable follow the control plane's cordon list. gShare's
+// cordon lives in its ledger and steers card placement; kube-scheduler knows nothing of it, so a
+// CPU session (or a resumed one) could land straight back on a node being drained. Best-effort:
+// a control-plane hiccup leaves the node as it is until the next tick.
+func (r *InventoryReconciler) mirrorCordon(ctx context.Context, node *corev1.Node) {
+	logger := log.FromContext(ctx)
+	wanted, err := r.SoT.CordonedNodes(ctx)
+	if err != nil {
+		logger.V(1).Info("cordon list unavailable; leaving node as is", "node", node.Name, "err", err.Error())
+		return
+	}
+	desired := false
+	for _, h := range wanted {
+		if h == node.Name {
+			desired = true
+			break
+		}
+	}
+	ours := node.Annotations[annoCordoned] == "true"
+	switch {
+	case desired && !node.Spec.Unschedulable:
+		patch := client.MergeFrom(node.DeepCopy())
+		node.Spec.Unschedulable = true
+		if node.Annotations == nil {
+			node.Annotations = map[string]string{}
+		}
+		node.Annotations[annoCordoned] = "true"
+		if perr := r.Patch(ctx, node, patch); perr != nil {
+			logger.Error(perr, "cordon mirror failed", "node", node.Name)
+		} else {
+			logger.Info("node cordoned on the control plane's behalf", "node", node.Name)
+		}
+	case !desired && ours && node.Spec.Unschedulable:
+		patch := client.MergeFrom(node.DeepCopy())
+		node.Spec.Unschedulable = false
+		delete(node.Annotations, annoCordoned)
+		if perr := r.Patch(ctx, node, patch); perr != nil {
+			logger.Error(perr, "uncordon mirror failed", "node", node.Name)
+		} else {
+			logger.Info("node uncordoned (control plane lifted the cordon)", "node", node.Name)
+		}
+	}
 }

@@ -3,7 +3,9 @@ credit, active sessions, GPU VRAM, region (GPU model) availability, resource all
 Read-only; principal-scoped (owner's sessions/wallet). Real ledger/inventory values."""
 from __future__ import annotations
 
-from fastapi import APIRouter, Depends
+from typing import Literal
+
+from fastapi import APIRouter, Depends, Query
 from sqlalchemy import func, or_, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -11,34 +13,69 @@ from app.api.deps import get_current_principal
 from app.api.schemas.dashboard import DashboardSummary
 from app.auth.rbac import Principal
 from app.db.base import get_db
-from app.db.models import CreditWallet, GpuDevice, GpuNode, Membership, Session
+from app.db.models import CreditWallet, GpuDevice, GpuNode, Membership, Project, Session
 from app.domain.node_pools import resolve_pool_access
 from app.domain.policy import resolve_effective_policy
 
 router = APIRouter(tags=["dashboard"])
 
 
+def managed_owner_filter(principal: Principal, scope: str):
+    """The session-owner predicate for the summary.
+
+    ``mine`` (default) is the caller's own sessions. ``managed`` widens it to the people the caller
+    administers — every user in the groups they are group_admin of, every group of the organizations
+    they are org_admin of, or everyone for a super_admin. A plain member asking for ``managed`` gets
+    ``mine``: there is nothing wider to show, and the answer must never leak beyond their tenancy.
+    """
+    if scope != "managed":
+        return Session.owner_user_id == principal.user_id
+    if principal.global_role == "super_admin":
+        return None
+    group_ids = {g for g, role in principal.memberships.items() if role in ("group_admin", "org_admin")}
+    org_groups = None
+    if principal.org_admin_orgs:
+        org_groups = select(Project.id).where(
+            Project.org_id.in_(list(principal.org_admin_orgs)), Project.deleted_at.is_(None)
+        )
+    if not group_ids and org_groups is None:
+        return Session.owner_user_id == principal.user_id
+    members = select(Membership.user_id).where(Membership.group_id.is_not(None))
+    if group_ids and org_groups is not None:
+        members = members.where(
+            or_(Membership.group_id.in_(list(group_ids)), Membership.group_id.in_(org_groups))
+        )
+    elif group_ids:
+        members = members.where(Membership.group_id.in_(list(group_ids)))
+    else:
+        members = members.where(Membership.group_id.in_(org_groups))
+    # The admin's own sessions count too — they are part of what they run.
+    return or_(Session.owner_user_id.in_(members), Session.owner_user_id == principal.user_id)
+
+
+def _where(stmt, pred):
+    return stmt if pred is None else stmt.where(pred)
+
+
 @router.get("/dashboard/summary", response_model=DashboardSummary)
 async def dashboard_summary(
+    scope: Literal["mine", "managed"] = Query(default="mine"),
     principal: Principal = Depends(get_current_principal),
     db: AsyncSession = Depends(get_db),
 ):
-    # Active sessions, by owner.
+    # Whose sessions: the caller's own, or — for an administrator's dashboard — the tenants they
+    # manage (see managed_owner_filter).
+    owner = managed_owner_filter(principal, scope)
     running = (
         await db.scalar(
-            select(func.count())
-            .select_from(Session)
-            .where(Session.owner_user_id == principal.user_id, Session.status == "running")
+            _where(select(func.count()).select_from(Session), owner)
+            .where(Session.status == "running")
         )
     ) or 0
     active = (
         await db.scalar(
-            select(func.count())
-            .select_from(Session)
-            .where(
-                Session.owner_user_id == principal.user_id,
-                Session.status.in_(("pending", "preparing", "running", "paused")),
-            )
+            _where(select(func.count()).select_from(Session), owner)
+            .where(Session.status.in_(("pending", "preparing", "running", "paused")))
         )
     ) or 0
 
@@ -160,18 +197,22 @@ async def dashboard_summary(
     # (cpu / mem_gb; session disk counts toward storage_gb, mirroring the quota check).
     comp = (
         await db.execute(
-            select(
-                func.coalesce(func.sum(Session.cpu), 0),
-                func.coalesce(func.sum(Session.mem_gb), 0),
-                func.coalesce(func.sum(Session.disk_gb), 0),
-                func.coalesce(func.sum(Session.gpu_mem_mb), 0),
-                func.coalesce(func.sum(Session.gpu_cores), 0),
-            ).where(
-                Session.owner_user_id == principal.user_id,
-                Session.status.in_(("pending", "preparing", "running")),
+            _where(
+                select(
+                    func.coalesce(func.sum(Session.cpu), 0),
+                    func.coalesce(func.sum(Session.mem_gb), 0),
+                    func.coalesce(func.sum(Session.disk_gb), 0),
+                    func.coalesce(func.sum(Session.gpu_mem_mb), 0),
+                    func.coalesce(func.sum(Session.gpu_cores), 0),
+                ).where(Session.status.in_(("pending", "preparing", "running"))),
+                owner,
             )
         )
     ).one()
+    if scope == "managed":
+        # An administrator's VRAM figure is what THEIR people hold, not the cluster's occupancy —
+        # the latter includes other tenants and is the super_admin dashboard's number.
+        used_mem = int(comp[3])
 
     def _lim(key: str) -> int | None:
         return _min_field(lambda p: int((p.limits or {}).get(key) or 0))

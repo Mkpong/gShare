@@ -25,6 +25,11 @@ from typing import Any
 from fastapi import FastAPI, Request
 from fastapi.exceptions import RequestValidationError
 from fastapi.responses import JSONResponse
+from starlette.exceptions import HTTPException as StarletteHTTPException
+
+from app.core.logging import get_logger
+
+log = get_logger(__name__)
 
 
 def _utcnow_iso() -> str:
@@ -138,6 +143,14 @@ class NotFound(DomainError):
     code, http = "not_found", 404
 
 
+# Stable codes for the HTTP statuses the framework raises on its own.
+_HTTP_STATUS_CODES = {
+    400: "bad_request", 401: "unauthenticated", 403: "forbidden", 404: "not_found",
+    405: "method_not_allowed", 409: "conflict", 413: "payload_too_large",
+    415: "unsupported_media_type", 429: "rate_limited",
+}
+
+
 def register_exception_handlers(app: FastAPI) -> None:
     """Install envelope handlers on the app."""
 
@@ -149,6 +162,37 @@ def register_exception_handlers(app: FastAPI) -> None:
                 "code": exc.code, "message": exc.message, "details": exc.details,
                 "request_id": getattr(req.state, "request_id", None),
                 "timestamp": _utcnow_iso(),
+            }},
+        )
+
+    # Framework-raised HTTP errors (unknown route → 404, wrong verb → 405, auth dependencies that
+    # raise HTTPException) wear the same envelope as domain errors: the console keys off
+    # ``error.code`` everywhere, and a bare ``{"detail": ...}`` was the one shape it could not map.
+    @app.exception_handler(StarletteHTTPException)
+    async def _http(req: Request, exc: StarletteHTTPException):  # noqa: ANN202
+        code = _HTTP_STATUS_CODES.get(exc.status_code, "http_error")
+        message = exc.detail if isinstance(exc.detail, str) and exc.detail else code.replace("_", " ")
+        return JSONResponse(
+            status_code=exc.status_code,
+            headers=dict(exc.headers) if getattr(exc, "headers", None) else None,
+            content={"error": {
+                "code": code, "message": message, "details": None,
+                "request_id": getattr(req.state, "request_id", None),
+                "timestamp": _utcnow_iso(),
+            }},
+        )
+
+    # Anything else is a bug: log it with the request id so the envelope's id leads straight to
+    # the traceback, and never leak the exception text to the caller.
+    @app.exception_handler(Exception)
+    async def _unhandled(req: Request, exc: Exception):  # noqa: ANN202
+        rid = getattr(req.state, "request_id", None)
+        log.exception("unhandled error request_id=%s path=%s", rid, req.url.path)
+        return JSONResponse(
+            status_code=500,
+            content={"error": {
+                "code": "internal_error", "message": "internal server error", "details": None,
+                "request_id": rid, "timestamp": _utcnow_iso(),
             }},
         )
 

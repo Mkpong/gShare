@@ -71,13 +71,20 @@ type StatusEvent struct {
 	NodeName string `json:"node_name,omitempty"`
 	// YieldState="Yielded" on a successful in-place yield (Pod alive, VRAM evicted); empty on cold
 	// pause/fallback. The control plane keys yield-vs-cold accounting on the operator's actual action.
-	YieldState string    `json:"yield_state,omitempty"`
-	PodRef     string    `json:"pod_ref,omitempty"`
-	UsedMemMB  int       `json:"used_mem_mb,omitempty"`
-	Message    string    `json:"message,omitempty"`
-	TraceID    string    `json:"trace_id,omitempty"` // W3C traceparent trace-id
-	ClusterID  string    `json:"cluster_id,omitempty"`
-	TS         time.Time `json:"ts"`
+	YieldState string `json:"yield_state,omitempty"`
+	PodRef     string `json:"pod_ref,omitempty"`
+	UsedMemMB  int    `json:"used_mem_mb,omitempty"`
+	Message    string `json:"message,omitempty"`
+	TraceID    string `json:"trace_id,omitempty"` // W3C traceparent trace-id
+	// Generation is the CR generation this report describes. The control plane discards a pause
+	// or terminal report from a generation older than the one its latest resume produced.
+	Generation int64 `json:"generation,omitempty"`
+	// Heartbeat facts: the kubelet's restart count and the main container's state, sent on
+	// every reconcile of a live pod (phase "Heartbeat" when nothing else changed).
+	RestartCount   int       `json:"restart_count,omitempty"`
+	ContainerState string    `json:"container_state,omitempty"`
+	ClusterID      string    `json:"cluster_id,omitempty"`
+	TS             time.Time `json:"ts"`
 }
 
 // AuditEvent is the payload of POST /internal/audit/operator.
@@ -128,6 +135,9 @@ type Reporter interface {
 	AuditOperator(ctx context.Context, ev AuditEvent) error
 	UpsertGpuDevice(ctx context.Context, d GpuDevice) error
 	UpsertNode(ctx context.Context, n Node) error
+	// CordonedNodes lists the hostnames the control plane wants unschedulable (a drain, an
+	// administrator's hold); the inventory controller mirrors it onto the Nodes.
+	CordonedNodes(ctx context.Context) ([]string, error)
 	ReportDrift(ctx context.Context, uuid string, used, total int) error
 	CreateNodeHealthEvent(ctx context.Context, ev NodeHealthEvent) (NodeHealthEvent, error)
 	// SyncVolumes reports every session-volume PVC (plus each session pod's scratch-disk
@@ -334,18 +344,22 @@ type GpuDevice struct {
 	TotalCores int    `json:"total_cores"`
 	UsedCores  int    `json:"used_cores"`
 	Status     string `json:"status"`
-	NodeCPU    int    `json:"node_cpu,omitempty"`     // node CPU cores
-	NodeMemGB  int    `json:"node_mem_gb,omitempty"`  // node memory (GiB)
-	NodeDiskGB int    `json:"node_disk_gb,omitempty"` // node ephemeral-storage (GiB)
+	NodeCPU    int    `json:"node_cpu,omitempty"` // node CPU cores
+	// NodeReady is the node's Ready condition. The control plane takes a heartbeat only from a
+	// ready node: a dead kubelet leaves its Node object behind, which must not count as alive.
+	NodeReady  bool `json:"node_ready"`
+	NodeMemGB  int  `json:"node_mem_gb,omitempty"`  // node memory (GiB)
+	NodeDiskGB int  `json:"node_disk_gb,omitempty"` // node ephemeral-storage (GiB)
 }
 
 // NodeHealthEvent is a health transition reported to the control plane.
 type NodeHealthEvent struct {
 	ID       string `json:"id,omitempty"`
 	NodeID   string `json:"node_id"`
-	Kind     string `json:"kind"`     // xid | ecc | temp | down
-	Severity string `json:"severity"` // warn | critical
-	Action   string `json:"action"`   // cordon | alert
+	Kind     string `json:"kind"`               // xid | ecc | temp | down
+	Severity string `json:"severity"`           // warn | critical
+	Action   string `json:"action"`             // cordon | alert
+	GpuUUID  string `json:"gpu_uuid,omitempty"` // the faulting card, when the source identifies one
 }
 
 // UpsertGpuDevice reflects measured device inventory (total/used) into the control
@@ -369,6 +383,8 @@ type Node struct {
 	Role string `json:"role,omitempty"`
 	// LosslessCapable: true when the node labels mark lossless-pause prerequisites (cuda-checkpoint + CRIU) ready.
 	LosslessCapable bool `json:"lossless_capable,omitempty"`
+	// NodeReady: see GpuDevice.NodeReady.
+	NodeReady bool `json:"node_ready"`
 }
 
 func (c *Client) UpsertNode(ctx context.Context, n Node) error {
@@ -477,4 +493,33 @@ func (c *Client) ReportImageBuild(ctx context.Context, buildID string, ev ImageB
 	}
 	_, err := c.doJSON(ctx, "/internal/image-builds/"+buildID+"/status", ev, "")
 	return err
+}
+
+const cordonedNodesPath = "/internal/nodes/cordoned"
+
+func (c *Client) CordonedNodes(ctx context.Context) ([]string, error) {
+	token, err := c.bearerToken()
+	if err != nil {
+		return nil, err
+	}
+	req, err := http.NewRequestWithContext(ctx, http.MethodGet, strings.TrimRight(c.cfg.BaseURL, "/")+cordonedNodesPath, nil)
+	if err != nil {
+		return nil, fmt.Errorf("sot: build request for %s: %w", cordonedNodesPath, err)
+	}
+	req.Header.Set("Authorization", "Bearer "+token)
+	resp, err := c.http.Do(req)
+	if err != nil {
+		return nil, fmt.Errorf("sot: GET %s: %w", cordonedNodesPath, err)
+	}
+	defer resp.Body.Close()
+	if resp.StatusCode/100 != 2 {
+		return nil, fmt.Errorf("sot: GET %s: HTTP %d", cordonedNodesPath, resp.StatusCode)
+	}
+	var out struct {
+		Hostnames []string `json:"hostnames"`
+	}
+	if err := json.NewDecoder(resp.Body).Decode(&out); err != nil {
+		return nil, fmt.Errorf("sot: decode %s: %w", cordonedNodesPath, err)
+	}
+	return out.Hostnames, nil
 }

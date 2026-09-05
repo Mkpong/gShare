@@ -124,15 +124,32 @@ export function useSetPoolTargets() {
 }
 
 // GET /gpu-devices — the devices on each node, with their VRAM and core occupancy.
-export function useGpuDevices(nodeId?: string) {
+export function useGpuDevices(nodeId?: string, opts?: { enabled?: boolean }) {
   const query: Record<string, unknown> = { page: 1, size: 200 };
   if (nodeId) query.node_id = nodeId;
   return useQuery({
+    enabled: opts?.enabled ?? true,
     queryKey: nodeKeys.devices(nodeId),
     queryFn: async () => {
       const { data } = await raw.GET('/api/v1/gpu-devices', { params: { query } });
       return (data as { data?: GpuDevice[] } | undefined)?.data ?? [];
     },
+  });
+}
+
+// PUT /gpu-devices/{id}/health — take a faulty card out of service (ends the sessions bound to
+// it, gpu_fault) or put a repaired one back.
+export function useSetDeviceHealth() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: async ({ deviceId, status, reason }: { deviceId: string; status: 'ready' | 'unhealthy'; reason?: string }) => {
+      const { data } = await raw.PUT('/api/v1/gpu-devices/{device_id}/health', {
+        params: { path: { device_id: deviceId } },
+        body: { status, reason },
+      });
+      return data as { device_id: string; status: string; terminated_sessions: string[] };
+    },
+    onSuccess: () => { qc.invalidateQueries({ queryKey: ['gpu-devices'] }); qc.invalidateQueries({ queryKey: nodeKeys.all }); },
   });
 }
 

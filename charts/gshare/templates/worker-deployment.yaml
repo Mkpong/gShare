@@ -33,6 +33,14 @@ spec:
           securityContext:
             {{- include "gshare.containerSecurityContext" . | nindent 12 }}
           command: ["python", "-m", "app.workers.runner"]
+          # No listening port: every job loop touches /tmp/gshare-worker-alive each tick, so a
+          # file older than three minutes means the event loop is wedged and the pod is restarted.
+          livenessProbe:
+            exec:
+              command: ["sh", "-c", "test $(( $(date +%s) - $(stat -c %Y /tmp/gshare-worker-alive) )) -lt 180"]
+            initialDelaySeconds: 60
+            periodSeconds: 60
+            failureThreshold: 3
           envFrom:
             - configMapRef: { name: gshare-config }
           env:

@@ -6,6 +6,7 @@ from __future__ import annotations
 
 from datetime import UTC, datetime, timedelta
 from decimal import ROUND_HALF_UP, Decimal
+from typing import Literal
 
 from fastapi import APIRouter, Depends, Query, Response, status
 from pydantic import BaseModel, Field
@@ -32,6 +33,7 @@ from app.api.schemas.node_pool import (
 )
 from app.auth.rbac import Principal, rbac_allows
 from app.core import ids
+from app.core.config import settings
 from app.core.errors import DomainError, Forbidden, NotFound
 from app.db.base import get_db
 from app.db.models import (
@@ -330,6 +332,25 @@ async def register_node(
     return _node_out(node, [])
 
 
+async def _wait_pause_ack(session_id: str, timeout_sec: float | None = None) -> bool:
+    """Block until the operator reports the session Paused (status_sync sets ``pause-ack``), or
+    give up after ``timeout_sec`` — the resume path still has its own guards."""
+    import asyncio
+
+    from app.core.redis import get_redis
+
+    redis = get_redis()
+    key = f"pause-ack:{session_id}"
+    await redis.delete(key)
+    timeout_sec = settings.DRAIN_PAUSE_ACK_SEC if timeout_sec is None else timeout_sec
+    deadline = asyncio.get_event_loop().time() + timeout_sec
+    while asyncio.get_event_loop().time() < deadline:
+        if await redis.get(key) is not None:
+            return True
+        await asyncio.sleep(0.25)
+    return False
+
+
 class _NodeBusy(DomainError):
     """The node still carries live work; drain it before removing it (409)."""
 
@@ -461,10 +482,26 @@ async def drain_node(
                 )
             ).all()
         )
+    # CPU sessions hold no card allocation; they are on the node by placement only. A drain has
+    # to move them too, or a CPU node could never be emptied from the console.
+    by_host = list(
+        (
+            await db.scalars(
+                select(Session.id).where(
+                    Session.node_hostname == node.hostname,
+                    Session.status.in_(("preparing", "running")),
+                    Session.deleted_at.is_(None),
+                )
+            )
+        ).all()
+    )
+    affected = list(dict.fromkeys([*affected, *by_host]))
     node.status = "cordoned"
     await db.flush()
     await db.commit()   # publish the cordon before touching sessions: resumes must not land here
 
+    from app.core.errors import NoCapacity
+    from app.domain.scheduler import enqueue_resume
     from app.domain.session_service import SessionService  # lazy: avoids an import cycle
 
     svc = SessionService(db)
@@ -487,11 +524,20 @@ async def drain_node(
                 # resume onto the same node), so force a cold pause for this stop.
                 sess.pause_mode = "cold"
                 await db.commit()
-                await svc.stop(sid, reason="admin_stopped")
+                await svc.stop(sid, reason="drained")
+                # Let the operator finish tearing the pod down before resuming: otherwise the
+                # resume can overtake the pause and the "moved" session keeps its old pod.
+                await _wait_pause_ack(sid)
                 try:
                     await svc.start(sid)
                     rescheduled.append(sid)
-                except Exception:  # noqa: BLE001 — no room elsewhere: parked paused, work preserved
+                except NoCapacity:
+                    # No room elsewhere right now: park it paused AND queue the resume, so the
+                    # queue ticker brings it back the moment a card frees up (or this node is
+                    # uncordoned) without anyone having to remember.
+                    await enqueue_resume(db, sid)
+                    parked.append(sid)
+                except Exception:  # noqa: BLE001 — credit gate etc.: parked paused, work preserved
                     parked.append(sid)
         except Exception:  # noqa: BLE001 — one stuck session must not abort the whole drain
             failed.append(sid)
@@ -951,6 +997,14 @@ async def list_gpu_devices(
     if node_id:
         stmt = stmt.where(GpuDevice.node_id == node_id)
     devs = (await db.execute(stmt)).scalars().all()
+    # The node's liveness/cordon state rides along: a card on an offline or cordoned node keeps
+    # its own status (its health is not in question) but cannot take placements, and the
+    # console must say so rather than show a green "ready" on a node that is gone.
+    node_status = dict(
+        (await db.execute(
+            select(GpuNode.id, GpuNode.status).where(GpuNode.id.in_({d.node_id for d in devs} or {""}))
+        )).all()
+    )
     # Live allocations per device (reserved or bound) become bound_sessions.
     allocs = (
         await db.execute(select(Allocation).where(Allocation.ended_at.is_(None)))
@@ -972,6 +1026,7 @@ async def list_gpu_devices(
             "desired_mode": d.desired_mode,
             "mode_state": d.mode_state,
             "status": d.status,
+            "node_status": node_status.get(d.node_id),
             "gpu_uuid": d.gpu_uuid,
             "total_mem_mb": d.total_mem_mb,
             "used_mem_mb": d.used_mem_mb,
@@ -987,6 +1042,34 @@ async def list_gpu_devices(
 class GpuDeviceModeSet(BaseModel):
     # fractional | exclusive | mig; null clears the target (follow observed).
     desired_mode: str | None = Field(default=None, pattern="^(fractional|exclusive|mig)$")
+
+
+class _DeviceHealthBody(BaseModel):
+    status: Literal["ready", "unhealthy"]
+    reason: str | None = None
+
+
+@router.put("/gpu-devices/{device_id}/health")
+async def set_device_health(
+    device_id: str,
+    body: _DeviceHealthBody,
+    principal: Principal = Depends(get_current_principal),
+    db: AsyncSession = Depends(get_db),
+):
+    """Take one card out of service (or put it back). super_admin only.
+
+    ``unhealthy`` removes the card from placement and ends every session bound to it with
+    ``gpu_fault`` — a process whose CUDA context died cannot be resumed, so the honest outcome is
+    a settled session and a notified owner, not a running one that bills. ``ready`` puts the
+    card back after repair. The same routine serves operator health events that name a card.
+    """
+    principal.require(action="node.cordon")
+    dev = await db.get(GpuDevice, device_id)
+    if dev is None:
+        raise NotFound(f"device {device_id}")
+    from app.domain.device_health import set_device_health as _set
+    ended = await _set(db, dev, body.status, actor=principal.user_id, reason=body.reason)
+    return {"device_id": dev.id, "status": dev.status, "terminated_sessions": ended}
 
 
 @router.put("/gpu-devices/{device_id}/mode")
@@ -1161,7 +1244,14 @@ async def metrics_cluster(
         select(func.coalesce(func.sum(StorageVolume.quota_gb), 0)).where(StorageVolume.deleted_at.is_(None))
     ) or 0)
     storage = {
-        "disk_gb": {"used": vol_alloc, "total": sum(n.disk or 0 for n in storage_nodes)},
+        # The pool that actually backs volumes is not something the operator can see (it reports
+        # the node's root disk); an administrator states it once in the chart, otherwise the panel
+        # falls back to the storage nodes' disk and says so.
+        "disk_gb": {
+            "used": vol_alloc,
+            "total": settings.STORAGE_POOL_CAPACITY_GB or sum(n.disk or 0 for n in storage_nodes),
+            "source": "pool" if settings.STORAGE_POOL_CAPACITY_GB else "node_disk",
+        },
         "node_count": len(storage_nodes),
     } if storage_nodes else None
 

@@ -188,7 +188,13 @@ class SessionService:
                         )
 
         # Operator: cold recreates the pod and rebinds the GPU; yield toggles VRAM back, losslessly.
-        await self.handoff.set_paused(sess, False)
+        gen = await self.handoff.set_paused(sess, False)
+        if gen:
+            # Reports the operator emits for an OLDER generation (the stop this resume overtook)
+            # must not be read as a fresh pause: status_sync compares against this marker.
+            from app.core.redis import get_redis  # lazy: keep module import-light
+
+            await get_redis().set(f"resume-gen:{sess.id}", str(gen), ex=86400)
         # Close the ambient transaction set_paused's read opened, so notify's begin() is clean.
         await self.db.rollback()
         async with self.db.begin():

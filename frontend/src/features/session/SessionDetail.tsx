@@ -57,9 +57,12 @@ export function SessionDetail() {
 
   // Subscribe to SSE and invalidate the detail query on each event so the view updates immediately.
   // On failure, polling takes over.
+  // Only the terminal-ness of the status matters to the stream, so the effect keys on that
+  // boolean rather than the whole session object (which changes on every refetch).
+  const sessionEnded = session ? ['terminated', 'error'].includes(session.status) : false;
   useEffect(() => {
     if (!id) return;
-    if (session && ['terminated', 'error'].includes(session.status)) { setLive(false); return; }
+    if (sessionEnded) { setLive(false); return; }
     const unsubscribe = subscribeSessionEvents<SessionEvent>(id, {
       onOpen: () => setLive(true),
       onMessage: (data) => {
@@ -72,7 +75,7 @@ export function SessionDetail() {
       setLive(false);
       unsubscribe();
     };
-  }, [id, qc, session?.status]);
+  }, [id, qc, sessionEnded]);
 
   if (isLoading) return <div className="gs-card"><TableSkeleton rows={4} columns={2} /></div>;
   // A failed fetch is not "this session does not exist" - show the error and offer a retry;

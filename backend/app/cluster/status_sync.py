@@ -20,6 +20,8 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.api.schemas.internal import OperatorStatusEvent
 from app.cluster.sse_bus import publish_session_event
 from app.core import ids
+from app.core.config import settings
+from app.core.logging import get_logger
 from app.core.redis import get_redis
 from app.db.models import Allocation, GpuDevice, Project, Session
 from app.domain.credit_engine import CreditEngine
@@ -44,8 +46,15 @@ def _map_operator_reason(message: str | None) -> str | None:
     return None
 
 
+def _aware(dt: datetime) -> datetime:
+    return dt if dt.tzinfo is not None else dt.replace(tzinfo=UTC)
+
+
 def _sess_label(sess: Session) -> str:
     return sess.name or sess.id
+
+
+log = get_logger(__name__)
 
 
 class StatusSync:
@@ -81,6 +90,42 @@ class StatusSync:
             #    still in flight.
             if sess.status == "paused" and phase in ("running", "preparing", "pending"):
                 return
+            # A terminal or pause report older than the session's current run is the echo of a
+            # pod that a resume has since replaced (a drain pauses and resumes within a second;
+            # a deleted pod's exit lands after its successor is up). Acting on it would settle the
+            # bill and release the NEW reservation out from under a session that continues.
+            if phase in ("paused", "terminated", "error") and sess.status == "running":
+                stale = sess.started_at is not None and _aware(ev.ts) < _aware(sess.started_at)
+                # Generation beats timestamps: the operator may reconcile the stop's generation
+                # AFTER the resume was committed (its report is then newer than the run start),
+                # so compare against the generation the resume produced.
+                if not stale and ev.generation:
+                    marker = await get_redis().get(f"resume-gen:{sess.id}")
+                    if marker is not None and int(ev.generation) < int(marker):
+                        stale = True
+                if stale:
+                    log.info("stale %s report for running session %s ignored (event %s gen %s < run start %s)",
+                             phase, sess.id, ev.ts, ev.generation, sess.started_at)
+                    return
+            if (
+                phase == "paused"
+                and sess.status == "running"
+                and not (ev.message or "").strip()
+                and sess.started_at is not None
+                and (datetime.now(UTC) - _aware(sess.started_at)).total_seconds() < settings.RESUME_ECHO_WINDOW_SEC
+            ):
+                # The reaper says WHY it pauses (the pause-reason annotation rides along as the
+                # message) and never within seconds of a resume — idle windows are minutes. A
+                # reason-less Paused right after a resume is the echo of the backend stop that
+                # resume overtook. Reading it as an idle pause released the new reservation and
+                # left the session "paused" while its pod ran for free. Older operators that send
+                # no reason are still honoured outside this window.
+                log.info("paused echo without a reason for freshly resumed session %s ignored", sess.id)
+                return
+            if phase == "paused" and sess.status == "paused":
+                # The operator confirmed a backend-driven pause: the pod is gone. A drain waits
+                # for this before resuming, so the resume can never race the teardown.
+                await get_redis().set(f"pause-ack:{sess.id}", str(self._event_ts(ev).timestamp()), ex=3600)
             if phase == "paused":
                 # The operator took the pod down and returned the GPU. A backend-driven pause (stop)
                 # has already set paused, so this is a no-op; an operator-driven automatic pause
@@ -141,6 +186,14 @@ class StatusSync:
                     session_id=sess.id,
                 )
                 return
+            # Every report from a live pod is a heartbeat, whatever else it says.
+            if ev.restart_count is not None or phase == "heartbeat":
+                self._heartbeat(sess, ev)
+            if phase == "heartbeat":
+                if self._crash_looping(sess, ev):
+                    ev.message = ev.message or "crash loop"
+                    await self._on_error(sess, ev, reason="crash_loop")
+                return
             if phase == "running":
                 await self._on_running(sess, ev)
             elif phase == "terminated":
@@ -152,6 +205,28 @@ class StatusSync:
             # unknown phases are ignored (forward-compatible, no-op)
 
     # ── running: bind ledger + start consume ──
+    def _heartbeat(self, sess: Session, ev: OperatorStatusEvent) -> None:
+        sess.last_reported_at = datetime.now(UTC)
+        if ev.restart_count is not None:
+            sess.restart_count = int(ev.restart_count)
+        if ev.node_name and sess.node_hostname != ev.node_name:
+            # The pod can move without a ledger-driven placement (a drain's replace rule, a
+            # kube-scheduler decision for a CPU session); the node column must follow the pod,
+            # or the next drain of the old node would still count this session as its own.
+            sess.node_hostname = ev.node_name
+
+    @staticmethod
+    def _crash_looping(sess: Session, ev: OperatorStatusEvent) -> bool:
+        """A pod that keeps restarting is not a session anyone can use: restartPolicy Always keeps
+        the pod Running, so nothing else would ever end it."""
+        if sess.status not in ("running", "preparing"):
+            return False
+        state = (ev.container_state or "").lower()
+        return (
+            "crashloopbackoff" in state
+            and int(ev.restart_count or 0) >= settings.SESSION_CRASH_LOOP_RESTARTS
+        )
+
     async def _org_of(self, sess: Session) -> str | None:
         if not sess.group_id:
             return None
@@ -245,7 +320,7 @@ class StatusSync:
             }, await self._org_of(sess))
 
     # ── error: session error + refund hold ──
-    async def _on_error(self, sess: Session, ev: OperatorStatusEvent) -> None:
+    async def _on_error(self, sess: Session, ev: OperatorStatusEvent, *, reason: str | None = None) -> None:
         now = self._event_ts(ev)
         was_terminal = sess.status in ("terminated", "error")
         await self._release_allocation(sess, now)
@@ -253,7 +328,7 @@ class StatusSync:
             sess.status = "error"
         if sess.terminated_at is None:
             sess.terminated_at = now
-        reason = _map_operator_reason(ev.message)
+        reason = reason or _map_operator_reason(ev.message)
         sess.status_reason = reason or sess.status_reason
         await self.db.flush()
         # Settle releases any remaining hold (release/refund) idempotently — money only moves here.
@@ -324,6 +399,10 @@ class StatusSync:
         Relies on the partial UNIQUE index uq_alloc_session_live (WHERE ended_at IS NULL) for
         idempotency under concurrent/duplicate running events.
         """
+        if getattr(sess, "resource_class", None) == "cpu":
+            # CPU sessions hold no GPU slice: the ledger has nothing to reconcile for them, and a
+            # phantom "reserved" row would count them against a card in the drain and health paths.
+            return False
         existing = (
             await self.db.execute(
                 select(Allocation.id).where(

@@ -83,10 +83,11 @@ export function AdminDashboard() {
   // summary instead.
   const isSuper = useAuthStore((s) => s.claims.global_role === 'super_admin');
   const { data: m, isLoading, isError, error, refetch: refetchMetrics } = useClusterMetrics({}, { enabled: isSuper });
-  const { data: summary } = useDashboardSummary();
+  const { data: summary } = useDashboardSummary('managed');
   // The fleet inventory, NOT /sessions/gpu-availability: that endpoint applies the caller's
   // node-pool access, which hid pool-granted cards from the admin's own grid.
-  const { data: fleetDevices = [] } = useGpuDevices();
+  // gpu-devices is super_admin-only; an org/group admin never renders the grid, so skip the 403.
+  const { data: fleetDevices = [] } = useGpuDevices(undefined, { enabled: isSuper });
   const auditQ = useAuditLogs(isSuper ? { size: 8, sort: '-at' } : {});
   const auditRows = (auditQ.data?.data ?? []) as Array<{
     id: string; action: string; actor_id?: string; actor_name?: string; result?: string; at?: string;
@@ -106,7 +107,7 @@ export function AdminDashboard() {
           title={t('admin.dashboard.title')}
           description={t('admin.dashboard.scopedSubtitle')}
         />
-        <section className="gs-panel grid md:grid-cols-4">
+        <section className="gs-panel grid md:grid-cols-2 lg:grid-cols-4">
           <Figure label={t('admin.dashboard.runningSessions')} value={summary?.sessions.running ?? 0} />
           <Figure label={t('admin.dashboard.activeSessions')} value={summary?.sessions.active ?? 0} />
           <Figure label={t('admin.dashboard.vramInUse')} value={summary ? formatVram(summary.vram.used_mb) : '-'} />
@@ -230,12 +231,12 @@ export function AdminDashboard() {
                 </section>
               )}
 
-              {(m as { storage?: { disk_gb: { used: number; total: number }; node_count: number } }).storage && (() => {
-                const st = (m as unknown as { storage: { disk_gb: { used: number; total: number }; node_count: number } }).storage;
+              {(m as { storage?: { disk_gb: { used: number; total: number; source?: string }; node_count: number } }).storage && (() => {
+                const st = (m as unknown as { storage: { disk_gb: { used: number; total: number; source?: string }; node_count: number } }).storage;
                 return (
                   <section className="gs-panel p-5">
                     <h2 className="gs-h2">{t('admin.dashboard.storageTitle')}</h2>
-                    <p className="gs-sub mt-1">{t('admin.dashboard.storageSub', { count: st.node_count })}</p>
+                    <p className="gs-sub mt-1">{t(st.disk_gb.source === 'pool' ? 'admin.dashboard.storageSub' : 'admin.dashboard.storageSubNodeDisk', { count: st.node_count })}</p>
                     <div className="mt-1">
                       <CapacityRow
                         label={t('admin.dashboard.storageAllocated')}

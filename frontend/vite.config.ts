@@ -21,6 +21,23 @@ export default defineConfig({
       },
     },
   },
+  build: {
+    rollupOptions: {
+      output: {
+        // Vendor code changes on dependency bumps, app code on every release: keeping them in
+        // separate chunks lets the browser keep the (much larger) vendor half cached across deploys.
+        manualChunks(id) {
+          if (!id.includes('node_modules')) return undefined;
+          // uplot is the one dependency with no React import, so it is safe to isolate. Everything
+          // else stays in one vendor chunk: splitting React away from libraries that import it
+          // (icons, i18n, zustand) let a dependent chunk evaluate before React had initialised and
+          // took the login page down with "Cannot read properties of undefined (reading 'useState')".
+          if (id.includes('uplot')) return 'uplot';
+          return 'vendor';
+        },
+      },
+    },
+  },
   test: {
     environment: 'jsdom',
     globals: true,

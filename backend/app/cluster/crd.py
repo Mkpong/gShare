@@ -13,6 +13,7 @@ Pod mode rules carried in spec (operator builds the Pod):
 from __future__ import annotations
 
 from collections.abc import Awaitable, Callable
+from datetime import UTC, datetime
 from typing import Any, Protocol
 
 from sqlalchemy import select
@@ -70,6 +71,7 @@ _CRD_KEY_MAP = {
     "borrowed_node": "borrowedNode",
     "pinned_gpu_uuid": "pinnedGpuUuid",
     "full_card": "fullCard",
+    "excluded_nodes": "excludedNodes",
 }
 
 
@@ -241,6 +243,13 @@ class GShareSessionCRD:
             if pinned:
                 spec["pinned_gpu_uuid"] = pinned
 
+        # Nodes the ledger holds as cordoned/offline at handoff (see Handoff.apply_desired):
+        # kube-scheduler must not put the pod there. Card-pinned GPU sessions never target such a
+        # node anyway; this closes the same door for CPU sessions and for a resume during a drain.
+        excluded = getattr(sess, "_excluded_nodes", None)
+        if excluded:
+            spec["excluded_nodes"] = list(excluded)
+
         if resource_class == "cpu":
             # CPU sessions request no GPU and pin to the cpu node pool.
             spec["node_selector"] = {"gshare.io/node-type": "cpu"}
@@ -354,8 +363,10 @@ class GShareSessionCRD:
         self, cluster_id: str, session_id: str, paused: bool,
         *, pause_mode: str | None = None, preemptible: bool | None = None,
         graceful_demote: bool | None = None, pinned_gpu_uuid: str | None = None,
+        excluded_nodes: list[str] | None = None,
+        resource_class: str | None = None,
         owner: str | None = None, group_id: str | None = None,
-    ) -> None:
+    ) -> int:
         """Patch spec.paused (+ pauseMode/preemptible) on the session CR.
 
         Merge-patch keeps every other spec field intact — used for pause(true)/resume(false) without
@@ -375,6 +386,10 @@ class GShareSessionCRD:
             # yield→cold demotion: operator toggles VRAM back + lets the job checkpoint on SIGTERM
             # before deleting the Pod (fresh checkpoint). Set only when the card is not lent.
             body.append({"op": "add", "path": "/spec/gracefulDemote", "value": bool(graceful_demote)})
+        if excluded_nodes is not None:
+            # Re-asserted on every resume (an empty list clears an old exclusion): the set of
+            # cordoned/offline nodes at resume time is what the recreated pod must avoid.
+            body.append({"op": "add", "path": "/spec/excludedNodes", "value": list(excluded_nodes)})
         if pinned_gpu_uuid is not None:
             # Per-card pools: a cold resume re-reserved a card, which may differ from the one the
             # CR was created with — re-assert the pin so the recreated pod binds the NEW card.
@@ -385,7 +400,24 @@ class GShareSessionCRD:
             # policy said, forever ("~1" is the JSON-Pointer escape for "/").
             from app.core.config import settings  # lazy: keep module import-light
 
-            spec_like = {"owner": owner, "group_id": group_id}
+            # resource_class makes the resolvers class-aware: a CPU session must get the policy's
+            # cpu_session_* windows, not the GPU ones (a resumed CPU session was once reaped at
+            # the GPU max-runtime, measured from a five-day-old CR).
+            spec_like = {"owner": owner, "group_id": group_id, "resource_class": resource_class}
+            # The run starts now: the reaper measures the lifetime cap from this stamp, not from
+            # the CR's creation (which would count every paused day against the session).
+            # A reaper pause leaves its reason on the CR; clear it on resume so a LATER
+            # backend stop's Paused echo cannot masquerade as a fresh idle pause.
+            body.append({
+                "op": "add",
+                "path": "/metadata/annotations/gshare.io~1pause-reason",
+                "value": "",
+            })
+            body.append({
+                "op": "add",
+                "path": "/metadata/annotations/gshare.io~1run-started-at",
+                "value": datetime.now(UTC).strftime("%Y-%m-%dT%H:%M:%SZ"),
+            })
             idle = await self._resolve_idle_timeout_sec(spec_like)
             if idle is None:
                 idle = settings.IDLE_TIMEOUT_SEC
@@ -403,10 +435,16 @@ class GShareSessionCRD:
                     "value": str(int(max_sec)),
                 })
         async with await self._client_factory(cluster) as api:
-            await api.patch_namespaced_custom_object(
+            obj = await api.patch_namespaced_custom_object(
                 group=GROUP, version=VERSION, namespace=SESSION_NAMESPACE, plural=PLURAL,
                 name=name, body=body,
             )
+        # The generation this patch produced: a resume records it so a Paused report the operator
+        # emits for the PREVIOUS generation (the stop that this resume overtook) is recognisable.
+        try:
+            return int(((obj or {}).get("metadata") or {}).get("generation") or 0)
+        except (TypeError, ValueError, AttributeError):
+            return 0
 
     async def restamp_reaper(
         self, cluster_id: str, session_id: str, owner: str | None, group_id: str | None,

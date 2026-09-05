@@ -465,6 +465,13 @@ class Session(Base, TimestampMixin, SoftDeleteMixin):
     # placement record for CPU sessions (no bound GPU); for GPU sessions it matches the bound
     # device's node.
     node_hostname: Mapped[str | None] = mapped_column(String, default=None)
+    # Session liveness. The operator re-reports every running/preparing session on a fixed cadence
+    # (a heartbeat, not a phase change); the control plane never talks to Kubernetes itself, so
+    # this stamp is the only way it knows the pod is still there. NULL until the first heartbeat.
+    last_reported_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), default=None)
+    # Container restarts observed by the operator (kubelet restartCount); a crash loop ends the
+    # session instead of billing an endless restart cycle.
+    restart_count: Mapped[int] = mapped_column(Integer, default=0, server_default=text("0"))
     billing_wallet_id: Mapped[str | None] = mapped_column(
         ForeignKey("credit_wallet.id"), default=None
     )  # NULL allowed for cpu (free)
