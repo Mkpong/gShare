@@ -231,12 +231,12 @@ export function AdminDashboard() {
                 </section>
               )}
 
-              {(m as { storage?: { disk_gb: { used: number; total: number }; node_count: number } }).storage && (() => {
-                const st = (m as unknown as { storage: { disk_gb: { used: number; total: number }; node_count: number } }).storage;
+              {(m as { storage?: { disk_gb: { used: number; total: number; source?: string }; node_count: number } }).storage && (() => {
+                const st = (m as unknown as { storage: { disk_gb: { used: number; total: number; source?: string }; node_count: number } }).storage;
                 return (
                   <section className="gs-panel p-5">
                     <h2 className="gs-h2">{t('admin.dashboard.storageTitle')}</h2>
-                    <p className="gs-sub mt-1">{t('admin.dashboard.storageSub', { count: st.node_count })}</p>
+                    <p className="gs-sub mt-1">{t(st.disk_gb.source === 'pool' ? 'admin.dashboard.storageSub' : 'admin.dashboard.storageSubNodeDisk', { count: st.node_count })}</p>
                     <div className="mt-1">
                       <CapacityRow
                         label={t('admin.dashboard.storageAllocated')}

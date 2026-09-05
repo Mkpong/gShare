@@ -3549,6 +3549,11 @@ export interface components {
             used: number;
             /** Total */
             total: number;
+            /**
+             * Source
+             * @default node_disk
+             */
+            source: string;
         };
         /** ConnectionInfo */
         ConnectionInfo: {
@@ -4300,6 +4305,8 @@ export interface components {
             trace_id?: string | null;
             /** Restart Count */
             restart_count?: number | null;
+            /** Generation */
+            generation?: number | null;
             /** Container State */
             container_state?: string | null;
             /**

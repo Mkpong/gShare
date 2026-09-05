@@ -190,10 +190,15 @@ async def preview_cost(
     # that is the flavor's fractional allotment, not the full card).
     total_mem_mb: int | None = None
     if body.gpu_mem_mb:
+        # The wizard omits cluster_id on purpose (the backend picks the cluster at admission), so
+        # the filter applies only when a cluster was actually named — otherwise the query matched
+        # nothing and the estimate fell back to the 48 GB reference card, quoting half (or double)
+        # the hold that admission then took.
         stmt = select(GpuDevice.total_mem_mb).where(
-            GpuDevice.cluster_id == body.cluster_id,
             GpuDevice.status == "ready",
         )
+        if body.cluster_id:
+            stmt = stmt.where(GpuDevice.cluster_id == body.cluster_id)
         if offering.gpu_model is not None:
             stmt = stmt.where(GpuDevice.model == offering.gpu_model)
         total_mem_mb = (await db.scalars(stmt.order_by(GpuDevice.total_mem_mb).limit(1))).first()

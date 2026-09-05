@@ -29,7 +29,7 @@ from app.db.models import (
 
 log = get_logger(__name__)
 
-# The four catalogue images: session bases published to Docker Hub under boanlab, registered
+# The catalogue images: session bases published to Docker Hub under boanlab, registered
 # idempotently at startup. cuda_version is the real CUDA baked into the registry tag, which the
 # session wizard compares against the offering's min_cuda. There is no CPU-only image.
 _BASE_IMAGES = [
@@ -37,6 +37,13 @@ _BASE_IMAGES = [
     {"name": "TensorFlow 2.18 (GPU)", "registry": "boanlab/gshare-session:tensorflow2.18-cuda12.5-cudnn9", "cuda_version": "12.5"},
     {"name": "ML Base (GPU)", "registry": "boanlab/gshare-session:ml-cuda12.4-cudnn9", "cuda_version": "12.4"},
     {"name": "Ubuntu 24.04 (CPU)", "registry": "boanlab/gshare-session:ml-ubuntu24.04"},
+    # Blackwell line (sm_120 needs CUDA >= 12.8). Built from build/images/ml/Dockerfile.* and
+    # published by .github/workflows/publish-session-images.yml; a fleet of RTX PRO / RTX 50
+    # cards cannot start a single session from the 12.4/12.5 images above.
+    {"name": "ML Base (GPU, CUDA 12.8)", "registry": "boanlab/gshare-session:ml-cuda12.8-cudnn9", "cuda_version": "12.8"},
+    {"name": "PyTorch 2.7 (GPU, CUDA 12.8)", "registry": "boanlab/gshare-session:pytorch2.7-cuda12.8-cudnn9", "cuda_version": "12.8"},
+    {"name": "PyTorch 2.8 (GPU, CUDA 12.9)", "registry": "boanlab/gshare-session:pytorch2.8-cuda12.9-cudnn9", "cuda_version": "12.9"},
+    {"name": "TensorFlow NGC 25.02 (GPU, CUDA 12.8)", "registry": "boanlab/gshare-session:tensorflow-ngc25.02-cuda12.8", "cuda_version": "12.8"},
 ]
 
 # The default GPU offering catalogue: one full-card row per model. The session wizard derives the

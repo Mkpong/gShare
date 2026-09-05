@@ -140,6 +140,20 @@ the environment. It has no admin UI by design.
 
 ---
 
+**GPU model names.** Admission matches an offering's `gpu_model` to the card's reported model
+string exactly. The seeded catalogue uses marketing names ("NVIDIA RTX PRO 6000 Blackwell");
+the driver may report a longer SKU ("… Max-Q Workstation Edition"). When the operator's inventory
+reports a model no offering names exactly and exactly one offering is a word-boundary prefix of
+it, that offering adopts the reported string automatically (audited as `offering.align_model`).
+If a session is still refused with `unserviceable`, the error now lists the models the fleet
+reports (`reported_models`) — copy one of them into the offering.
+
+**Session images.** The catalogue seeds `boanlab/gshare-session:<tag>` for the CUDA 12.4/12.5
+line and the Blackwell (CUDA 12.8/12.9) line. Those tags exist on Docker Hub only after the
+*Publish session images* workflow has run (on a release tag, or by hand from Actions); a fleet of
+Blackwell cards needs the 12.8 line — the older images are refused with `incompatible_image`.
+
+
 ## 7. Credit allocation and requests
 
 Allocate credits down the hierarchy — system → organization → group → individual — and
@@ -194,6 +208,10 @@ Per-node actions:
   keeps the billing history: past allocations survive, holding their `gpu_uuid`, detached from
   the card that no longer exists. Deleting a node's last card also empties any dedicated pool it
   belonged to — reassign or delete that pool.
+
+The dashboard's **storage panel** shows provisioned volume quota against the pool that backs the
+volumes. The operator can only see a storage node's root disk, so set the real pool size once in
+the chart (`storage.poolCapacityGb`); until then the panel shows the nodes' disk and says so.
 
 **GPU devices** (the per-node card list) carry a per-card health action: **Mark faulty** takes one
 card out of placement and ends every session bound to it (`gpu_fault`, settled, owners notified)

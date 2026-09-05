@@ -14,7 +14,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.api.schemas.internal import OperatorGpuDeviceUpsert, OperatorNodeUpsert
 from app.core import ids
-from app.db.models import Cluster, GpuDevice, GpuNode
+from app.db.models import Cluster, GpuDevice, GpuNode, Offering
 from app.domain import node_status
 
 
@@ -167,3 +167,44 @@ class InventorySync:
                         dev.mode = ev.mode
                 if ev.model:
                     dev.model = ev.model
+            if ev.model:
+                await align_offering_models(self.db, ev.model)
+
+
+async def align_offering_models(db: AsyncSession, reported: str) -> None:
+    """Make the catalogue speak the fleet's exact model string.
+
+    Admission matches ``offering.gpu_model == device.model`` verbatim. The seeded catalogue carries
+    the marketing name ("NVIDIA RTX PRO 6000 Blackwell"); the driver reports the full SKU
+    ("NVIDIA RTX PRO 6000 Blackwell Max-Q Workstation Edition"). Until an administrator noticed
+    and retyped it, every session on such a fleet answered ``409 unserviceable``. When a device
+    reports a model no offering names exactly, but exactly one offering's name is a word-boundary
+    prefix of it, that offering adopts the reported string. Never touches offerings that already
+    match a reported model somewhere, and never guesses between several candidates."""
+    reported = (reported or "").strip()
+    if not reported or reported == "unknown":
+        return
+    exact = await db.scalar(select(Offering.id).where(Offering.gpu_model == reported).limit(1))
+    if exact is not None:
+        return
+    candidates = [
+        o for o in (await db.scalars(select(Offering).where(Offering.gpu_model.is_not(None)))).all()
+        if o.gpu_model and reported.startswith(o.gpu_model + " ")
+    ]
+    if len(candidates) != 1:
+        return
+    off = candidates[0]
+    # A model string that other devices report must keep its offering; only re-point when no
+    # ready card carries the old name.
+    still_used = await db.scalar(
+        select(GpuDevice.id).where(GpuDevice.model == off.gpu_model).limit(1)
+    )
+    if still_used is not None:
+        return
+    previous = off.gpu_model
+    off.gpu_model = reported
+    from app.domain.audit_service import AuditService  # lazy: import cycle
+    await AuditService(db).record(
+        actor="system", action="offering.align_model", target=off.id, result="ok",
+        previous=previous, reported=reported, offering=off.name,
+    )

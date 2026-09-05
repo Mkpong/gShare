@@ -818,9 +818,19 @@ class SchedulerService:
             devs, cluster_id, sess.owner_user_id, sess.group_id or req.group_id
         )
         if not devs:
+            # Name what the fleet DOES report: the usual cause is an offering whose gpu_model is
+            # not the exact string the driver uses, and that is invisible from the request alone.
+            reported = sorted({
+                m for (m,) in (await self.db.execute(
+                    select(GpuDevice.model).where(
+                        GpuDevice.cluster_id == cluster_id, GpuDevice.status == "ready"
+                    ).distinct()
+                )).all() if m
+            })
             raise Unserviceable(
                 f"no ready {mode} device of this GPU model in the cluster",
-                {"mode": mode, "gpu_model": model, "cluster_id": sess.cluster_id or req.cluster_id},
+                {"mode": mode, "gpu_model": model, "cluster_id": sess.cluster_id or req.cluster_id,
+                 "reported_models": reported},
             )
 
     async def _filter_pool_access(self, devs, cluster_id: str, user_id: str, group_id: str | None):

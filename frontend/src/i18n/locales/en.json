@@ -491,6 +491,7 @@
       "capacityTitle": "Host resources",
       "storageTitle": "Storage server",
       "storageSub": "Volume backing pool · {{count}} node(s) · usage is the provisioned volume quota",
+      "storageSubNodeDisk": "{{count}} node(s) · total is the storage nodes' disk (set storage.poolCapacityGb for the real pool) · usage is provisioned volume quota",
       "storageAllocated": "Volume allocation",
       "cordonOfflineCount": "{{cordoned}} cordoned · {{offline}} offline",
       "deviceGridLink": "Manage GPUs →",

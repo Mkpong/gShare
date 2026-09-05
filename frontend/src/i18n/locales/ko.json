@@ -491,6 +491,7 @@
       "capacityTitle": "호스트 자원",
       "storageTitle": "스토리지 서버",
       "storageSub": "볼륨 백킹 풀 · 노드 {{count}}대 · 사용량은 프로비저닝된 볼륨 쿼터 합",
+      "storageSubNodeDisk": "노드 {{count}}대 · 총량은 스토리지 노드의 디스크(볼륨 풀 용량은 storage.poolCapacityGb로 지정) · 사용량은 프로비저닝된 볼륨 쿼터 합",
       "storageAllocated": "볼륨 할당",
       "cordonOfflineCount": "차단 {{cordoned}} · 오프라인 {{offline}}",
       "deviceGridLink": "GPU 관리 →",

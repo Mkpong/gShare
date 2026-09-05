@@ -1244,7 +1244,14 @@ async def metrics_cluster(
         select(func.coalesce(func.sum(StorageVolume.quota_gb), 0)).where(StorageVolume.deleted_at.is_(None))
     ) or 0)
     storage = {
-        "disk_gb": {"used": vol_alloc, "total": sum(n.disk or 0 for n in storage_nodes)},
+        # The pool that actually backs volumes is not something the operator can see (it reports
+        # the node's root disk); an administrator states it once in the chart, otherwise the panel
+        # falls back to the storage nodes' disk and says so.
+        "disk_gb": {
+            "used": vol_alloc,
+            "total": settings.STORAGE_POOL_CAPACITY_GB or sum(n.disk or 0 for n in storage_nodes),
+            "source": "pool" if settings.STORAGE_POOL_CAPACITY_GB else "node_disk",
+        },
         "node_count": len(storage_nodes),
     } if storage_nodes else None
 

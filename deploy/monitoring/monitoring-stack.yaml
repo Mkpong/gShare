@@ -199,7 +199,10 @@ kind: PersistentVolumeClaim
 metadata: { name: prometheus-data, namespace: monitoring }
 spec:
   accessModes: ["ReadWriteOnce"]
-  storageClassName: gshare-data
+  # No storageClassName: the cluster's default StorageClass (local-path after cluster-bootstrap).
+  # gshare-data exists only when the optional ZFS storage node is configured, and a PVC bound to a
+  # class that does not exist stays Pending forever. storageClassName is immutable: on a cluster
+  # where this PVC was already created against gshare-data, delete the PVC before re-applying.
   resources:
     requests: { storage: 20Gi }
 ---

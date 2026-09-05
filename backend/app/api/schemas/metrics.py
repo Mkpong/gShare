@@ -118,7 +118,8 @@ class ClusterCompute(BaseModel):
 
 class ClusterStorageDisk(BaseModel):
     used: int   # provisioned volume quota (GiB) — allocation, not bytes on disk
-    total: int  # storage-server host disk capacity (GB)
+    total: int  # configured pool capacity (GB) when known, else the storage nodes' host disk
+    source: str = "node_disk"   # pool | node_disk — what `total` measures
 
 
 class ClusterStorage(BaseModel):
