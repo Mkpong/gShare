@@ -28,6 +28,7 @@ class Handoff:
         # (the operator has no DB). Without this the CR carries the raw image id and the Pod
         # fails with InvalidImageName.
         image_ref = await self._resolve_image_ref(sess)
+        sess._excluded_nodes = await self.excluded_nodes(sess)
         spec = self.crd.to_session_spec(sess, req, image_ref=image_ref)   # GShareSession.spec
         await self._stamp_spot(sess, spec)
         cluster_id = getattr(req, "cluster_id", None) or sess.cluster_id
@@ -76,7 +77,7 @@ class Handoff:
         up)."""
         await self.crd.delete(sess.cluster_id, sess.id)
 
-    async def set_paused(self, sess, paused: bool, *, graceful_demote: bool | None = None) -> None:
+    async def set_paused(self, sess, paused: bool, *, graceful_demote: bool | None = None) -> int:
         """Pause(true)/resume(false) — patch spec.paused so the operator releases/recreates the Pod.
 
         pauseMode and preemptible are re-asserted alongside it, so the operator's pause branch
@@ -86,17 +87,40 @@ class Handoff:
         from app.core.config import settings  # lazy: keep module import-light
 
         pinned = None
+        excluded = None
+        if not paused:
+            # A resume recreates the pod: it must avoid the nodes the ledger holds as unusable
+            # right now (a drain in progress, a node that went offline).
+            excluded = await self.excluded_nodes(sess)
         if settings.PER_CARD_MODE and not paused:
             # A cold resume re-reserved a card; re-assert the pin so the recreated pod binds it.
             pinned = getattr(sess, "_pinned_gpu_uuid", None)
-        await self.crd.set_paused(
+        return await self.crd.set_paused(
             sess.cluster_id, sess.id, paused,
             owner=sess.owner_user_id, group_id=sess.group_id,
             pause_mode=getattr(sess, "pause_mode", None),
             preemptible=getattr(sess, "preemptible", None),
             graceful_demote=graceful_demote,
             pinned_gpu_uuid=pinned,
+            excluded_nodes=excluded,
+            resource_class=getattr(sess, "resource_class", None),
         )
+
+    async def excluded_nodes(self, sess) -> list[str]:
+        """Hostnames in the session's cluster that must not receive its pod: cordoned (a drain,
+        an administrator's hold) or offline (no kubelet heartbeat). Card-pinned GPU sessions never
+        target such a node anyway; this is what keeps a CPU session — placed by kube-scheduler —
+        off it too."""
+        from sqlalchemy import select
+
+        from app.db.models import GpuNode
+
+        rows = await self.db.scalars(
+            select(GpuNode.hostname).where(
+                GpuNode.cluster_id == sess.cluster_id, GpuNode.status.in_(("cordoned", "offline"))
+            )
+        )
+        return sorted(set(rows.all()))
 
 
 def _current_traceparent() -> str | None:

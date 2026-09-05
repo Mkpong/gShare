@@ -41,8 +41,11 @@ async def _root(db) -> User:
 @pytest.mark.asyncio
 async def test_stale_node_goes_offline_and_cordon_is_left_alone(db, monkeypatch):
     monkeypatch.setattr(node_liveness, "get_sessionmaker", lambda: (lambda: db))
-    stale = await _node(db, status="ready", seen_delta_sec=settings.NODE_STALE_SEC + 60)
-    cordoned = await _node(db, status="cordoned", seen_delta_sec=settings.NODE_STALE_SEC + 60)
+    cid = ids.new("cluster")
+    stale = await _node(db, status="ready", seen_delta_sec=settings.NODE_STALE_SEC + 60, cluster_id=cid)
+    cordoned = await _node(db, status="cordoned", seen_delta_sec=settings.NODE_STALE_SEC + 60, cluster_id=cid)
+    # A fresh sibling proves the operator is alive; without one, silence is the operator's.
+    await _node(db, status="ready", seen_delta_sec=5, cluster_id=cid)
 
     await node_liveness.run()
 
@@ -121,3 +124,16 @@ async def test_sessions_on_an_offline_node_are_terminated(db, monkeypatch):
     await node_liveness.run()
     # Only the session with a pod is ended; the paused one has none and can resume elsewhere.
     assert calls == [(running.id, "node_offline")]
+
+
+@pytest.mark.asyncio
+async def test_operator_silence_marks_nothing_offline(db, monkeypatch):
+    """Every node of a cluster stale at once = the operator is down, not the fleet."""
+    monkeypatch.setattr(node_liveness, "get_sessionmaker", lambda: (lambda: db))
+    cid = ids.new("cluster")
+    a = await _node(db, status="ready", seen_delta_sec=settings.NODE_STALE_SEC + 60, cluster_id=cid)
+    b = await _node(db, status="ready", seen_delta_sec=settings.NODE_STALE_SEC + 90, cluster_id=cid)
+    await node_liveness.run()
+    db.expunge_all()
+    assert (await db.get(GpuNode, a.id)).status == "ready"
+    assert (await db.get(GpuNode, b.id)).status == "ready"

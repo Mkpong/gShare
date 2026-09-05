@@ -61,6 +61,23 @@ their group's.
 
 ---
 
+**Session liveness.** The operator re-reports every running session once a minute (a
+heartbeat carrying the container's restart count and state), and the control plane acts on
+what it hears — never on what it assumes:
+
+- *Crash loop* — a container restarted `SESSION_CRASH_LOOP_RESTARTS` (3) times and sitting in
+  `CrashLoopBackOff` ends the session (`crash_loop`), settled and notified, instead of billing
+  an endless restart cycle.
+- *Pod lost* — a session whose heartbeat has been silent for `SESSION_STALE_SEC` (5 min) while
+  the operator is otherwise alive (its node inventory is fresh) is settled (`pod_lost`). If the
+  operator itself is silent — every node of a cluster stale at once — nothing is touched: an
+  operator outage must never turn into mass termination.
+- *Node offline* — a node whose kubelet stops answering goes offline at once and its running
+  sessions end (`node_offline`); paused sessions are left to resume elsewhere.
+- A pod deleted by hand (or evicted) while the session is still wanted is simply rebuilt; its
+  exit is not reported as the session's end, so the bill and the reservation are untouched.
+
+
 ## 3. Organizations (super admin)
 
 Create organizations and appoint their administrators.
@@ -162,15 +179,28 @@ without watching the screen.
 Per-node actions:
 
 - **Cordon / uncordon** — stop or resume new placements. Sessions already running stay.
-- **Drain** — cordon, then move or end the sessions on the node. Rescheduling needs another node
-  with the same GPU model, free capacity, and pool access; sessions that cannot move are left
-  paused rather than lost.
+- **Drain** — cordon, then move or end the sessions on the node. *Reschedule* cold-pauses each
+  running session (`drained`) and resumes it at once; a GPU session needs another card of the
+  same model with room and pool access, a CPU session any other CPU node. A session with nowhere
+  to go is **parked**: it stays paused and holds a place in the queue, and the queue ticker
+  resumes it the moment room appears — when another session ends, or when you uncordon the node.
+  *Force terminate* settles every session like an administrator stop. The cordon is mirrored onto
+  the Kubernetes node within about fifteen seconds, so nothing — not even a CPU session placed by
+  kube-scheduler — lands back on it; a pod that slipped in before the mirror took effect is
+  replaced automatically. The node stays cordoned until you uncordon it.
 - **Delete** — appears only on an **offline** node, because a node the operator still reports
   would simply reappear on its next inventory tick. It removes the node and its GPU card records
   after refusing (`node_busy`) while any live allocation or non-terminal session remains, and it
   keeps the billing history: past allocations survive, holding their `gpu_uuid`, detached from
   the card that no longer exists. Deleting a node's last card also empties any dedicated pool it
   belonged to — reassign or delete that pool.
+
+**GPU devices** (the per-node card list) carry a per-card health action: **Mark faulty** takes one
+card out of placement and ends every session bound to it (`gpu_fault`, settled, owners notified)
+— a process whose CUDA context died cannot be resumed, so an honest end beats a session that
+bills for a dead card. **Restore** puts a repaired card back. Fatal Xid events from DCGM still
+cordon the whole node automatically; the card action is for the case where one card of several
+is bad.
 
 The full machine-level procedure for adding or removing a node — join, labels, drain, `kubeadm
 reset` — is in [cluster-setup.md](cluster-setup.md#growing-or-shrinking-a-running-cluster).

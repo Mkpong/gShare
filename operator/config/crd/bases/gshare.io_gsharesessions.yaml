@@ -98,6 +98,15 @@ spec:
                   request=limit (evict on exceed).
                 minimum: 0
                 type: integer
+              excludedNodes:
+                description: |-
+                  ExcludedNodes lists hostnames the pod must not be scheduled on — the nodes the control
+                  plane holds as cordoned or offline at handoff time. A drain vacates a session with a
+                  cold pause and resumes it; without this a CPU session (placed by kube-scheduler, not by
+                  the ledger's card pin) could land straight back on the node being drained.
+                items:
+                  type: string
+                type: array
               fullCard:
                 description: |-
                   FullCard requests the whole physical card THROUGH hami-scheduler

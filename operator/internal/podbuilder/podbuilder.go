@@ -106,6 +106,11 @@ func (b *Builder) BuildPod(s *gsharev1.GShareSession) *corev1.Pod {
 		NodeSelector:                 map[string]string{},
 	}
 	rc := "nvidia"
+	// spec.excludedNodes is deliberately NOT baked into the pod as node affinity: the list is a
+	// snapshot, and a pod created while a node was cordoned would stay Pending after the cordon
+	// was lifted. Keeping nodes out is the Node's own unschedulable flag (mirrored from the
+	// control plane by the inventory controller); the session controller uses excludedNodes
+	// only to replace a pod that is already sitting on such a node.
 
 	switch {
 	case s.Spec.ResourceClass == "cpu":

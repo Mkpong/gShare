@@ -1510,3 +1510,53 @@ class SchedulerService:
             mode=sess.mode,
             billing_wallet_id=sess.billing_wallet_id,
         )
+
+
+async def enqueue_resume(db, session_id: str, *, priority: int = 0) -> None:
+    """Park a paused session in the queue so the ticker resumes it when capacity returns.
+
+    Used by drain: the session was vacated from a node and nothing else fit. The entry is keyed
+    by session (unique), so re-parking is idempotent; ``session_req`` marks it as a resume."""
+    existing = await db.scalar(select(QueueEntry).where(QueueEntry.session_id == session_id))
+    if existing is not None:
+        return
+    db.add(QueueEntry(id=ids.new("queue"), session_id=session_id,
+                      session_req={"resume": True}, priority=priority))
+    await db.flush()
+
+
+async def resume_parked_from_queue(db) -> str:
+    """Resume queued *paused* sessions (drain parking), oldest first, until one does not fit.
+
+    Runs after the pending-session pass each tick. Returns "admitted" / "blocked" / "empty" /
+    "skipped" like reschedule_from_queue. A session that is no longer paused (owner resumed it by
+    hand, or it was terminated) just drops its entry."""
+    from app.core.errors import InsufficientCredit, NoCapacity
+    from app.domain.session_service import SessionService
+
+    entry = await db.scalar(
+        select(QueueEntry)
+        .join(Session, Session.id == QueueEntry.session_id)
+        .where(Session.status == "paused")
+        .order_by(QueueEntry.priority.desc(), QueueEntry.enqueued_at.asc())
+        .limit(1)
+    )
+    if entry is None:
+        return "empty"
+    sid = entry.session_id
+    try:
+        await SessionService(db).start(sid)
+    except NoCapacity:
+        return "blocked"
+    except InsufficientCredit:
+        # Not ours to fix: leave the session paused, drop the parking so the head moves on; the
+        # owner was already told by the pause notification and can resume after topping up.
+        await db.delete(entry)
+        await db.commit()
+        return "skipped"
+    # start() committed the resume; remove the parking in its own short transaction.
+    row = await db.scalar(select(QueueEntry).where(QueueEntry.session_id == sid))
+    if row is not None:
+        await db.delete(row)
+        await db.commit()
+    return "admitted"

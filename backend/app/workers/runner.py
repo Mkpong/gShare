@@ -26,6 +26,7 @@ from app.workers import (
     node_liveness,
     pool_rebalancer,
     queue_ticker,
+    session_liveness,
     token_expiry,
     webhook_dispatcher,
 )
@@ -46,6 +47,7 @@ JOBS: list[tuple[Job, int, str]] = [
     (webhook_dispatcher.run, 15, "webhook_dispatcher"),  # deliver the webhook outbox
     (pool_rebalancer.run, 30, "pool_rebalancer"),   # drive hami-core<->mig card transitions
     (node_liveness.run, 60, "node_liveness"),   # heartbeat -> node status (offline / back to ready)
+    (session_liveness.run, 60, "session_liveness"),   # lost pods (no operator heartbeat) -> settled
 ]
 
 

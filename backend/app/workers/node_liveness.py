@@ -33,17 +33,35 @@ async def run() -> None:
     offline_hosts: set[str] = set()
     async with get_sessionmaker()() as db:
         async with db.begin():
-            for node in (await db.scalars(select(GpuNode))).all():
+            nodes = (await db.scalars(select(GpuNode))).all()
+            # Operator liveness per cluster: if NO node of a cluster has a fresh heartbeat, the
+            # silence is the operator's, not the nodes' — marking them all offline (and ending
+            # every session on them) would turn a control-plane outage into data loss.
+            alive_clusters = {
+                n.cluster_id for n in nodes
+                if n.last_seen_at is not None and _aware(n.last_seen_at) >= cutoff
+            }
+            for node in nodes:
+                if node.cluster_id not in alive_clusters:
+                    continue
                 if node_status.stale_sweep(node, cutoff) == "offline":
                     marked.append(node)
-                if node.status == "offline":
+            for node in nodes:
+                if node.status == "offline" and node.cluster_id in alive_clusters:
                     offline_hosts.add(node.hostname)
+            silent = {n.cluster_id for n in nodes} - alive_clusters
+            if silent:
+                log.warning("node_liveness: no operator heartbeat for clusters %s — leaving their nodes and sessions alone", sorted(silent))
             if marked:
                 await node_status.notify_transitions(db, marked, [])
     if marked:
         log.info("node_liveness: stale → offline %s", [n.hostname for n in marked])
     if offline_hosts:
         await _end_stranded_sessions(offline_hosts)
+
+
+def _aware(dt: datetime) -> datetime:
+    return dt if dt.tzinfo is not None else dt.replace(tzinfo=UTC)
 
 
 async def _end_stranded_sessions(hosts: set[str]) -> None:

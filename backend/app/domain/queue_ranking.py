@@ -138,6 +138,10 @@ async def rank(db: AsyncSession) -> list[tuple[QueueEntry, float]]:
 
 
 async def head(db: AsyncSession) -> QueueEntry | None:
-    """The entry that dequeues next, or None when the queue is empty."""
+    """The next *new* session to admit, or None. Parked resumes (a drain's paused sessions,
+    ``session_req.resume``) are admitted by a separate pass and never block this head."""
     ranked = await rank(db)
-    return ranked[0][0] if ranked else None
+    for entry, _score in ranked:
+        if not (entry.session_req or {}).get("resume"):
+            return entry
+    return None

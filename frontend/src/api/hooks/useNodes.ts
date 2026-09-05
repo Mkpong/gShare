@@ -137,6 +137,22 @@ export function useGpuDevices(nodeId?: string, opts?: { enabled?: boolean }) {
   });
 }
 
+// PUT /gpu-devices/{id}/health — take a faulty card out of service (ends the sessions bound to
+// it, gpu_fault) or put a repaired one back.
+export function useSetDeviceHealth() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: async ({ deviceId, status, reason }: { deviceId: string; status: 'ready' | 'unhealthy'; reason?: string }) => {
+      const { data } = await raw.PUT('/api/v1/gpu-devices/{device_id}/health', {
+        params: { path: { device_id: deviceId } },
+        body: { status, reason },
+      });
+      return data as { device_id: string; status: string; terminated_sessions: string[] };
+    },
+    onSuccess: () => { qc.invalidateQueries({ queryKey: ['gpu-devices'] }); qc.invalidateQueries({ queryKey: nodeKeys.all }); },
+  });
+}
+
 // POST /nodes/{id}/cordon — cordon with true, uncordon with false. Draining is an option.
 export function useCordonNode() {
   const qc = useQueryClient();

@@ -8,7 +8,7 @@ from pydantic import BaseModel
 
 class OperatorStatusEvent(BaseModel):
     """Status callback payload. Drives consume/settle triggers."""
-    phase: str                          # running|terminated|error|preparing|terminating
+    phase: str                          # running|terminated|error|preparing|terminating|heartbeat
     bound_gpu_uuid: str | None = None   # physical GPU bound on running
     node_name: str | None = None        # k8s node the pod landed on (pod.spec.nodeName)
     yield_state: str | None = None      # "Yielded" if operator did an in-place yield (not cold)
@@ -16,6 +16,10 @@ class OperatorStatusEvent(BaseModel):
     used_mem_mb: int | None = None      # measured occupancy (inventory reconciliation)
     message: str | None = None
     trace_id: str | None = None         # W3C traceparent trace-id
+    # Heartbeat facts (phase=heartbeat, also carried on phase changes when the pod exists).
+    restart_count: int | None = None    # kubelet container restartCount
+    generation: int | None = None       # CR generation the report describes
+    container_state: str | None = None  # Running|Waiting:<reason>|Terminated:<reason>
     ts: datetime                        # event time (UTC)
 
 
@@ -68,6 +72,7 @@ class OperatorNodeHealthEvent(BaseModel):
     kind: str                           # xid|ecc|temp|down
     severity: str = "critical"          # info|warning|critical
     action: str | None = None           # cordon|alert
+    gpu_uuid: str | None = None         # the faulting card when the source identifies one
     message: str | None = None
     cluster_id: str | None = None
     id: str | None = None

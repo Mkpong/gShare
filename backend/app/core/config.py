@@ -112,6 +112,17 @@ class Settings(BaseSettings):
     # offline (and back to ready when reports resume). Reports land every inventory tick, so
     # this only needs to outlast a slow tick, not a slow cluster.
     NODE_STALE_SEC: int = 300
+    # A running/preparing session whose operator heartbeat is older than this is treated as lost
+    # (pod gone without a terminal phase) and settled. Only enforced while the operator itself is
+    # demonstrably alive (fresh node heartbeats), so an operator outage never mass-terminates.
+    SESSION_STALE_SEC: int = 300
+    # Container restarts (CrashLoopBackOff) after which a session is ended instead of billed.
+    SESSION_CRASH_LOOP_RESTARTS: int = 3
+    # A reason-less Paused report within this many seconds of a resume is treated as the echo of
+    # the backend stop the resume overtook, not as a reaper pause.
+    RESUME_ECHO_WINDOW_SEC: int = 60
+    # How long a drain waits for the operator to confirm each pause before resuming the session.
+    DRAIN_PAUSE_ACK_SEC: float = 15.0
     NODE_RESERVED_CPU: int = 1
     NODE_RESERVED_MEM_GB: int = 2
     # Rate for keeping persistent storage (data volumes), billed continuously per GB-hour against

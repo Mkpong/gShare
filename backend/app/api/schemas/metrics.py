@@ -59,6 +59,7 @@ class GpuDeviceRow(BaseModel):
     desired_mode: str | None = None
     mode_state: str = "ready"
     status: str
+    node_status: str | None = None   # ready|busy|cordoned|offline of the hosting node
     gpu_uuid: str
     total_mem_mb: int
     used_mem_mb: int

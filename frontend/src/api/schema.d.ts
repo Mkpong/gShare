@@ -2676,6 +2676,31 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/gpu-devices/{device_id}/health": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        /**
+         * Set Device Health
+         * @description Take one card out of service (or put it back). super_admin only.
+         *
+         *     ``unhealthy`` removes the card from placement and ends every session bound to it with
+         *     ``gpu_fault`` — a process whose CUDA context died cannot be resumed, so the honest outcome is
+         *     a settled session and a notified owner, not a running one that bills. ``ready`` puts the
+         *     card back after repair. The same routine serves operator health events that name a card.
+         */
+        put: operations["set_device_health_api_v1_gpu_devices__device_id__health_put"];
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/gpu-devices/{device_id}/mode": {
         parameters: {
             query?: never;
@@ -2988,6 +3013,29 @@ export interface paths {
         put?: never;
         /** Upsert Node */
         post: operations["upsert_node_internal_inventory_nodes_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/internal/nodes/cordoned": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Cordoned Nodes
+         * @description Hostnames the ledger holds as cordoned, for the operator to mirror onto the Kubernetes
+         *     nodes (spec.unschedulable). The control plane never touches Kubernetes itself; without this
+         *     mirror a gShare cordon only steered the ledger's card placement and kube-scheduler could still
+         *     put a CPU session — or a resumed one — straight back on a node being drained.
+         */
+        get: operations["cordoned_nodes_internal_nodes_cordoned_get"];
+        put?: never;
+        post?: never;
         delete?: never;
         options?: never;
         head?: never;
@@ -3668,6 +3716,8 @@ export interface components {
             mode_state: string;
             /** Status */
             status: string;
+            /** Node Status */
+            node_status?: string | null;
             /** Gpu Uuid */
             gpu_uuid: string;
             /** Total Mem Mb */
@@ -4150,6 +4200,8 @@ export interface components {
             cluster_id?: string | null;
             /** Node Cpu */
             node_cpu?: number | null;
+            /** Node Ready */
+            node_ready?: boolean | null;
             /** Node Mem Gb */
             node_mem_gb?: number | null;
             /** Node Disk Gb */
@@ -4174,6 +4226,8 @@ export interface components {
             severity: string;
             /** Action */
             action?: string | null;
+            /** Gpu Uuid */
+            gpu_uuid?: string | null;
             /** Message */
             message?: string | null;
             /** Cluster Id */
@@ -4195,6 +4249,8 @@ export interface components {
             cluster_id?: string | null;
             /** Node Cpu */
             node_cpu?: number | null;
+            /** Node Ready */
+            node_ready?: boolean | null;
             /** Node Mem Gb */
             node_mem_gb?: number | null;
             /** Node Disk Gb */
@@ -4242,6 +4298,10 @@ export interface components {
             message?: string | null;
             /** Trace Id */
             trace_id?: string | null;
+            /** Restart Count */
+            restart_count?: number | null;
+            /** Container State */
+            container_state?: string | null;
             /**
              * Ts
              * Format: date-time
@@ -5142,6 +5202,16 @@ export interface components {
              * @default true
              */
             cordon: boolean;
+            /** Reason */
+            reason?: string | null;
+        };
+        /** _DeviceHealthBody */
+        _DeviceHealthBody: {
+            /**
+             * Status
+             * @enum {string}
+             */
+            status: "ready" | "unhealthy";
             /** Reason */
             reason?: string | null;
         };
@@ -11825,6 +11895,47 @@ export interface operations {
             };
         };
     };
+    set_device_health_api_v1_gpu_devices__device_id__health_put: {
+        parameters: {
+            query?: {
+                /** @description Token fallback for clients that cannot set custom headers, such as EventSource (SSE) */
+                access_token?: string | null;
+            };
+            header?: {
+                /** @description Bearer <jwt> */
+                authorization?: string | null;
+            };
+            path: {
+                device_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["_DeviceHealthBody"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": unknown;
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
     set_gpu_device_mode_api_v1_gpu_devices__device_id__mode_put: {
         parameters: {
             query?: {
@@ -12398,6 +12509,37 @@ export interface operations {
         responses: {
             /** @description Successful Response */
             202: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": unknown;
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    cordoned_nodes_internal_nodes_cordoned_get: {
+        parameters: {
+            query?: never;
+            header: {
+                authorization: string;
+            };
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
                 headers: {
                     [name: string]: unknown;
                 };

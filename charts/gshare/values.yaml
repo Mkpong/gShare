@@ -70,6 +70,8 @@ api:
   # Seconds without an operator inventory report before a node is marked offline (and back to
   # ready when reports resume). super_admins are notified on each transition.
   nodeStaleSec: 300
+  # Placement policy for fractional GPU slices when several cards fit: binpack | spread.
+  gpuPacking: binpack
   # Days-to-hours window a deleted volume's data is kept before the operator reclaims the PVC
   # (and the CSI driver the dataset). 0 reclaims on the next sync (about five minutes).
   volumeReclaimGraceHours: 24

@@ -591,7 +591,7 @@ export function SessionWizard() {
               )}
             </dl>
           </div>
-          {concurrencyFull && <div className="font-bold mt-2">{t('wizard.concurrencyFull')}</div>}
+          {concurrencyFull && <div className="font-bold mt-2">{t('wizard.concurrencyFull', { limit: pol?.max_concurrent ?? 0, active: pol?.used?.active ?? 0 })}</div>}
         </div>
       )}
 
