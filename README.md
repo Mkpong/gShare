@@ -37,8 +37,8 @@ sitting on it.
 - **Admission queueing.** When VRAM is oversubscribed, requests queue instead of failing,
   and are dequeued as capacity frees up.
 - **Pause that actually frees the GPU.** Pausing a session tears the pod down and returns
-  the card; compute billing stops. Resuming re-acquires a card and rebuilds the pod. Retained
-  volumes keep billing for their provisioned capacity.
+  the card; billing stops entirely. Resuming re-acquires a card and rebuilds the pod. Volumes
+  are kept and are not billed.
 - **Idle reaping.** Sessions that stop using their GPU can be paused automatically, driven
   by real per-GPU utilisation from DCGM or the HAMi device-plugin monitor.
 - **Multi-tenancy with three role planes.** Organization → group → user, with `super_admin`,
@@ -127,8 +127,8 @@ memberships. The top bar has an admin-mode toggle that switches between the two 
 super-admin to organization to group to user — and no level can hand out more than it
 received. Monthly refills are supported and are use-it-or-lose-it. A session is always
 billed to the requester's own personal wallet; charging someone else's wallet or a group
-wallet is rejected. Volumes bill continuously for their provisioned capacity, whether or not
-a session is running.
+wallet is rejected. **Credits are a GPU-only concept**: CPU-class sessions and storage volumes
+are free, and are governed by resource-policy quotas instead.
 
 **Resource limits.** GPUs are allocated in per-model full-card fraction tiers — `fractional`
 for shared, `exclusive` for the whole card. MIG is operated as a per-card POOL (admins move

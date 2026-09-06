@@ -274,8 +274,16 @@ class SchedulerService:
             best_fit: tuple[int, str] | None = None   # (total headroom, cluster_id) — best among clusters that fit
             best_any: tuple[int, str] | None = None   # (matching device count, cluster_id) — fallback when nothing fits
             for c in clusters:
-                stmt = select(GpuDevice).where(
-                    GpuDevice.cluster_id == c.id, GpuDevice.status == "ready"
+                # Cards on a cordoned or offline node take no new placements (the reservation
+                # query enforces the same join), so they must not make a cluster look capable.
+                stmt = (
+                    select(GpuDevice)
+                    .join(GpuNode, GpuNode.id == GpuDevice.node_id, isouter=True)
+                    .where(
+                        or_(GpuNode.id.is_(None), GpuNode.status == "ready"),
+                        GpuDevice.cluster_id == c.id,
+                        GpuDevice.status == "ready",
+                    )
                 )
                 if req.mode is not None:
                     # Same pool set reserve_slice uses: fractional is servable by MIG cards too.
@@ -805,10 +813,18 @@ class SchedulerService:
         # Same pool set the reservation uses: fractional requests are servable by MIG cards too.
         modes = (mode,) if mode != "fractional" else ("fractional", "mig")
         cluster_id = sess.cluster_id or req.cluster_id
-        stmt = select(GpuDevice).where(
-            GpuDevice.cluster_id == cluster_id,
-            GpuDevice.status == "ready",
-            GpuDevice.mode.in_(modes),
+        # A card whose node is cordoned or offline can never be reserved, so counting it here
+        # would queue the request forever instead of rejecting it with a reason the user can act
+        # on (this is what a decommissioned node's leftover cards did).
+        stmt = (
+            select(GpuDevice)
+            .join(GpuNode, GpuNode.id == GpuDevice.node_id, isouter=True)
+            .where(
+                or_(GpuNode.id.is_(None), GpuNode.status == "ready"),
+                GpuDevice.cluster_id == cluster_id,
+                GpuDevice.status == "ready",
+                GpuDevice.mode.in_(modes),
+            )
         )
         if model is not None:
             stmt = stmt.where(GpuDevice.model == model)

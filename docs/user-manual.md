@@ -61,8 +61,8 @@ Terminating asks first, naming the session and the credits it has spent.
 The lifecycle controls are on the session detail page.
 
 - **Pause** tears down the pod, **returns the GPU** so another session can take it
-  immediately, and **stops compute billing**. The session, its volumes, and the credit hold
-  are preserved. Retained volumes keep billing for their capacity.
+  immediately, and **stops billing**. The session, its volumes, and the credit hold
+  are preserved, and keeping the volumes costs nothing.
 - **Resume** **re-acquires a GPU** and picks up where you left off. If no capacity is free,
   the resume waits.
 - **Restart** is a stop followed by a resume. **Terminate** settles the bill — refunding
@@ -111,8 +111,8 @@ wallet.
 
 ## 5. Data and volumes
 
-> A volume bills **continuously, in proportion to its provisioned quota** — per minute from
-> the owning wallet (personal or group), whether or not a session is running.
+> Volumes are **free**. Credits are charged for GPU session time only. What limits storage is
+> the quota your administrator sets, shown on each volume, not your balance.
 
 ### 5.1 Volume list
 

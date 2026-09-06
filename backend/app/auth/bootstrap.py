@@ -72,9 +72,9 @@ _GPU_OFFERINGS = [
 
 
 # Default resource presets, split into compute (cpu, mem, disk) and gpu (a per-model fraction).
-# The compute ladder is sized for a shared education fleet: host CPU/RAM are billed only on
-# CPU-class sessions, so on GPU sessions the preset IS the control — S is the sensible default for
-# coursework, XL exists for the rare heavy preprocessing job. The wizard also offers a custom
+# The compute ladder is sized for a shared education fleet. Host CPU/RAM/disk are never billed —
+# resource policies cap them — so on GPU sessions the preset IS the control: S is the sensible
+# default for coursework, XL exists for the rare heavy preprocessing job. The wizard also offers a custom
 # panel; oversized custom requests are caught by the host-headroom admission gate.
 _COMPUTE_PRESETS = [
     {"name": "Compute S",  "cpu": 2,  "mem_gb": 4,  "disk_gb": 20},
@@ -205,8 +205,8 @@ async def seed_offerings() -> None:
                 log.info("offering seeded: %s (%d MB)", spec["gpu_model"], spec["gpu_mem_mb"])
 
             # A single CPU offering carrying the default cpu, mem, and disk for CPU sessions.
-            # Billing is computed from the configured compute rates times the amounts, so
-            # offering.credit_per_hour stays 0. Choosing a compute preset overrides these values.
+            # CPU-class sessions are free — credits are a GPU-only concept — so credit_per_hour is
+            # 0. Choosing a compute preset overrides these values.
             cpu_exists = await db.scalar(select(Offering.id).where(Offering.resource_class == "cpu"))
             if cpu_exists is None:
                 db.add(Offering(

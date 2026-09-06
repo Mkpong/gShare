@@ -128,43 +128,8 @@ async def test_settle_marker_folds_into_the_refund_row(db):
 
 
 @pytest.mark.asyncio
-async def test_storage_rows_fold_per_volume(db):
-    """Per-minute storage billing folds into one row per volume, like session consume."""
-    from app.db.models import StorageVolume
-
-    user_id = ids.new("user")
-    wallet = CreditWallet(id=ids.new("wallet"), owner_type="user", owner_id=user_id,
-                          balance=Decimal("100"), reserved=Decimal("0"))
-    vol = StorageVolume(id=ids.new("volume"), scope="user", scope_id=user_id, type="home",
-                        name="home-data", access_mode="RWO", quota_gb=100, used_gb=0)
-    base = datetime(2026, 8, 27, 12, 0, tzinfo=UTC)
-    rows = []
-    for i in range(6):
-        rows.append(CreditTransaction(
-            id=ids.new("txn"), wallet_id=wallet.id, type="storage",
-            amount=Decimal("-0.02"), balance_after=Decimal("100") - Decimal("0.02") * (i + 1),
-            ref=vol.id, idempotency_key=f"s{i}", created_at=base + timedelta(minutes=i),
-        ))
-    async with db.begin():
-        db.add_all([wallet, vol, *rows])
-
-    out = await _grouped_transactions(db, wallet.id, Pagination(page=1, size=50))
-    assert len(out) == 1, [r.type for r in out]
-    g = out[0]
-    assert g.type == "storage" and g.entry_count == 6
-    assert g.live is True                         # volume still exists: bills until deleted
-    assert g.amount == Decimal("-0.12")
-    assert g.ref_name == "home-data"
-    assert g.balance_after == Decimal("100") - Decimal("0.12")
-
-
-@pytest.mark.asyncio
 async def test_closed_streams_are_not_live(db):
-    """A terminated session's rollup and a deleted volume's rollup do not show as billing."""
-    from datetime import UTC as _UTC
-
-    from app.db.models import StorageVolume
-
+    """A terminated session's rollup does not show as still billing."""
     user_id = ids.new("user")
     wallet = CreditWallet(id=ids.new("wallet"), owner_type="user", owner_id=user_id,
                           balance=Decimal("100"), reserved=Decimal("0"))
@@ -174,22 +139,16 @@ async def test_closed_streams_are_not_live(db):
     sess = SessionRow(id=ids.new("session"), owner_user_id=user_id, cluster_id=ids.new("cluster"),
                       offering_id=offering.id, image_id=image.id, resource_class="gpu",
                       mode="fractional", status="terminated", name="done")
-    vol = StorageVolume(id=ids.new("volume"), scope="user", scope_id=user_id, type="home",
-                        name="gone", access_mode="RWO", quota_gb=10, used_gb=0,
-                        deleted_at=datetime(2026, 8, 27, 13, 0, tzinfo=_UTC))
     base = datetime(2026, 8, 27, 12, 0, tzinfo=UTC)
-    rows = []
-    for i in range(2):
-        rows.append(CreditTransaction(
+    rows = [
+        CreditTransaction(
             id=ids.new("txn"), wallet_id=wallet.id, type="consume", amount=Decimal("-1"),
             balance_after=Decimal("99") - i, ref=sess.id, idempotency_key=f"c{i}",
-            created_at=base + timedelta(minutes=i)))
-        rows.append(CreditTransaction(
-            id=ids.new("txn"), wallet_id=wallet.id, type="storage", amount=Decimal("-0.02"),
-            balance_after=Decimal("98"), ref=vol.id, idempotency_key=f"s{i}",
-            created_at=base + timedelta(minutes=i)))
+            created_at=base + timedelta(minutes=i))
+        for i in range(2)
+    ]
     async with db.begin():
-        db.add_all([wallet, offering, image, sess, vol, *rows])
+        db.add_all([wallet, offering, image, sess, *rows])
 
     out = await _grouped_transactions(db, wallet.id, Pagination(page=1, size=50))
-    assert {r.type: r.live for r in out} == {"consume": False, "storage": False}
+    assert {r.type: r.live for r in out} == {"consume": False}

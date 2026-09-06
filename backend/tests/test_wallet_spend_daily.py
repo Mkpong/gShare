@@ -36,7 +36,7 @@ async def test_sums_spend_by_day_and_ignores_non_spend(db):
         db.add_all([
             _txn(wid, "consume", "-1.5", datetime(2026, 8, 10, 3, 0, tzinfo=UTC)),
             _txn(wid, "consume", "-0.5", datetime(2026, 8, 10, 22, 0, tzinfo=UTC)),
-            _txn(wid, "storage", "-0.25", datetime(2026, 8, 11, 1, 0, tzinfo=UTC)),
+            _txn(wid, "consume", "-0.25", datetime(2026, 8, 11, 1, 0, tzinfo=UTC)),
             _txn(wid, "topup", "50", datetime(2026, 8, 10, 4, 0, tzinfo=UTC)),   # not spend
             _txn(wid, "hold", "-10", datetime(2026, 8, 10, 5, 0, tzinfo=UTC)),   # not spend
             _txn(wid, "consume", "-9", datetime(2026, 9, 1, 0, 0, tzinfo=UTC)),  # out of range

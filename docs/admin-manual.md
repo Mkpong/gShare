@@ -124,8 +124,8 @@ Manage GPU offerings (per-model full card, hourly rate, minimum CUDA version), p
 resource policies (concurrency, resource ceilings, idle timeout). Policies resolve
 most-specific first: **user → group → organization → global**.
 
-The storage rate (`STORAGE_CREDIT_PER_GB_HOUR`) is deployment configuration, set through
-the environment. It has no admin UI by design.
+Credits apply to GPU sessions only. CPU-class sessions and storage volumes are free; cap
+them with the concurrency and resource ceilings in the policy instead.
 
 ![Resources, offerings, presets](screenshots/26-superadmin-admin-resources.png)
 
@@ -160,9 +160,8 @@ Allocate credits down the hierarchy — system → organization → group → in
 approve or reject users' allocation requests. An organization admin allocates from the
 organization to its groups; a group admin from the group to individuals.
 
-Note that personal and group wallets are also charged continuously for **provisioned volume
-capacity**, on top of session compute. A balance can therefore fall even with no session
-running.
+Wallets are charged for **GPU session time only**. A balance never falls while no GPU
+session is running: CPU sessions and volumes cost nothing and are bounded by policy quotas.
 
 ![Credit allocation, global](screenshots/34-superadmin-admin-allocations.png)
 ![Credit allocation, organization admin](screenshots/42-orgadmin-allocations.png)

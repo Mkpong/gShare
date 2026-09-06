@@ -62,6 +62,7 @@ from app.api import (
     presets_router,
     queue_router,
     sessions_router,
+    system_router,
     users_router,
     volumes_router,
     webhooks_router,
@@ -92,6 +93,7 @@ API_ROUTERS = (
     dashboard_router,
     infra_router,
     monitoring_router,
+    system_router,
 )
 
 

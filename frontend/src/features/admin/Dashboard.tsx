@@ -3,6 +3,7 @@ import { useClusterMetrics, useDashboardSummary } from '@/api/hooks/useAdminDash
 import { useGpuDevices } from '@/api/hooks/useNodes';
 import { useAuditLogs } from '@/api/hooks/useAudit';
 import { actionLabel, resultMeta, targetDisplay, changesSummary } from '@/features/admin/Audit';
+import { HelpTip } from '@/components/HelpTip';
 import { PageHeader } from '@/components/PageHeader';
 import { useTranslation } from 'react-i18next';
 import { useAuthStore } from '@/auth/authStore';
@@ -236,7 +237,10 @@ export function AdminDashboard() {
                 return (
                   <section className="gs-panel p-5">
                     <h2 className="gs-h2">{t('admin.dashboard.storageTitle')}</h2>
-                    <p className="gs-sub mt-1">{t(st.disk_gb.source === 'pool' ? 'admin.dashboard.storageSub' : 'admin.dashboard.storageSubNodeDisk', { count: st.node_count })}</p>
+                    <p className="gs-sub mt-1 inline-flex items-center gap-1.5">
+                      {t('admin.dashboard.storageSubShort', { count: st.node_count })}
+                      <HelpTip text={t(st.disk_gb.source === 'pool' ? 'admin.dashboard.storageSub' : 'admin.dashboard.storageSubNodeDisk', { count: st.node_count })} />
+                    </p>
                     <div className="mt-1">
                       <CapacityRow
                         label={t('admin.dashboard.storageAllocated')}

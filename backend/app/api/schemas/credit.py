@@ -98,8 +98,7 @@ class TransactionRead(ORMModel):
     period_end: datetime | None = None
     # The session's billing is closed (its zero-amount settle marker folded into this row).
     settled: bool = False
-    # The stream behind this rollup is still accruing: the session is running (consume) or the
-    # volume still exists (storage bills for provisioned capacity until deletion).
+    # The stream behind this rollup is still accruing: the session is running.
     live: bool = False
 
 

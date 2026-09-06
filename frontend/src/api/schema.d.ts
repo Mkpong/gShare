@@ -2917,6 +2917,30 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/system/branding": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Get Branding
+         * @description Public: the sign-in screen renders this before anyone has a token.
+         */
+        get: operations["get_branding_api_v1_system_branding_get"];
+        /**
+         * Set Branding
+         * @description Set the service name and logo; super_admin only.
+         */
+        put: operations["set_branding_api_v1_system_branding_put"];
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/internal/sessions/{session_id}/status": {
         parameters: {
             query?: never;
@@ -3273,6 +3297,25 @@ export interface components {
             gpu_mem_mb: number;
             /** Gpu Cores */
             gpu_cores: number;
+        };
+        /** BrandingOut */
+        BrandingOut: {
+            /** Service Name */
+            service_name: string;
+            /** Logo */
+            logo?: string | null;
+        };
+        /** BrandingUpdate */
+        BrandingUpdate: {
+            /** Service Name */
+            service_name?: string | null;
+            /** Logo */
+            logo?: string | null;
+            /**
+             * Clear Logo
+             * @default false
+             */
+            clear_logo: boolean;
         };
         /** BudgetCreate */
         BudgetCreate: {
@@ -12311,6 +12354,65 @@ export interface operations {
                 };
                 content: {
                     "application/json": unknown;
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    get_branding_api_v1_system_branding_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["BrandingOut"];
+                };
+            };
+        };
+    };
+    set_branding_api_v1_system_branding_put: {
+        parameters: {
+            query?: {
+                /** @description Token fallback for clients that cannot set custom headers, such as EventSource (SSE) */
+                access_token?: string | null;
+            };
+            header?: {
+                /** @description Bearer <jwt> */
+                authorization?: string | null;
+            };
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["BrandingUpdate"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["BrandingOut"];
                 };
             };
             /** @description Validation Error */

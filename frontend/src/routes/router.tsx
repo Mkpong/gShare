@@ -72,6 +72,7 @@ export const router = createBrowserRouter(
             { path: 'groups/:groupId/admins', element: <RequireRole min="group_admin">{lazyPage(() => import('@/features/admin/Groups'), 'GroupAdminsPage')}</RequireRole> },
             { path: 'groups/:groupId/delete', element: <RequireRole min="group_admin">{lazyPage(() => import('@/features/admin/Groups'), 'DeleteGroupPage')}</RequireRole> },
             { path: 'resources', element: <RequireRole role="super_admin">{lazyPage(() => import('@/features/admin/Resources'), 'AdminResources')}</RequireRole> },
+            { path: 'system', element: <RequireRole role="super_admin">{lazyPage(() => import('@/features/admin/System'), 'AdminSystem')}</RequireRole> },
             { path: 'policies', element: <RequireRole min="group_admin">{lazyPage(() => import('@/features/admin/Resources'), 'AdminPolicies')}</RequireRole> },
             { path: 'policies/new', element: <RequireRole role="super_admin">{lazyPage(() => import('@/features/admin/Resources'), 'CreatePolicyPage')}</RequireRole> },
             { path: 'policies/:policyId/edit', element: <RequireRole role="super_admin">{lazyPage(() => import('@/features/admin/Resources'), 'EditPolicyPage')}</RequireRole> },

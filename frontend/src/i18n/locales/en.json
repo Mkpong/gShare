@@ -1,5 +1,7 @@
 {
-  "images": { "myTag": "Mine" },
+  "images": {
+    "myTag": "Mine"
+  },
   "account": {
     "backToAccount": "Account",
     "changePassword": "Change password",
@@ -62,7 +64,8 @@
         "storage": "Storage",
         "user": "User",
         "volume": "Volume",
-        "webhook": "Webhook"
+        "webhook": "Webhook",
+        "auth": "Authentication"
       },
       "actionLabel": {
         "audit_read": "Audit log viewed",
@@ -189,7 +192,9 @@
         "session_stop": "Session paused",
         "session_restart": "Session restarted",
         "session_terminate": "Session terminated",
-        "image_delete": "Image deleted"
+        "image_delete": "Image deleted",
+        "auth_login": "Sign-in",
+        "system_branding_set": "Set branding"
       },
       "actor": "Actor",
       "actorPlaceholder": "Name or email",
@@ -250,8 +255,8 @@
       "summary": "{{total}} entries · page {{page}} of {{pages}}",
       "target": "Target",
       "targetKind": {
-      "ntc": "Notice",
-      "inq": "Inquiry",
+        "ntc": "Notice",
+        "inq": "Inquiry",
         "alc": "Allocation",
         "alr": "Alert rule",
         "aud": "Audit entry",
@@ -301,7 +306,7 @@
         "30d": "30d"
       },
       "actionGroup": {
-      "boards": "Boards",
+        "boards": "Boards",
         "user": "User",
         "org": "Organization",
         "group": "Group/membership",
@@ -311,7 +316,8 @@
         "infra": "Infrastructure",
         "catalog": "Catalog",
         "storage": "Storage",
-        "system": "System"
+        "system": "System",
+        "auth": "Authentication"
       },
       "customRange": "Custom",
       "resultAccepted": "Accepted",
@@ -502,7 +508,8 @@
       "viewAudit": "Open audit log",
       "nodeStateBar": "Node states",
       "fleetTitle": "Fleet",
-      "gpuUtilBasis": "allocated · usage on Monitoring"
+      "gpuUtilBasis": "allocated · usage on Monitoring",
+      "storageSubShort": "{{count}} node · provisioned volume quota"
     },
     "groups": {
       "add": "Group",
@@ -527,7 +534,7 @@
       "colGroup": "Group",
       "colMember": "Member",
       "colMemberCount": "Users",
-      "pickFromMembers": "Pick from this department\u0027s members",
+      "pickFromMembers": "Pick from this department's members",
       "memberSearchPlaceholder": "Search by name",
       "noMemberCandidates": "No eligible members. Add them as members first.",
       "colWallet": "Wallet",
@@ -641,7 +648,6 @@
       "colCluster": "Cluster",
       "colEnqueued": "Queued at",
       "colNode": "Node",
-      "colOwner": "Owner",
       "colOwner": "User",
       "colPriority": "Priority",
       "colResource": "Resources",
@@ -1190,6 +1196,32 @@
       },
       "gpu": "GPU",
       "allGpus": "All GPUs"
+    },
+    "system": {
+      "title": "System",
+      "subtitle": "Settings that apply to this whole instance. Saved changes take effect immediately.",
+      "tab": {
+        "branding": "Branding"
+      },
+      "branding": {
+        "title": "Branding",
+        "subtitle": "The name and logo shown in the sidebar, on the sign-in screen, and in the browser tab.",
+        "preview": "Preview",
+        "name": "Service name",
+        "nameHint": "Up to 40 characters. The first letter becomes the icon when no logo is set.",
+        "nameSaved": "Service name saved.",
+        "logo": "Logo",
+        "logoHint": "PNG, JPEG, WebP or SVG, under 180 KB. A square image works best. Without one, the first letter of the name is used.",
+        "logoUpload": "Upload an image",
+        "logoSaved": "Logo saved.",
+        "logoRemove": "Remove logo",
+        "logoRemoved": "Logo removed.",
+        "logoRemoveTitle": "Remove the logo?",
+        "logoRemoveBody": "The icon goes back to the first letter of the service name.",
+        "logoType": "Choose a PNG, JPEG, WebP or SVG image.",
+        "logoTooBig": "The image must be under 180 KB.",
+        "logoUnreadable": "That file could not be read."
+      }
     }
   },
   "auth": {
@@ -1570,7 +1602,8 @@
       "policies": "Resource policy",
       "volumes": "Volumes",
       "gpus": "GPUs",
-      "monitoring": "Monitoring"
+      "monitoring": "Monitoring",
+      "system": "System"
     },
     "adminConsole": "Admin console",
     "adminSection": "Admin",
@@ -1713,10 +1746,10 @@
     "compute": "Compute",
     "started": "Started",
     "terminatedAt": "Terminated",
-      "volumesLabel": "Volumes",
-      "nodeLabel": "Node",
+    "volumesLabel": "Volumes",
+    "nodeLabel": "Node",
     "eventsTitle": "Event log",
-      "queueWaited": "started after waiting {{duration}} in the queue",
+    "queueWaited": "started after waiting {{duration}} in the queue",
     "eventsEmpty": "No events recorded",
     "cleanup": "Clean up",
     "cleanupHint": "This session already stopped. Cleaning up reclaims any leftover hold and files it as terminated.",
@@ -1863,13 +1896,13 @@
     "pendingAdd": "to add",
     "pendingRevoke": "to revoke",
     "pendingCount": "{{count}} pending changes",
-      "crumbData": "Data",
-      "crumbVolumes": "Volumes",
-      "shareCrumb": "Share",
-      "sharedTag": "Shared",
-      "mountsPanelTitle": "Sessions mounting {{name}}",
-      "mountsPanelEmpty": "No session is mounting this volume.",
-      "sharedCountTitle": "Shared with {{count}} user(s)",
+    "crumbData": "Data",
+    "crumbVolumes": "Volumes",
+    "shareCrumb": "Share",
+    "sharedTag": "Shared",
+    "mountsPanelTitle": "Sessions mounting {{name}}",
+    "mountsPanelEmpty": "No session is mounting this volume.",
+    "sharedCountTitle": "Shared with {{count}} user(s)",
     "shareSaved": "Share changes saved."
   },
   "wallet": {
@@ -1916,8 +1949,7 @@
       "hold": "Hold",
       "refund": "Refund",
       "settle": "Settlement",
-      "topup": "Top-up",
-      "storage": "Storage"
+      "topup": "Top-up"
     },
     "topupTitle": "Request a top-up from the system administrators",
     "topupNote": "Mints new credits · needs a system administrator's approval",
@@ -1969,73 +2001,76 @@
     "quotaRequestCrossLink": "Quota increase request →"
   },
   "boards": {
-      "noticesTitle": "Notices",
-      "noticesSubtitle": "Global announcements plus your department's",
-      "adminNoticesTitle": "Notice management",
-      "adminNoticesSubtitle": "Post globally (super admin) or to your department (group admin)",
-      "inquiriesTitle": "Support",
-      "inquiriesSubtitle": "Ask the operators and follow the answers",
-      "adminInquiriesTitle": "Inquiry management",
-      "adminInquiriesSubtitle": "Answer your members' (group admin) or everyone's (super admin) inquiries",
-      "noNotices": "No notices yet.",
-      "searchPlaceholder": "Search title, body, author",
-      "noInquiries": "You have no inquiries.",
-      "noIncoming": "No incoming inquiries.",
-      "newNotice": "New notice",
-      "editNotice": "Edit notice",
-      "newInquiry": "New inquiry",
-      "inquiryDetail": "Inquiry",
-      "scopeLabel": "Audience",
-      "scopeGlobal": "Everyone",
-      "scopeGroup": "Department",
-      "scopeGroupOnly": "A group admin can post to their own department only.",
-      "titleLabel": "Title",
-      "toLabel": "To",
-      "toGroup": "Department admins · {{name}}",
-      "toSystem": "System administrators",
-      "bodyLabel": "Body",
-      "pinLabel": "Pin to top",
-      "pinned": "Pinned",
-      "metaCreated": "Written",
-      "metaAuthor": "Author",
-      "metaTitle": "Title",
-      "colNo": "No.",
-      "colTitle": "Title",
-      "colAuthor": "Author",
-      "colDate": "Posted",
-      "colManage": "Manage",
-      "colInquirer": "Inquirer",
-      "inqTagGroup": "Department inquiry",
-      "inqTagSystem": "System inquiry",
-      "statusFilterAll": "All statuses",
-      "submitReply": "Post",
-      "pinnedTag": "Pinned",
-      "badgeNew": "New notice",
-      "notifyLabel": "Notify the audience",
-      "metaUpdated": "Updated",
-      "post": "Post",
-      "send": "Send",
-      "sendReply": "Reply",
-      "closeOnly": "Close without reply",
-      "close": "Close",
-      "role": { "super_admin": "System admin", "group_admin": "Department admin" },
-      "closeWithAnswer": "Close with this answer",
-      "noticePosted": "Notice posted.",
-      "noticeUpdated": "Notice updated.",
-      "noticeDeleted": "Notice deleted.",
-      "confirmDeleteNotice": "Delete notice \"{{title}}\"?",
-      "inquirySent": "Inquiry sent.",
-      "replySent": "Reply posted.",
-      "inquiryHint": "Mentioning a session ID or screen name helps us answer faster.",
-      "answerPlaceholder": "Write an answer\u2026",
-      "followupPlaceholder": "Write a follow-up\u2026 (reopens the inquiry)",
-      "replyCount": "{{count}} replies",
-      "inqStatus": {
-        "open": "Open",
-        "answered": "Answered",
-        "closed": "Closed"
-      }
+    "noticesTitle": "Notices",
+    "noticesSubtitle": "Global announcements plus your department's",
+    "adminNoticesTitle": "Notice management",
+    "adminNoticesSubtitle": "Post globally (super admin) or to your department (group admin)",
+    "inquiriesTitle": "Support",
+    "inquiriesSubtitle": "Ask the operators and follow the answers",
+    "adminInquiriesTitle": "Inquiry management",
+    "adminInquiriesSubtitle": "Answer your members' (group admin) or everyone's (super admin) inquiries",
+    "noNotices": "No notices yet.",
+    "searchPlaceholder": "Search title, body, author",
+    "noInquiries": "You have no inquiries.",
+    "noIncoming": "No incoming inquiries.",
+    "newNotice": "New notice",
+    "editNotice": "Edit notice",
+    "newInquiry": "New inquiry",
+    "inquiryDetail": "Inquiry",
+    "scopeLabel": "Audience",
+    "scopeGlobal": "Everyone",
+    "scopeGroup": "Department",
+    "scopeGroupOnly": "A group admin can post to their own department only.",
+    "titleLabel": "Title",
+    "toLabel": "To",
+    "toGroup": "Department admins · {{name}}",
+    "toSystem": "System administrators",
+    "bodyLabel": "Body",
+    "pinLabel": "Pin to top",
+    "pinned": "Pinned",
+    "metaCreated": "Written",
+    "metaAuthor": "Author",
+    "metaTitle": "Title",
+    "colNo": "No.",
+    "colTitle": "Title",
+    "colAuthor": "Author",
+    "colDate": "Posted",
+    "colManage": "Manage",
+    "colInquirer": "Inquirer",
+    "inqTagGroup": "Department inquiry",
+    "inqTagSystem": "System inquiry",
+    "statusFilterAll": "All statuses",
+    "submitReply": "Post",
+    "pinnedTag": "Pinned",
+    "badgeNew": "New notice",
+    "notifyLabel": "Notify the audience",
+    "metaUpdated": "Updated",
+    "post": "Post",
+    "send": "Send",
+    "sendReply": "Reply",
+    "closeOnly": "Close without reply",
+    "close": "Close",
+    "role": {
+      "super_admin": "System admin",
+      "group_admin": "Department admin"
     },
+    "closeWithAnswer": "Close with this answer",
+    "noticePosted": "Notice posted.",
+    "noticeUpdated": "Notice updated.",
+    "noticeDeleted": "Notice deleted.",
+    "confirmDeleteNotice": "Delete notice \"{{title}}\"?",
+    "inquirySent": "Inquiry sent.",
+    "replySent": "Reply posted.",
+    "inquiryHint": "Mentioning a session ID or screen name helps us answer faster.",
+    "answerPlaceholder": "Write an answer…",
+    "followupPlaceholder": "Write a follow-up… (reopens the inquiry)",
+    "replyCount": "{{count}} replies",
+    "inqStatus": {
+      "open": "Open",
+      "answered": "Answered",
+      "closed": "Closed"
+    }
+  },
   "wizard": {
     "back": "Back",
     "billingCpu": "A CPU session consumes no credits. Its CPU, memory, and disk are governed by your resource-policy quota instead.",
@@ -2140,9 +2175,18 @@
     "sumDisk": "Disk {{value}} GB"
   },
   "notif": {
-    "notice_posted": { "title": "New notice: {{title}}", "body": "Open the Notices menu to read it." },
-    "inquiry_created": { "title": "New inquiry: {{title}}", "body": "Answer it in Inquiry management." },
-    "inquiry_answered": { "title": "Answered: {{title}}", "body": "See the reply in the Support menu." },
+    "notice_posted": {
+      "title": "New notice: {{title}}",
+      "body": "Open the Notices menu to read it."
+    },
+    "inquiry_created": {
+      "title": "New inquiry: {{title}}",
+      "body": "Answer it in Inquiry management."
+    },
+    "inquiry_answered": {
+      "title": "Answered: {{title}}",
+      "body": "See the reply in the Support menu."
+    },
     "cluster_health": {
       "title": "Cluster {{new_status}}",
       "body": "Cluster '{{cluster_name}}': {{prev_status}} → {{new_status}}"
@@ -2227,8 +2271,14 @@
       "title": "Idle pause ahead",
       "body": "Session '{{session_name}}' is idle and will be auto-paused in about {{minutes_left}} minutes. Any GPU activity resets the timer."
     },
-    "node_offline": { "title": "Node offline: {{hostname}}", "body": "No inventory report for {{stale_min}} minutes; the node is out of placement. Check it under Nodes." },
-    "node_online": { "title": "Node back online: {{hostname}}", "body": "Inventory reports resumed; the node takes placements again." },
+    "node_offline": {
+      "title": "Node offline: {{hostname}}",
+      "body": "No inventory report for {{stale_min}} minutes; the node is out of placement. Check it under Nodes."
+    },
+    "node_online": {
+      "title": "Node back online: {{hostname}}",
+      "body": "Inventory reports resumed; the node takes placements again."
+    },
     "session_paused": {
       "title": "Session paused",
       "body": "Session '{{session_name}}' paused: GPU returned, billing stopped.",
@@ -2300,8 +2350,8 @@
     "cpuLabel": "CPU total (vCPU)",
     "memLabel": "Memory total (GiB)",
     "diskLabel": "Disk total (GB)",
-      "gpuMemLabel": "GPU VRAM (GB)",
-      "gpuCoresLabel": "GPU cores (%)",
+    "gpuMemLabel": "GPU VRAM (GB)",
+    "gpuCoresLabel": "GPU cores (%)",
     "currentLimit": "Current limit: {{value}}",
     "noLimit": "No current limit",
     "reasonPlaceholder": "e.g. large preprocessing job needs 128 GiB memory",

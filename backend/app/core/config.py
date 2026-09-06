@@ -133,10 +133,6 @@ class Settings(BaseSettings):
     DRAIN_PAUSE_ACK_SEC: float = 15.0
     NODE_RESERVED_CPU: int = 1
     NODE_RESERVED_MEM_GB: int = 2
-    # Rate for keeping persistent storage (data volumes), billed continuously per GB-hour against
-    # the provisioned quota_gb, whether or not a session is running. 0 disables storage billing.
-    # Tunable through GSHARE_STORAGE_CREDIT_PER_GB_HOUR without a rebuild.
-    STORAGE_CREDIT_PER_GB_HOUR: float = 0.01
     # How long a deleted volume's data is kept before the operator reclaims its PVC (and, through
     # the CSI driver, the dataset on the storage node). Soft-delete keeps the ledger row; this is
     # the window in which an accidental delete can still be recovered by an operator on the storage
