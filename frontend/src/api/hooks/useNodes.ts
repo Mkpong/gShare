@@ -10,7 +10,7 @@ const raw = api as unknown as {
   DELETE: (path: string, init?: { params?: { path?: Record<string, string> } }) => Promise<{ data?: unknown; error?: unknown }>;
 };
 
-export type NodeStatus = 'ready' | 'busy' | 'cordoned' | 'offline';
+export type NodeStatus = 'ready' | 'busy' | 'cordoned' | 'offline' | 'decommissioning';
 export type GpuMode = 'exclusive' | 'fractional' | 'mig';
 
 export interface GpuNode {

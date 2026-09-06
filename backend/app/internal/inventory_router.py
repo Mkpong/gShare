@@ -22,6 +22,7 @@ from app.core import ids
 from app.core.logging import get_logger
 from app.db.base import get_db
 from app.db.models import GpuNode, NodeHealthEvent
+from app.domain.audit_service import AuditService
 
 log = get_logger(__name__)
 router = APIRouter(tags=["internal"])
@@ -74,6 +75,61 @@ async def cordoned_nodes(
         select(GpuNode.hostname).where(GpuNode.cluster_id == cluster_id, GpuNode.status == "cordoned")
     )
     return {"hostnames": sorted(set(rows.all()))}
+
+
+@router.get("/internal/nodes/decommissioning")
+async def decommissioning_nodes(
+    claims: dict = Depends(require_internal_jwt),
+    db: AsyncSession = Depends(get_db),
+):
+    """Hostnames an administrator asked to remove from the cluster.
+
+    The console's delete button clears the ledger and parks the node here; the operator deletes
+    the matching Node object and calls back below. Without that second step the Node object
+    survives, every inventory pass recreates the row, and the node reappears in the console —
+    which is why removing a node used to need a manual `kubectl delete node`.
+    """
+    sub = str(claims.get("sub", ""))
+    cluster_id = sub.split(":", 1)[1] if sub.startswith("operator:") else sub
+    rows = await db.scalars(
+        select(GpuNode.hostname).where(
+            GpuNode.cluster_id == cluster_id, GpuNode.status == "decommissioning"
+        )
+    )
+    return {"hostnames": sorted(set(rows.all()))}
+
+
+@router.post("/internal/nodes/decommissioned", status_code=status.HTTP_202_ACCEPTED)
+async def node_decommissioned(
+    claims: dict = Depends(require_internal_jwt),
+    body: dict = Body(default_factory=dict),
+    db: AsyncSession = Depends(get_db),
+):
+    """The operator confirms the Node object is gone; the ledger row goes with it."""
+    hostname = str(body.get("hostname") or "").strip()
+    if not hostname:
+        return {"accepted": False}
+    sub = str(claims.get("sub", ""))
+    cluster_id = sub.split(":", 1)[1] if sub.startswith("operator:") else sub
+    node = (
+        await db.execute(
+            select(GpuNode).where(
+                GpuNode.cluster_id == cluster_id,
+                GpuNode.hostname == hostname,
+                GpuNode.status == "decommissioning",
+            )
+        )
+    ).scalar_one_or_none()
+    if node is None:
+        return {"accepted": True}   # already finalised
+    await AuditService(db).record(
+        actor=f"operator:{cluster_id}", action="node.delete", target=node.id, result="ok",
+        hostname=hostname, cluster_id=cluster_id, removed_from_cluster=True,
+    )
+    await db.delete(node)
+    await db.commit()
+    log.info("node %s removed from the cluster and the ledger", hostname)
+    return {"accepted": True}
 
 
 @router.post("/internal/inventory/drift", status_code=status.HTTP_202_ACCEPTED)

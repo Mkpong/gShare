@@ -50,6 +50,55 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/auth/signup": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Auth Signup
+         * @description Self-service registration, governed by the sign-up policy in system settings.
+         *
+         *     `closed` refuses outright; `open` creates a usable account; `approval` creates it as
+         *     ``pending``, which cannot sign in until an administrator approves it. Either way the account
+         *     starts with **no department** — an administrator assigns one at approval, or later. Until then
+         *     the account resolves to the global resource policy and has no group wallet to draw credits
+         *     from, which is why the approval screen assigns a department in the same step.
+         */
+        post: operations["auth_signup_api_v1_auth_signup_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/users/{user_id}/approve": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Approve User
+         * @description Approve a self-registered account: assign the department, activate, grant welcome credit.
+         *
+         *     One step rather than three, because a half-approved account (active, no department, no
+         *     credits) is a state nobody wants to find. super_admin, or an org_admin for a group of theirs.
+         */
+        post: operations["approve_user_api_v1_users__user_id__approve_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/auth/change-password": {
         parameters: {
             query?: never;
@@ -2484,15 +2533,22 @@ export interface paths {
         post?: never;
         /**
          * Delete Node
-         * @description Remove a node's inventory rows after it has left the cluster. super_admin only.
+         * @description Decommission a node: clear its inventory and have the operator remove it from Kubernetes.
+         *
+         *     super_admin only. Two phases, because the control plane never calls the workload Kubernetes
+         *     API itself. This request clears the cards and marks the node ``decommissioning``; the operator
+         *     deletes the Node object on its next pass and reports back, and only then does the row go. That
+         *     is what stops a removed node from reappearing: while the Node object exists, every inventory
+         *     report recreates the row (upsert by cluster + hostname), which is exactly what a manual
+         *     `kubectl delete node` used to be needed for.
          *
          *     Refuses while the node still carries live work — a live allocation on one of its cards, or a
          *     non-terminal session the operator placed there — so removal can never strand a running
          *     session's ledger. Ended allocations keep their history: the row survives with device_id NULL
          *     and its gpu_uuid intact, since the card it names no longer exists.
          *
-         *     Deleting a node that is still IN the cluster is pointless rather than harmful: the operator's
-         *     next inventory report recreates it (upsert by cluster + hostname).
+         *     Refuses while the node is still up: deleting a live node's object only makes its kubelet
+         *     register again seconds later. Drain it and power it down first.
          */
         delete: operations["delete_node_api_v1_nodes__node_id__delete"];
         options?: never;
@@ -2941,6 +2997,30 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/system/signup": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Get Signup Policy
+         * @description Public: the sign-in screen shows its sign-up tab only when this is not `closed`.
+         */
+        get: operations["get_signup_policy_api_v1_system_signup_get"];
+        /**
+         * Set Signup Policy
+         * @description Set the sign-up policy; super_admin only.
+         */
+        put: operations["set_signup_policy_api_v1_system_signup_put"];
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/internal/sessions/{session_id}/status": {
         parameters: {
             query?: never;
@@ -3060,6 +3140,51 @@ export interface paths {
         get: operations["cordoned_nodes_internal_nodes_cordoned_get"];
         put?: never;
         post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/internal/nodes/decommissioning": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Decommissioning Nodes
+         * @description Hostnames an administrator asked to remove from the cluster.
+         *
+         *     The console's delete button clears the ledger and parks the node here; the operator deletes
+         *     the matching Node object and calls back below. Without that second step the Node object
+         *     survives, every inventory pass recreates the row, and the node reappears in the console —
+         *     which is why removing a node used to need a manual `kubectl delete node`.
+         */
+        get: operations["decommissioning_nodes_internal_nodes_decommissioning_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/internal/nodes/decommissioned": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Node Decommissioned
+         * @description The operator confirms the Node object is gone; the ledger row goes with it.
+         */
+        post: operations["node_decommissioned_internal_nodes_decommissioned_post"];
         delete?: never;
         options?: never;
         head?: never;
@@ -4960,6 +5085,23 @@ export interface components {
             /** Status Changed At */
             status_changed_at?: string | null;
         };
+        /** SignupPolicyOut */
+        SignupPolicyOut: {
+            /** Mode */
+            mode: string;
+            /**
+             * Allowed Domains
+             * @default []
+             */
+            allowed_domains: string[];
+        };
+        /** SignupPolicyUpdate */
+        SignupPolicyUpdate: {
+            /** Mode */
+            mode?: string | null;
+            /** Allowed Domains */
+            allowed_domains?: string[] | null;
+        };
         /**
          * SpendDayRead
          * @description One day of spend (consume + storage), for the wallet's usage chart.
@@ -5058,6 +5200,20 @@ export interface components {
             to_wallet_id: string;
             /** Amount */
             amount: number | string;
+        };
+        /**
+         * UserApproveBody
+         * @description Department is optional: an administrator may let someone in and sort out the department
+         *     later, but doing both at once is the normal path.
+         */
+        UserApproveBody: {
+            /** Group Id */
+            group_id?: string | null;
+            /**
+             * Initial Role
+             * @default member
+             */
+            initial_role: string;
         };
         /** UserCreate */
         UserCreate: {
@@ -5300,6 +5456,15 @@ export interface components {
             /** Reason */
             reason: string;
         };
+        /** _SignupRequest */
+        _SignupRequest: {
+            /** Email */
+            email: string;
+            /** Name */
+            name: string;
+            /** Password */
+            password: string;
+        };
     };
     responses: never;
     parameters: never;
@@ -5354,6 +5519,80 @@ export interface operations {
         requestBody: {
             content: {
                 "application/json": components["schemas"]["_LoginRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": unknown;
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    auth_signup_api_v1_auth_signup_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["_SignupRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": unknown;
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    approve_user_api_v1_users__user_id__approve_post: {
+        parameters: {
+            query?: {
+                /** @description Token fallback for clients that cannot set custom headers, such as EventSource (SSE) */
+                access_token?: string | null;
+            };
+            header?: {
+                /** @description Bearer <jwt> */
+                authorization?: string | null;
+            };
+            path: {
+                user_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["UserApproveBody"];
             };
         };
         responses: {
@@ -12426,6 +12665,65 @@ export interface operations {
             };
         };
     };
+    get_signup_policy_api_v1_system_signup_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["SignupPolicyOut"];
+                };
+            };
+        };
+    };
+    set_signup_policy_api_v1_system_signup_put: {
+        parameters: {
+            query?: {
+                /** @description Token fallback for clients that cannot set custom headers, such as EventSource (SSE) */
+                access_token?: string | null;
+            };
+            header?: {
+                /** @description Bearer <jwt> */
+                authorization?: string | null;
+            };
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["SignupPolicyUpdate"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["SignupPolicyOut"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
     report_status_internal_sessions__session_id__status_post: {
         parameters: {
             query?: never;
@@ -12649,6 +12947,74 @@ export interface operations {
         responses: {
             /** @description Successful Response */
             200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": unknown;
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    decommissioning_nodes_internal_nodes_decommissioning_get: {
+        parameters: {
+            query?: never;
+            header: {
+                authorization: string;
+            };
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": unknown;
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    node_decommissioned_internal_nodes_decommissioned_post: {
+        parameters: {
+            query?: never;
+            header: {
+                authorization: string;
+            };
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: {
+            content: {
+                "application/json": {
+                    [key: string]: unknown;
+                };
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            202: {
                 headers: {
                     [name: string]: unknown;
                 };

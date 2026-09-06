@@ -12,7 +12,7 @@ import {
   useSetUserDepartment,
   useDeleteUser,
   type AdminUser,
-  type UserStatus,
+  type UserStatus, useApproveUser,
 } from '@/api/hooks/useUsers';
 import { useProjects, useOrganizations } from '@/api/hooks/useGroups';
 import { useAuthStore } from '@/auth/authStore';
@@ -57,6 +57,7 @@ export function AdminUsers() {
   // Row click opens the detail drawer; the row's edit/delete buttons stay as the fast path.
   const [detail, setDetail] = useState<AdminUser | null>(null);
   const [editing, setEditing] = useState<AdminUser | null>(null);
+  const [approving, setApproving] = useState<AdminUser | null>(null);
   const [createOpen, setCreateOpen] = useState(false);
   const search = table.query;
   const statusFilter = (table.tab ?? '') as UserStatus | '';
@@ -219,6 +220,12 @@ export function AdminUsers() {
       align: 'right',
       render: (u) => (
         <div className="flex flex-nowrap gap-2 justify-end">
+          {/* A pending account is the one row where the primary action is not "edit". */}
+          {u.status === 'pending' && (
+            <button type="button" className="gs-btn gs-btn-sm gs-btn-primary" onClick={(e) => { e.stopPropagation(); setApproving(u); }}>
+              {t('admin.users.approve')}
+            </button>
+          )}
           <button type="button" className="gs-btn gs-btn-sm" onClick={(e) => { e.stopPropagation(); setEditing(u); }}>{t('common.edit')}</button>
           {canDelete && (
             <button
@@ -281,6 +288,7 @@ export function AdminUsers() {
         >
           <option value="">{t('admin.users.allStatuses')}</option>
           <option value="active">{t('enum.userStatus.active')}</option>
+          <option value="pending">{t('enum.userStatus.pending')}</option>
           <option value="invited">{t('enum.userStatus.invited')}</option>
           <option value="suspended">{t('enum.userStatus.suspended')}</option>
         </Select>
@@ -401,7 +409,65 @@ export function AdminUsers() {
           <EditUserModalBody userId={editing.id} onDone={() => setEditing(null)} />
         </Dialog>
       )}
+      {approving && (
+        <Dialog open title={t('admin.users.approveTitle', { name: approving.name })} onClose={() => setApproving(null)}>
+          <ApproveUserForm user={approving} onDone={() => setApproving(null)} />
+        </Dialog>
+      )}
     </div>
+  );
+}
+
+/** Let a self-registered account in. The department is chosen here so the account never becomes
+ *  active without one: policy, credits and node-pool access all resolve through it. */
+function ApproveUserForm({ user, onDone }: { user: AdminUser; onDone: () => void }) {
+  const { t } = useTranslation();
+  const pushToast = useUiStore((s) => s.pushToast);
+  const groups = useProjects().data ?? [];
+  const approve = useApproveUser();
+  const [groupId, setGroupId] = useState('');
+  const [role, setRole] = useState('member');
+
+  const submit = (e: React.FormEvent) => {
+    e.preventDefault();
+    approve.mutate(
+      { userId: user.id, group_id: groupId || null, initial_role: role },
+      {
+        onSuccess: () => { pushToast('success', t('admin.users.approved', { name: user.name })); onDone(); },
+        onError: (err) => pushToast('error', humanizeError(asApiError(err))),
+      },
+    );
+  };
+
+  return (
+    <form className="space-y-4" onSubmit={submit}>
+      <p className="text-muted text-sm">{t('admin.users.approveBody', { email: user.email })}</p>
+      <Field label={t('admin.users.approveGroup')} hint={t('admin.users.approveGroupHint')}>
+        {(ids) => (
+          <Select {...ids} className="gs-input w-full" value={groupId} onChange={(e) => setGroupId(e.target.value)}>
+            <option value="">{t('admin.users.approveNoGroup')}</option>
+            {groups.map((g) => <option key={g.id} value={g.id}>{g.name}</option>)}
+          </Select>
+        )}
+      </Field>
+      {groupId && (
+        <Field label={t('admin.users.initialRole')}>
+          {(ids) => (
+            <Select {...ids} className="gs-input w-full" value={role} onChange={(e) => setRole(e.target.value)}>
+              {['member', 'group_admin', 'org_admin'].map((r) => (
+                <option key={r} value={r}>{roleLabel(r)}</option>
+              ))}
+            </Select>
+          )}
+        </Field>
+      )}
+      <div className="flex justify-end gap-2 pt-1">
+        <button type="button" className="gs-btn" onClick={onDone}>{t('common.cancel')}</button>
+        <button type="submit" className="gs-btn gs-btn-primary" disabled={approve.isPending}>
+          {t('admin.users.approve')}
+        </button>
+      </div>
+    </form>
   );
 }
 

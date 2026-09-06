@@ -48,7 +48,7 @@ from app.domain.welcome_credit import grant_welcome_credit
 router = APIRouter(tags=["users"])
 
 # Status / role enums.
-_USER_STATUSES = {"invited", "active", "suspended"}
+_USER_STATUSES = {"invited", "pending", "active", "suspended"}
 _GLOBAL_ROLES = {"super_admin"}
 _MEMBERSHIP_ROLES = {"org_admin", "group_admin", "member", "guest"}
 
@@ -223,6 +223,12 @@ async def auth_login(body: _LoginRequest, request: Request, db: AsyncSession = D
         await _audit_login(db, actor=user.id, ok=False, ip=client_ip, email=email,
                            reason="account_disabled")
         raise Unauthenticated("invalid credentials")
+    # A self-registered account waiting for approval gets a message it can act on: the
+    # credentials are right, the account simply is not open yet.
+    if user.status == "pending":
+        await _audit_login(db, actor=user.id, ok=False, ip=client_ip, email=email,
+                           reason="account_pending")
+        raise _SignupPending("account awaiting administrator approval")
     # Password check: when a hash exists it must match. An account with no hash — bootstrap or
     # legacy — is let through, but must_change_password is set so a password is chosen immediately.
     if user.password_hash:
@@ -256,6 +262,133 @@ def _issue_token(user: User) -> dict[str, Any]:
         "token_type": "Bearer",
         "expires_in": ttl,
     }
+
+
+class _SignupPending(DomainError):
+    code, http = "account_pending", 403
+
+
+class _SignupRequest(BaseModel):
+    email: str = Field(min_length=3, max_length=254)
+    name: str = Field(min_length=1, max_length=100)
+    password: str = Field(min_length=8, max_length=128)
+
+
+@router.post("/auth/signup", status_code=status.HTTP_201_CREATED)
+async def auth_signup(body: _SignupRequest, request: Request, db: AsyncSession = Depends(get_db)):
+    """Self-service registration, governed by the sign-up policy in system settings.
+
+    `closed` refuses outright; `open` creates a usable account; `approval` creates it as
+    ``pending``, which cannot sign in until an administrator approves it. Either way the account
+    starts with **no department** — an administrator assigns one at approval, or later. Until then
+    the account resolves to the global resource policy and has no group wallet to draw credits
+    from, which is why the approval screen assigns a department in the same step.
+    """
+    from app.api.system_router import signup_policy
+
+    client_ip = (request.headers.get("x-forwarded-for") or "").split(",")[0].strip() or (
+        request.client.host if request.client else "unknown"
+    )
+    await check_rate(f"signup:ip:{client_ip}", limit=5, window_sec=3600)
+
+    mode, domains = await signup_policy(db)
+    if mode == "closed":
+        raise Forbidden("sign-up is closed")
+
+    email = body.email.strip().lower()
+    at = email.find("@")
+    if at <= 0 or "." not in email[at + 1 :] or email.endswith("."):
+        raise _Validation("invalid email", {"email": body.email})
+    if domains and email[at + 1 :] not in domains:
+        raise _Validation("email domain not allowed", {"allowed_domains": domains})
+
+    if await db.scalar(select(User.id).where(User.email == email)) is not None:
+        raise _Conflict("email already exists", {"email": email})
+
+    user = User(
+        id=ids.new("user"), email=email, name=body.name.strip(),
+        status="pending" if mode == "approval" else "active",
+        global_role=None, global_roles=[],
+        password_hash=await hash_password_async(body.password),
+        must_change_password=False,   # the person chose this password themselves
+    )
+    db.add(user)
+    try:
+        await db.flush()
+    except IntegrityError as exc:
+        await db.rollback()
+        raise _Conflict("email already exists", {"email": email}) from exc
+
+    # The personal wallet is the leaf of the credit hierarchy and exists from the start; it stays
+    # empty until a department is assigned, because that is where allocations come from.
+    from decimal import Decimal as _Decimal
+    db.add(CreditWallet(id=ids.new("wallet"), owner_type="user", owner_id=user.id,
+                        balance=_Decimal("0"), reserved=_Decimal("0")))
+    await db.flush()
+
+    await AuditService(db).record(
+        actor=user.id, action="user.signup", target=user.id, result="ok",
+        email=user.email, ip=client_ip, mode=mode,
+    )
+    await db.commit()
+    return {"status": user.status}
+
+
+class UserApproveBody(BaseModel):
+    """Department is optional: an administrator may let someone in and sort out the department
+    later, but doing both at once is the normal path."""
+    group_id: str | None = None
+    initial_role: str = "member"
+
+
+@router.post("/users/{user_id}/approve")
+async def approve_user(
+    user_id: str,
+    body: UserApproveBody,
+    principal: Principal = Depends(get_current_principal),
+    db: AsyncSession = Depends(get_db),
+):
+    """Approve a self-registered account: assign the department, activate, grant welcome credit.
+
+    One step rather than three, because a half-approved account (active, no department, no
+    credits) is a state nobody wants to find. super_admin, or an org_admin for a group of theirs.
+    """
+    principal.require(action="user.create")
+    user = await db.get(User, user_id)
+    if user is None or user.deleted_at is not None:
+        raise NotFound("user", {"user_id": user_id})
+    if user.status != "pending":
+        raise _Conflict("this account is not awaiting approval", {"status": user.status})
+    if body.initial_role not in _MEMBERSHIP_ROLES:
+        raise _Validation("invalid initial_role", {"initial_role": body.initial_role})
+
+    is_super = "super_admin" in principal.global_roles
+    group = None
+    if body.group_id:
+        group = await db.get(Project, body.group_id)
+        if group is None or group.deleted_at is not None:
+            raise NotFound("group", {"group_id": body.group_id})
+        managed = {gid for gid, r in principal.memberships.items() if r == "org_admin"}
+        if not is_super and body.group_id not in managed:
+            raise Forbidden("not permitted: target group outside your organization")
+        db.add(Membership(id=ids.new("membership"), user_id=user.id,
+                          group_id=group.id, role=body.initial_role))
+
+    user.status = "active"
+    await db.flush()
+    # The welcome credit belongs to the department, so it is granted here and not at sign-up.
+    welcome = await grant_welcome_credit(db, user.id, group) if group is not None else None
+
+    await AuditService(db).record(
+        actor=principal.user_id, action="user.approve", target=user.id, result="ok",
+        email=user.email, group_id=(group.id if group else None),
+        org_id=(group.org_id if group else None),
+        initial_role=(body.initial_role if group else None),
+        welcome_credit=(str(welcome) if welcome is not None else None),
+    )
+    await db.commit()
+    await db.refresh(user)
+    return _serialize(user)
 
 
 @router.post("/auth/change-password")

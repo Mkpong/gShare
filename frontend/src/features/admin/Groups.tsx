@@ -40,7 +40,9 @@ import { Plus, Question, UsersThree } from '@/components/icons';
 
 // Roles offered when adding a member. org_admin belongs to organization management, and
 // group_admin is granted with the Admins button, so neither appears here.
-const ROLE_OPTIONS: MembershipRole[] = ['member', 'guest'];
+// Guest is not offered: no permission rule admits it, so a guest membership grants nothing.
+// Existing rows still render with their label; only creating one is gone.
+const ROLE_OPTIONS: MembershipRole[] = ['member'];
 
 export function AdminGroups() {
   const { t } = useTranslation();
@@ -716,23 +718,10 @@ function AddMemberForm({
   const { t } = useTranslation();
   const [userId, setUserId] = useState('');
   const [role, setRole] = useState<MembershipRole>('member');
-  const [expiresAt, setExpiresAt] = useState('');
-  const [grantCredit, setGrantCredit] = useState('');
 
-  const isGuest = role === 'guest';
-  const valid = userId.length > 0 && (!isGuest || expiresAt.trim().length > 0);
+  const valid = userId.length > 0;
 
-  const submit = () => {
-    const payload: { user_id: string; role: MembershipRole; expires_at?: string; grant_credit?: string } = {
-      user_id: userId,
-      role,
-    };
-    if (isGuest) {
-      payload.expires_at = new Date(expiresAt).toISOString();
-      if (grantCredit.trim()) payload.grant_credit = grantCredit.trim();
-    }
-    onAdd(payload);
-  };
+  const submit = () => onAdd({ user_id: userId, role });
 
   return (
     <div className="border border-border rounded-card p-3 mb-3">
@@ -753,18 +742,6 @@ function AddMemberForm({
             ))}
           </Select>
         </label>
-        {isGuest && (
-          <>
-            <label className="text-sm font-semibold">
-              {t('admin.groups.expiresAt')}
-              <input className="gs-input mt-1 w-full" type="datetime-local" value={expiresAt} onChange={(e) => setExpiresAt(e.target.value)} autoComplete="off" />
-            </label>
-            <label className="text-sm font-semibold">
-              {t('admin.groups.creditLimit')}
-              <input className="gs-input mt-1 w-full" value={grantCredit} onChange={(e) => setGrantCredit(e.target.value)} placeholder="50.00" autoComplete="off" />
-            </label>
-          </>
-        )}
         <div className="flex justify-end gap-2">
           <button type="button" className="gs-btn gs-btn-sm gs-btn-primary disabled:opacity-50" onClick={submit} disabled={!valid || pending}>
             {pending ? t('admin.groups.adding') : t('common.add')}

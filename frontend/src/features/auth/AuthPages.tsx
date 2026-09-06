@@ -9,7 +9,7 @@ import { AppFooter } from '@/components/Layout';
 import { Brand, BrandMark } from '@/components/BrandMark';
 import { Field, DisabledReason } from '@/components/Field';
 import { asApiError, humanizeError } from '@/lib/errors';
-import { useBranding } from '@/api/hooks/useSystem';
+import { useBranding, useSignup, useSignupPolicy } from '@/api/hooks/useSystem';
 import { ArrowLeft, ArrowRight, Coins, GraphicsCard, Hourglass } from '@/components/icons';
 
 /** Shared shell for the signed-out screens: a landmark, a heading, and the language control. */
@@ -34,8 +34,17 @@ export function Login() {
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [emailTouched, setEmailTouched] = useState(false);
+  const signup = useSignup();
+  const [tab, setTab] = useState<'signin' | 'signup'>('signin');
+  const [name, setName] = useState('');
+  const [done, setDone] = useState<'pending' | 'active' | null>(null);
   const emailMalformed = emailTouched && email.trim().length > 0 && !/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(email.trim());
   const returnUrl = (loc.state as { returnUrl?: string } | null)?.returnUrl ?? '/';
+  const signupPolicy = useSignupPolicy().data;
+  const signupOpen = (signupPolicy?.mode ?? 'closed') !== 'closed';
+  const allowedDomains = signupPolicy?.allowed_domains ?? [];
+  const submitDisabled = busy || !email || !pw || emailMalformed
+    || (tab === 'signup' && (!name.trim() || pw.length < 8));
 
   async function handlePassword(e: React.FormEvent) {
     e.preventDefault();
@@ -53,6 +62,27 @@ export function Login() {
       // message so the user does not keep retyping a correct password.
       const err = asApiError(e);
       const msg = err.status && err.status !== 401 ? humanizeError(err) : t('auth.invalidCredentials');
+      setError(msg);
+      pushToast('error', msg);
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  async function handleSignup(e: React.FormEvent) {
+    e.preventDefault();
+    setError(null);
+    setBusy(true);
+    try {
+      const r = await signup.mutateAsync({ email: email.trim(), name: name.trim(), password: pw });
+      setDone(r.status);
+      // An open instance signs the new account straight in; an approval one waits.
+      if (r.status === 'active') {
+        await loginPassword(email, pw);
+        navigate(returnUrl, { replace: true });
+      }
+    } catch (e2) {
+      const msg = humanizeError(asApiError(e2));
       setError(msg);
       pushToast('error', msg);
     } finally {
@@ -135,13 +165,55 @@ export function Login() {
           <div className="lg:hidden flex items-center justify-center gap-2.5 mb-7">
             <Brand size={36} textClass="text-lg font-bold tracking-[-0.02em]" />
           </div>
-        <form className="gs-card shadow-raised w-full p-7 md:p-8 space-y-5" onSubmit={handlePassword} noValidate>
-          <div className="mb-7">
-            <h1 className="text-xl font-bold tracking-[-0.02em]">{t('auth.signIn')}</h1>
-            <p className="text-muted text-sm mt-1.5">{t('auth.signInSubtitle')}</p>
+        <form className="gs-card shadow-raised w-full p-7 md:p-8 space-y-5" onSubmit={tab === 'signup' ? handleSignup : handlePassword} noValidate>
+          <div className={signupOpen ? 'mb-5' : 'mb-7'}>
+            <h1 className="text-xl font-bold tracking-[-0.02em]">{tab === 'signup' ? t('auth.signUp') : t('auth.signIn')}</h1>
+            <p className="text-muted text-sm mt-1.5">{tab === 'signup' ? t('auth.signUpSubtitle') : t('auth.signInSubtitle')}</p>
           </div>
+          {/* The sign-up tab exists only where an administrator has opened registration. */}
+          {signupOpen && (
+            <div className="grid grid-cols-2 gap-1 p-1 rounded-ctl bg-surface-2" role="tablist" aria-label={t('auth.signIn')}>
+              {(['signin', 'signup'] as const).map((k) => (
+                <button
+                  key={k}
+                  type="button"
+                  role="tab"
+                  aria-selected={tab === k}
+                  className={`h-9 rounded-ctl text-sm font-semibold transition-colors duration-150 ${
+                    tab === k ? 'bg-surface text-text shadow-sm' : 'text-muted hover:text-text'
+                  }`}
+                  onClick={() => { setTab(k); setError(null); setDone(null); }}
+                >
+                  {t(k === 'signin' ? 'auth.signIn' : 'auth.signUp')}
+                </button>
+              ))}
+            </div>
+          )}
+          {done === 'pending' && (
+            <p role="status" className="text-xs leading-relaxed rounded-ctl border border-border bg-surface-2 p-3">
+              {t('auth.signUpPending')}
+            </p>
+          )}
           {error && <p role="alert" className="text-danger text-xs">{error}</p>}
-          <Field label={t('auth.email')} required error={emailMalformed ? t('auth.emailMalformed') : null}>
+          {tab === 'signup' && (
+            <Field label={t('auth.name')} required>
+              {(ids) => (
+                <input
+                  {...ids}
+                  className="gs-input w-full h-11"
+                  autoComplete="name"
+                  value={name}
+                  onChange={(e) => setName(e.target.value)}
+                />
+              )}
+            </Field>
+          )}
+          <Field
+            label={t('auth.email')}
+            required
+            error={emailMalformed ? t('auth.emailMalformed') : null}
+            hint={tab === 'signup' && allowedDomains.length > 0 ? t('auth.signUpDomains', { domains: allowedDomains.join(', ') }) : undefined}
+          >
             {(ids) => (
               <input
                 {...ids}
@@ -157,21 +229,28 @@ export function Login() {
               />
             )}
           </Field>
-          <Field label={t('auth.password')} required>
+          <Field label={tab === 'signup' ? t('auth.newPassword') : t('auth.password')} required>
             {(ids) => (
               <input
                 {...ids}
                 className="gs-input w-full h-11"
                 type="password"
-                autoComplete="current-password"
+                autoComplete={tab === 'signup' ? 'new-password' : 'current-password'}
+                minLength={tab === 'signup' ? 8 : undefined}
                 value={pw}
                 onChange={(e) => setPw(e.target.value)}
               />
             )}
           </Field>
-          <DisabledReason reasons={[!email && t('auth.email'), !pw && t('auth.password')].filter(Boolean) as string[]} />
-          <button type="submit" className="gs-btn gs-btn-primary w-full justify-center h-11 text-sm disabled:opacity-50" disabled={busy || !email || !pw || emailMalformed}>
-            {busy ? t('auth.signingIn') : t('auth.signIn')}
+          <DisabledReason reasons={[
+            tab === 'signup' && !name.trim() && t('auth.name'),
+            !email && t('auth.email'),
+            !pw && t('auth.password'),
+          ].filter(Boolean) as string[]} />
+          <button type="submit" className="gs-btn gs-btn-primary w-full justify-center h-11 text-sm disabled:opacity-50" disabled={submitDisabled}>
+            {busy
+              ? t(tab === 'signup' ? 'auth.signingUp' : 'auth.signingIn')
+              : t(tab === 'signup' ? 'auth.signUp' : 'auth.signIn')}
             {!busy && <ArrowRight size={16} weight="bold" aria-hidden="true" />}
           </button>
           <p className="text-muted text-xs text-center pt-1">{t('auth.forgotHint')}</p>

@@ -11,7 +11,7 @@ const raw = api as unknown as {
   DELETE: (path: string, init?: { params?: { path?: Record<string, string>; query?: Record<string, unknown> } }) => Promise<{ data?: unknown }>;
 };
 
-export type UserStatus = 'invited' | 'active' | 'suspended';
+export type UserStatus = 'invited' | 'pending' | 'active' | 'suspended';
 // Global roles; currently super_admin is the only one. Granting several uses global_roles.
 export type GlobalRole = 'super_admin' | null;
 
@@ -188,6 +188,22 @@ export function useSetUserDepartment() {
 }
 
 // DELETE /users/{id} — soft delete by default; hard=true is super_admin only.
+// POST /users/{id}/approve — let a self-registered account in, assigning its department in the
+// same step so it never sits active-but-unplaced.
+export function useApproveUser() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: async ({ userId, ...body }: { userId: string; group_id?: string | null; initial_role?: string }) => {
+      const { data, error } = await raw.POST('/api/v1/users/{user_id}/approve', {
+        params: { path: { user_id: userId } }, body,
+      });
+      if (error) throw error;
+      return data;
+    },
+    onSuccess: () => qc.invalidateQueries({ queryKey: userKeys.all }),
+  });
+}
+
 export function useDeleteUser() {
   const qc = useQueryClient();
   return useMutation({

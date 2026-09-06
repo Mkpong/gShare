@@ -138,6 +138,11 @@ type Reporter interface {
 	// CordonedNodes lists the hostnames the control plane wants unschedulable (a drain, an
 	// administrator's hold); the inventory controller mirrors it onto the Nodes.
 	CordonedNodes(ctx context.Context) ([]string, error)
+	// DecommissioningNodes lists the nodes an administrator removed in the console; the operator
+	// deletes their Node objects and confirms with NodeDecommissioned, which retires the ledger
+	// row. Until the object is gone, every inventory pass would recreate it.
+	DecommissioningNodes(ctx context.Context) ([]string, error)
+	NodeDecommissioned(ctx context.Context, hostname string) error
 	ReportDrift(ctx context.Context, uuid string, used, total int) error
 	CreateNodeHealthEvent(ctx context.Context, ev NodeHealthEvent) (NodeHealthEvent, error)
 	// SyncVolumes reports every session-volume PVC (plus each session pod's scratch-disk
@@ -497,6 +502,11 @@ func (c *Client) ReportImageBuild(ctx context.Context, buildID string, ev ImageB
 
 const cordonedNodesPath = "/internal/nodes/cordoned"
 
+const (
+	decommissioningNodesPath = "/internal/nodes/decommissioning"
+	decommissionedNodePath   = "/internal/nodes/decommissioned"
+)
+
 func (c *Client) CordonedNodes(ctx context.Context) ([]string, error) {
 	token, err := c.bearerToken()
 	if err != nil {
@@ -520,6 +530,66 @@ func (c *Client) CordonedNodes(ctx context.Context) ([]string, error) {
 	}
 	if err := json.NewDecoder(resp.Body).Decode(&out); err != nil {
 		return nil, fmt.Errorf("sot: decode %s: %w", cordonedNodesPath, err)
+	}
+	return out.Hostnames, nil
+}
+
+// DecommissioningNodes lists the nodes an administrator removed in the console. The Node object
+// still exists, which is why the ledger row keeps coming back; the operator deletes the object and
+// reports it below, so the control plane never touches the workload Kubernetes API itself.
+func (c *Client) DecommissioningNodes(ctx context.Context) ([]string, error) {
+	return c.hostnames(ctx, decommissioningNodesPath)
+}
+
+// NodeDecommissioned confirms one Node object is gone, which retires the ledger row.
+func (c *Client) NodeDecommissioned(ctx context.Context, hostname string) error {
+	token, err := c.bearerToken()
+	if err != nil {
+		return err
+	}
+	body, _ := json.Marshal(map[string]string{"hostname": hostname})
+	req, err := http.NewRequestWithContext(ctx, http.MethodPost,
+		strings.TrimRight(c.cfg.BaseURL, "/")+decommissionedNodePath, bytes.NewReader(body))
+	if err != nil {
+		return fmt.Errorf("sot: build request for %s: %w", decommissionedNodePath, err)
+	}
+	req.Header.Set("Authorization", "Bearer "+token)
+	req.Header.Set("Content-Type", "application/json")
+	resp, err := c.http.Do(req)
+	if err != nil {
+		return fmt.Errorf("sot: POST %s: %w", decommissionedNodePath, err)
+	}
+	defer resp.Body.Close()
+	if resp.StatusCode/100 != 2 {
+		return fmt.Errorf("sot: POST %s: HTTP %d", decommissionedNodePath, resp.StatusCode)
+	}
+	return nil
+}
+
+// hostnames GETs one of the {"hostnames": [...]} endpoints.
+func (c *Client) hostnames(ctx context.Context, path string) ([]string, error) {
+	token, err := c.bearerToken()
+	if err != nil {
+		return nil, err
+	}
+	req, err := http.NewRequestWithContext(ctx, http.MethodGet, strings.TrimRight(c.cfg.BaseURL, "/")+path, nil)
+	if err != nil {
+		return nil, fmt.Errorf("sot: build request for %s: %w", path, err)
+	}
+	req.Header.Set("Authorization", "Bearer "+token)
+	resp, err := c.http.Do(req)
+	if err != nil {
+		return nil, fmt.Errorf("sot: GET %s: %w", path, err)
+	}
+	defer resp.Body.Close()
+	if resp.StatusCode/100 != 2 {
+		return nil, fmt.Errorf("sot: GET %s: HTTP %d", path, resp.StatusCode)
+	}
+	var out struct {
+		Hostnames []string `json:"hostnames"`
+	}
+	if err := json.NewDecoder(resp.Body).Decode(&out); err != nil {
+		return nil, fmt.Errorf("sot: decode %s: %w", path, err)
 	}
 	return out.Hostnames, nil
 }
