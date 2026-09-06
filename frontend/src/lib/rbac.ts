@@ -1,4 +1,6 @@
-// Role ordering. "A+" means A or anything above it.
+// Role ordering. "A+" means A or anything above it. `guest` is kept so an existing membership
+// still ranks and labels correctly; the console no longer offers it, because no permission rule
+// admits a guest to anything.
 export const ROLE_ORDER = [
   'guest',
   'member',

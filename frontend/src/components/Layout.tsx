@@ -8,6 +8,7 @@ import { useWallet } from '@/api/hooks/useWallet';
 import { useAllocationRequests } from '@/api/hooks/useAllocations';
 import { useTopupRequests } from '@/api/hooks/useBilling';
 import { useResourceRequests } from '@/api/hooks/useResourceRequests';
+import { useUsers } from '@/api/hooks/useUsers';
 import {
   ArrowLeft,
   Coins,
@@ -31,7 +32,7 @@ import { AccountMenu } from './AccountMenu';
 interface NavItem {
   to: string;
   /** Key into the pending-approval counts, when this destination has an inbox. */
-  badge?: 'credits' | 'quota';
+  badge?: 'credits' | 'quota' | 'signups';
   /** Translation key under `nav.user` or `nav.admin`. */
   labelKey: string;
   /** Phosphor glyph, so a destination is recognisable before the label is read. */
@@ -60,7 +61,7 @@ const ADMIN_GROUPS: { labelKey: string; items: NavItem[] }[] = [
     items: [
       { to: '/admin/orgs', labelKey: 'nav.admin.orgs', exactGlobal: 'super_admin' },
       { to: '/admin/groups', labelKey: 'nav.admin.groups', minRole: 'group_admin' },
-      { to: '/admin/users', labelKey: 'nav.admin.users', minRole: 'group_admin' },
+      { to: '/admin/users', labelKey: 'nav.admin.users', minRole: 'group_admin', badge: 'signups' },
     ],
   },
   {
@@ -150,11 +151,18 @@ function usePendingApprovals(isAdminConsole: boolean) {
   const isSuperForInbox = useAuthStore((st) => st.claims.global_role === 'super_admin');
   const topups = useTopupRequests({ status: 'pending', ...(isSuperForInbox ? { scope: 'all' as const } : {}) });
   const quota = useResourceRequests('incoming');
-  if (!isAdminConsole) return { credits: 0, quota: 0 };
+  // Self-registered accounts waiting for a department and approval.
+  const signups = useUsers({ status: 'pending', size: 100 });
+  if (!isAdminConsole) return { credits: 0, quota: 0, signups: 0 };
   const pending = (rows: { status?: string }[] | undefined) =>
     (rows ?? []).filter((r) => (r.status ?? 'pending') === 'pending').length;
   const topupRows = (topups.data as { data?: { status?: string }[] } | undefined)?.data;
-  return { credits: pending(allocs.data) + pending(topupRows), quota: pending(quota.data) };
+  const signupRows = (signups.data as { data?: unknown[] } | undefined)?.data;
+  return {
+    credits: pending(allocs.data) + pending(topupRows),
+    quota: pending(quota.data),
+    signups: (signupRows ?? []).length,
+  };
 }
 
 /** Overline above a nav section: labels the console the sidebar is showing. The `nav` element

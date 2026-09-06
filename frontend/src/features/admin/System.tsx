@@ -1,7 +1,10 @@
 import { useEffect, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { useSearchParams } from 'react-router-dom';
-import { useBranding, useSetBranding, DEFAULT_SERVICE_NAME } from '@/api/hooks/useSystem';
+import {
+  useBranding, useSetBranding, useSignupPolicy, useSetSignupPolicy,
+  DEFAULT_SERVICE_NAME, type SignupMode,
+} from '@/api/hooks/useSystem';
 import { BrandMark } from '@/components/BrandMark';
 import { Field } from '@/components/Field';
 import { PageHeader } from '@/components/PageHeader';
@@ -12,7 +15,7 @@ import { asApiError, humanizeError } from '@/lib/errors';
 
 // Instance-wide settings. One section today (branding); `SECTIONS` is the seam a later section
 // slots into — add a key here and a panel below, and the tab row follows.
-const SECTIONS = ['branding'] as const;
+const SECTIONS = ['branding', 'signup'] as const;
 type Section = (typeof SECTIONS)[number];
 
 const LOGO_TYPES = ['image/png', 'image/jpeg', 'image/webp', 'image/svg+xml'];
@@ -25,7 +28,9 @@ export function AdminSystem() {
   const active: Section = (SECTIONS as readonly string[]).includes(raw) ? (raw as Section) : 'branding';
 
   return (
-    <div>
+    // Settings read as a document, not a dashboard: one centred column, so the panel does not
+    // strand itself against the left edge of a wide screen.
+    <div className="mx-auto w-full max-w-[1040px]">
       <PageHeader title={t('admin.system.title')} description={t('admin.system.subtitle')} />
       <Tabs
         ariaLabel={t('admin.system.title')}
@@ -38,6 +43,7 @@ export function AdminSystem() {
         items={SECTIONS.map((k) => ({ key: k, label: t(`admin.system.tab.${k}`) }))}
       />
       {active === 'branding' && <BrandingSection />}
+      {active === 'signup' && <SignupSection />}
     </div>
   );
 }
@@ -104,14 +110,14 @@ function BrandingSection() {
   };
 
   return (
-    <div className="gs-card max-w-[640px] space-y-6">
+    <section className="space-y-6">
       <div>
         <h2 className="gs-h2">{t('admin.system.branding.title')}</h2>
         <p className="gs-sub mt-1">{t('admin.system.branding.subtitle')}</p>
       </div>
 
       {/* What the sidebar and the sign-in screen will show, before saving. */}
-      <div className="rounded-ctl border border-border bg-surface-2 p-4">
+      <div className="rounded-ctl border border-border p-4">
         <p className="text-2xs uppercase tracking-[0.1em] text-muted">{t('admin.system.branding.preview')}</p>
         <div className="flex items-center gap-2.5 mt-2.5">
           <BrandMark size={36} logo={branding?.logo} name={previewName} />
@@ -158,6 +164,97 @@ function BrandingSection() {
         </div>
         <p className="gs-sub mt-1.5">{t('admin.system.branding.logoHint')}</p>
       </div>
-    </div>
+    </section>
+  );
+}
+
+
+const MODES: SignupMode[] = ['approval', 'open', 'closed'];
+
+function SignupSection() {
+  const { t } = useTranslation();
+  const pushToast = useUiStore((s) => s.pushToast);
+  const policy = useSignupPolicy().data;
+  const save = useSetSignupPolicy();
+
+  const [mode, setMode] = useState<SignupMode>('closed');
+  const [domains, setDomains] = useState('');
+
+  // The form follows the server until an administrator edits it.
+  useEffect(() => {
+    if (!policy) return;
+    setMode(policy.mode);
+    setDomains(policy.allowed_domains.join(', '));
+  }, [policy]);
+
+  const parsedDomains = domains.split(',').map((d) => d.trim().replace(/^@/, '')).filter(Boolean);
+  const dirty = !!policy && (
+    mode !== policy.mode || parsedDomains.join(',') !== policy.allowed_domains.join(',')
+  );
+
+  const submit = () => {
+    save.mutate(
+      { mode, allowed_domains: parsedDomains },
+      {
+        onSuccess: () => pushToast('success', t('admin.system.signup.saved')),
+        onError: (e) => pushToast('error', humanizeError(asApiError(e))),
+      },
+    );
+  };
+
+  return (
+    <section className="space-y-6">
+      <div>
+        <h2 className="gs-h2">{t('admin.system.signup.title')}</h2>
+        <p className="gs-sub mt-1">{t('admin.system.signup.subtitle')}</p>
+      </div>
+
+      <fieldset className="space-y-2">
+        <legend className="text-xs font-semibold mb-2">{t('admin.system.signup.mode')}</legend>
+        {MODES.map((m) => (
+          <label
+            key={m}
+            className={`flex items-start gap-3 rounded-ctl border p-3.5 cursor-pointer transition-colors duration-150 ${
+              mode === m ? 'border-primary bg-primary-soft/40' : 'border-border hover:bg-surface-2'
+            }`}
+          >
+            <input
+              type="radio"
+              name="signup-mode"
+              className="mt-0.5"
+              checked={mode === m}
+              onChange={() => setMode(m)}
+            />
+            <span className="leading-snug">
+              <b className="mr-2">{t(`admin.system.signup.mode_${m}`)}</b>
+              <span className="text-muted text-xs">{t(`admin.system.signup.mode_${m}_hint`)}</span>
+            </span>
+          </label>
+        ))}
+      </fieldset>
+
+      {mode !== 'closed' && (
+        <Field label={t('admin.system.signup.domains')} hint={t('admin.system.signup.domainsHint')}>
+          {(ids) => (
+            <input
+              {...ids}
+              className="gs-input w-full gs-num"
+              placeholder="dankook.ac.kr"
+              value={domains}
+              onChange={(e) => setDomains(e.target.value)}
+            />
+          )}
+        </Field>
+      )}
+
+      <p className="gs-sub">{t('admin.system.signup.departmentNote')}</p>
+
+      <div className="flex items-center gap-3 pt-1">
+        <button type="button" className="gs-btn gs-btn-primary" disabled={!dirty || save.isPending} onClick={submit}>
+          {t('common.save')}
+        </button>
+        <span className="gs-sub">{t('admin.system.signup.applyNote')}</span>
+      </div>
+    </section>
   );
 }

@@ -57,7 +57,7 @@ async def test_delete_node_refuses_while_an_allocation_is_live(db):
 
 
 @pytest.mark.asyncio
-async def test_delete_node_detaches_history_and_removes_inventory(db):
+async def test_delete_node_detaches_history_and_clears_the_cards(db):
     node, dev = await _node_with_card(db, hostname="gpu-y")
     sess = SessionRow(
         id=ids.new("session"), owner_user_id=ids.new("user"), cluster_id=node.cluster_id,
@@ -72,7 +72,10 @@ async def test_delete_node_detaches_history_and_removes_inventory(db):
 
     await delete_node(node.id, principal=_Principal(), db=db)
 
-    assert await db.get(GpuNode, node.id) is None
+    # The cards go now; the node row waits for the operator to delete the Node object, which is
+    # what stops the next inventory pass from bringing the node straight back.
+    parked = await db.get(GpuNode, node.id)
+    assert parked is not None and parked.status == "decommissioning"
     assert await db.get(GpuDevice, dev.id) is None
     # The billing trail survives, minus the card that no longer exists.
     row = (await db.execute(select(Allocation).where(Allocation.id == alloc.id))).scalar_one()

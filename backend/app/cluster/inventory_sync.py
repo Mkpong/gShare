@@ -46,6 +46,12 @@ class InventorySync:
                     lossless_capable=ev.lossless_capable,
                     last_seen_at=None if ev.node_ready is False else datetime.now(UTC),
                 ))
+            elif node.status == "decommissioning":
+                # An administrator asked for this node to be removed and the operator has not
+                # deleted its Node object yet. Reporting it back to ready/offline here would put
+                # it in front of the administrator again, which is the resurrection this state
+                # exists to stop. Capacity is stale by definition, so nothing else is updated.
+                return
             else:
                 # Liveness comes from the node's Ready condition, not from the report itself: the
                 # operator lists Node objects, and a dead kubelet leaves its object behind.
@@ -107,6 +113,9 @@ class InventorySync:
                 node.last_seen_at = None if ev.node_ready is False else datetime.now(UTC)
                 self.db.add(node)
                 await self.db.flush()   # materialise node.id, which GpuDevice references
+            elif node.status == "decommissioning":
+                # Being removed: do not re-create the cards an administrator just cleared.
+                return
             else:
                 # Liveness comes from the node's Ready condition (see upsert_node).
                 await self._touch(node, ev.node_ready)

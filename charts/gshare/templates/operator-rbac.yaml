@@ -59,7 +59,10 @@ rules:
     verbs: ["get", "list", "watch"]
   - apiGroups: [""]
     resources: ["nodes"]
-    verbs: ["patch"]                        # cordon (unschedulable) only
+    # patch = cordon (unschedulable). delete = finishing a node removal an administrator started
+    # in the console: the control plane never calls this API itself, so the operator deletes the
+    # Node object and reports back. It refuses to delete a control-plane node or a Ready one.
+    verbs: ["patch", "delete"]
   - apiGroups: [""]
     resources: ["nodes/proxy"]              # kubelet /stats/summary: per-PVC used bytes for the volume ledger
     verbs: ["get"]

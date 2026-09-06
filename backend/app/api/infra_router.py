@@ -363,18 +363,30 @@ async def delete_node(
     principal: Principal = Depends(get_current_principal),
     db: AsyncSession = Depends(get_db),
 ):
-    """Remove a node's inventory rows after it has left the cluster. super_admin only.
+    """Decommission a node: clear its inventory and have the operator remove it from Kubernetes.
+
+    super_admin only. Two phases, because the control plane never calls the workload Kubernetes
+    API itself. This request clears the cards and marks the node ``decommissioning``; the operator
+    deletes the Node object on its next pass and reports back, and only then does the row go. That
+    is what stops a removed node from reappearing: while the Node object exists, every inventory
+    report recreates the row (upsert by cluster + hostname), which is exactly what a manual
+    `kubectl delete node` used to be needed for.
 
     Refuses while the node still carries live work — a live allocation on one of its cards, or a
     non-terminal session the operator placed there — so removal can never strand a running
     session's ledger. Ended allocations keep their history: the row survives with device_id NULL
     and its gpu_uuid intact, since the card it names no longer exists.
 
-    Deleting a node that is still IN the cluster is pointless rather than harmful: the operator's
-    next inventory report recreates it (upsert by cluster + hostname).
+    Refuses while the node is still up: deleting a live node's object only makes its kubelet
+    register again seconds later. Drain it and power it down first.
     """
     principal.require(action="node.delete")
     node = await _load_node(db, node_id)
+    if node.status not in ("offline", "decommissioning"):
+        raise _NodeBusy(
+            "node is still up; drain it and shut it down before removing it",
+            {"node_id": node_id, "hostname": node.hostname, "status": node.status},
+        )
     devices = await _node_devices(db, node_id)
     device_ids = [d.id for d in devices]
 
@@ -415,9 +427,11 @@ async def delete_node(
             .values(device_id=None)
         )
         await db.execute(sa_delete(GpuDevice).where(GpuDevice.id.in_(device_ids)))
-    await db.delete(node)
+    # The row survives this phase so the operator knows which Node object to remove, and so the
+    # inventory sync can tell "being removed" from "just offline" and stop resurrecting it.
+    node.status = "decommissioning"
     await AuditService(db).record(
-        actor=principal.user_id, action="node.delete", target=node_id, result="ok",
+        actor=principal.user_id, action="node.delete", target=node_id, result="requested",
         hostname=node.hostname, cluster_id=node.cluster_id, devices=len(device_ids),
     )
     await db.commit()

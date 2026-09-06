@@ -528,7 +528,12 @@ export function AdminNodes() {
               {t('common.delete')}
             </button>
           )}
-          {(n.device_count ?? 0) === 0 && n.status !== 'offline' && <span className="text-muted text-xs">-</span>}
+          {n.status === 'decommissioning' && (
+            <span className="text-muted text-xs">{t('admin.nodes.removing')}</span>
+          )}
+          {(n.device_count ?? 0) === 0 && n.status !== 'offline' && n.status !== 'decommissioning' && (
+            <span className="text-muted text-xs">-</span>
+          )}
         </div>
       ),
     },

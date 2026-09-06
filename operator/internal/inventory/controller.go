@@ -15,6 +15,7 @@ import (
 	"time"
 
 	corev1 "k8s.io/api/core/v1"
+	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	"k8s.io/apimachinery/pkg/runtime"
 	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/client"
@@ -82,7 +83,7 @@ type InventoryReconciler struct {
 	ClusterID string
 }
 
-// +kubebuilder:rbac:groups="",resources=nodes,verbs=get;list;watch;patch
+// +kubebuilder:rbac:groups="",resources=nodes,verbs=get;list;watch;patch;delete
 
 // Reconcile collects devices for a node and upserts them into the control plane's ledger.
 func (r *InventoryReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctrl.Result, error) {
@@ -124,6 +125,7 @@ func (r *InventoryReconciler) Reconcile(ctx context.Context, req ctrl.Request) (
 	// Report capacity for every node, GPU-less ones included, independently of the device loop.
 	nodeReady := nodeIsReady(&node)
 	r.mirrorCordon(ctx, &node)
+	r.reapDecommissioned(ctx)
 	_ = r.SoT.UpsertNode(ctx, sot.Node{
 		NodeID: node.Name, NodeCPU: nodeCPU, NodeMemGB: nodeMemGB, NodeDiskGB: nodeDiskGB,
 		LosslessCapable: losslessCapable, Role: role, NodeReady: nodeReady,
@@ -282,6 +284,52 @@ func nodeIsReady(node *corev1.Node) bool {
 // annoCordoned marks a Node the operator cordoned on the control plane's behalf. Only nodes
 // carrying it are ever uncordoned here — an administrator's own `kubectl cordon` is left alone.
 const annoCordoned = "gshare.io/cordoned"
+
+// reapDecommissioned removes the Node objects an administrator deleted in the console, then tells
+// the control plane so the ledger row can go. This is the second half of node removal: the console
+// clears the inventory, but while the Node object exists every inventory pass recreates the row and
+// the node reappears — the thing a manual `kubectl delete node` used to be for.
+//
+// Runs on every tick rather than per node, because a node whose object has already been removed by
+// hand never reconciles again and would otherwise wait forever. Two nodes are never touched: one
+// that still carries a control-plane role, and one whose kubelet is still Ready (its kubelet would
+// simply register again seconds later).
+func (r *InventoryReconciler) reapDecommissioned(ctx context.Context) {
+	logger := log.FromContext(ctx)
+	wanted, err := r.SoT.DecommissioningNodes(ctx)
+	if err != nil || len(wanted) == 0 {
+		return
+	}
+	for _, hostname := range wanted {
+		var n corev1.Node
+		switch err := r.Get(ctx, client.ObjectKey{Name: hostname}, &n); {
+		case apierrors.IsNotFound(err):
+			// Already gone (removed by hand, or by an earlier tick): retire the ledger row.
+			if rerr := r.SoT.NodeDecommissioned(ctx, hostname); rerr != nil {
+				logger.V(1).Info("decommission callback failed", "node", hostname, "err", rerr.Error())
+			}
+			continue
+		case err != nil:
+			continue
+		}
+		if _, isControlPlane := n.Labels["node-role.kubernetes.io/control-plane"]; isControlPlane {
+			logger.Info("refusing to remove a control-plane node", "node", hostname)
+			continue
+		}
+		if nodeIsReady(&n) {
+			logger.Info("node is still Ready; leaving it in the cluster", "node", hostname)
+			continue
+		}
+		if derr := r.Delete(ctx, &n); derr != nil && !apierrors.IsNotFound(derr) {
+			logger.Error(derr, "node removal failed", "node", hostname)
+			continue
+		}
+		logger.Info("node removed from the cluster on the control plane's behalf", "node", hostname)
+		if rerr := r.SoT.NodeDecommissioned(ctx, hostname); rerr != nil {
+			logger.V(1).Info("decommission callback failed", "node", hostname, "err", rerr.Error())
+		}
+	}
+}
 
 // mirrorCordon makes Node.spec.unschedulable follow the control plane's cordon list. gShare's
 // cordon lives in its ledger and steers card placement; kube-scheduler knows nothing of it, so a

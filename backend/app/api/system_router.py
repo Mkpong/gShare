@@ -25,8 +25,15 @@ router = APIRouter(prefix="/system", tags=["system"])
 # Setting keys. Grouped by section prefix so a future section is additive.
 KEY_SERVICE_NAME = "branding.service_name"
 KEY_LOGO = "branding.logo"
+KEY_SIGNUP_MODE = "signup.mode"
+KEY_SIGNUP_DOMAINS = "signup.allowed_domains"
 
 DEFAULT_SERVICE_NAME = "gShare"
+
+# Sign-up modes. "closed" is the default so an existing install does not start accepting
+# strangers on upgrade.
+SIGNUP_MODES = ("approval", "open", "closed")
+DEFAULT_SIGNUP_MODE = "closed"
 # A logo travels inline in the branding payload, which every page load reads, so it is deliberately
 # small. 256 KB of base64 is roughly a 190 KB image — ample for a mark.
 MAX_LOGO_CHARS = 256 * 1024
@@ -49,10 +56,13 @@ class BrandingUpdate(BaseModel):
     clear_logo: bool = False
 
 
+_ALL_KEYS = (KEY_SERVICE_NAME, KEY_LOGO, KEY_SIGNUP_MODE, KEY_SIGNUP_DOMAINS)
+
+
 async def _read(db: AsyncSession) -> dict[str, str]:
     rows = (await db.execute(
         select(SystemSetting.key, SystemSetting.value).where(
-            SystemSetting.key.in_([KEY_SERVICE_NAME, KEY_LOGO])
+            SystemSetting.key.in_(_ALL_KEYS)
         )
     )).all()
     return {k: v for k, v in rows}
@@ -116,3 +126,71 @@ async def set_branding(
         )
     await db.commit()
     return await get_branding(db)
+
+
+# ── Sign-up policy ──────────────────────────────────────────────────────────────────────────
+# Who may create their own account, from which email domains, and whether an administrator has
+# to let them in first. The sign-in screen reads the public half to decide whether to offer the
+# sign-up tab at all.
+
+
+class SignupPolicyOut(BaseModel):
+    mode: str                              # approval | open | closed
+    allowed_domains: list[str] = []
+
+
+class SignupPolicyUpdate(BaseModel):
+    mode: str | None = None
+    allowed_domains: list[str] | None = None
+
+
+def _domains(raw: str | None) -> list[str]:
+    return [d.strip().lower().lstrip("@") for d in (raw or "").split(",") if d.strip()]
+
+
+async def signup_policy(db: AsyncSession) -> tuple[str, list[str]]:
+    """(mode, allowed_domains) — the shape the sign-up handler needs."""
+    cur = await _read(db)
+    mode = cur.get(KEY_SIGNUP_MODE) or DEFAULT_SIGNUP_MODE
+    if mode not in SIGNUP_MODES:
+        mode = DEFAULT_SIGNUP_MODE
+    return mode, _domains(cur.get(KEY_SIGNUP_DOMAINS))
+
+
+@router.get("/signup", response_model=SignupPolicyOut)
+async def get_signup_policy(db: AsyncSession = Depends(get_db)) -> SignupPolicyOut:
+    """Public: the sign-in screen shows its sign-up tab only when this is not `closed`."""
+    mode, domains = await signup_policy(db)
+    return SignupPolicyOut(mode=mode, allowed_domains=domains)
+
+
+@router.put("/signup", response_model=SignupPolicyOut)
+async def set_signup_policy(
+    body: SignupPolicyUpdate,
+    principal: Principal = Depends(get_current_principal),
+    db: AsyncSession = Depends(get_db),
+) -> SignupPolicyOut:
+    """Set the sign-up policy; super_admin only."""
+    principal.require(action="system.branding.set")
+    mode, domains = await signup_policy(db)
+    changed: dict[str, str] = {}
+
+    if body.mode is not None:
+        if body.mode not in SIGNUP_MODES:
+            raise _Unprocessable("unknown sign-up mode")
+        mode = body.mode
+        changed["mode"] = mode
+
+    if body.allowed_domains is not None:
+        domains = _domains(",".join(body.allowed_domains))
+        changed["allowed_domains"] = ",".join(domains) or "(any)"
+
+    await _write(db, KEY_SIGNUP_MODE, mode)
+    await _write(db, KEY_SIGNUP_DOMAINS, ",".join(domains) or None)
+    if changed:
+        await AuditService(db).record(
+            actor=principal.user_id, action="system.signup.set", target="signup",
+            result="ok", **changed,
+        )
+    await db.commit()
+    return SignupPolicyOut(mode=mode, allowed_domains=domains)

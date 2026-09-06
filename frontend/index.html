@@ -8,6 +8,30 @@
     <link rel="icon" type="image/png" sizes="32x32" href="/favicon-32.png" />
     <link rel="apple-touch-icon" sizes="180x180" href="/apple-touch-icon.png" />
     <meta name="theme-color" content="#0a6a8c" />
+    <script>
+      /* The tab paints before the bundle loads, so an instance with its own name would show
+         "gShare" and the default mark for a moment. Apply the last known branding first; the app
+         corrects it once the fetch lands. Kept tiny and dependency-free on purpose. */
+      (function () {
+        try {
+          var b = JSON.parse(localStorage.getItem('gshare.branding') || 'null');
+          if (!b || !b.service_name) return;
+          document.title = b.service_name;
+          var letter = Array.from(b.service_name.trim())[0] || 'g';
+          var href = b.logo || 'data:image/svg+xml,' + encodeURIComponent(
+            '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64">' +
+            '<rect width="64" height="64" rx="14" fill="#0a6a8c"/>' +
+            '<text x="32" y="33" fill="#ffffff" font-size="38" font-weight="700" ' +
+            'font-family="system-ui,sans-serif" text-anchor="middle" ' +
+            'dominant-baseline="central">' + letter + '</text></svg>');
+          var links = document.querySelectorAll('link[rel~="icon"]');
+          for (var i = 0; i < links.length; i++) {
+            links[i].setAttribute('href', href);
+            links[i].setAttribute('type', b.logo ? '' : 'image/svg+xml');
+          }
+        } catch (e) { /* storage blocked or corrupt: keep the static defaults */ }
+      })();
+    </script>
   </head>
   <body>
     <div id="root"></div>
