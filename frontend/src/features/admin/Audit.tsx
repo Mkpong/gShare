@@ -136,7 +136,8 @@ const AUDIT_ACTIONS: Record<string, string[]> = {
   catalog: ['policy.create', 'policy.update', 'policy.delete', 'policy.request', 'policy.request.approve', 'policy.request.reject', 'image.create', 'image.update', 'image.delete', 'image.import', 'image.build.create', 'image.build.finish', 'session.create', 'session.start', 'session.stop', 'session.restart', 'session.terminate', 'offering.create', 'offering.update', 'offering.delete', 'preset.create', 'preset.update', 'preset.delete'],
   storage: ['storage.volume.delete', 'storage.quota.approve', 'storage.quota.reject', 'storage.snapshot.restore', 'storage.snapshot.delete'],
   boards: ['notice.create', 'notice.update', 'notice.delete', 'inquiry.create', 'inquiry.reply'],
-  system: ['webhook.create', 'webhook.delete', 'audit.retention', 'audit.export'],
+  auth: ['auth.login'],
+  system: ['webhook.create', 'webhook.delete', 'audit.retention', 'audit.export', 'system.branding.set'],
 };
 
 // Quick ranges: most audit questions are "what just happened", not a calendar exercise.

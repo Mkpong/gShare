@@ -177,6 +177,18 @@ class _LoginRequest(BaseModel):
     password: str | None = None
 
 
+async def _audit_login(
+    db: AsyncSession, *, actor: str, ok: bool, ip: str, email: str, reason: str | None = None,
+) -> None:
+    """Append one auth.login row. Failures commit on their own because the request then raises."""
+    await AuditService(db).record(
+        actor=actor, action="auth.login", target=actor,
+        result="ok" if ok else "failed", email=email, ip=ip,
+        **({"reason": reason} if reason else {}),
+    )
+    await db.commit()
+
+
 @router.post("/auth/login")
 async def auth_login(body: _LoginRequest, request: Request, db: AsyncSession = Depends(get_db)):
     """Email+password local login (gated by AUTH_ALLOW_LOCAL_PASSWORD).
@@ -202,19 +214,25 @@ async def auth_login(body: _LoginRequest, request: Request, db: AsyncSession = D
             await db.execute(select(User).where(func.lower(User.email) == email))
         ).scalar_one_or_none()
     if user is None:
+        await _audit_login(db, actor=email or "unknown", ok=False, ip=client_ip, email=email,
+                           reason="unknown_account")
         raise Unauthenticated("invalid credentials")
     # A suspended or soft-deleted account must not authenticate. Checked before the password so
     # the account state, not the credential, decides — the message stays generic on purpose.
     if user.deleted_at is not None or user.status == "suspended":
+        await _audit_login(db, actor=user.id, ok=False, ip=client_ip, email=email,
+                           reason="account_disabled")
         raise Unauthenticated("invalid credentials")
     # Password check: when a hash exists it must match. An account with no hash — bootstrap or
     # legacy — is let through, but must_change_password is set so a password is chosen immediately.
     if user.password_hash:
         if not await verify_password_async(body.password or "", user.password_hash):
+            await _audit_login(db, actor=user.id, ok=False, ip=client_ip, email=email,
+                               reason="bad_password")
             raise Unauthenticated("invalid credentials")
     elif not user.must_change_password:
         user.must_change_password = True
-        await db.commit()
+    await _audit_login(db, actor=user.id, ok=True, ip=client_ip, email=email)
     return _issue_token(user)
 
 

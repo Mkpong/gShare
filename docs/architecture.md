@@ -69,15 +69,14 @@ about money and state are made only in the control plane.
   timeout. Resolved most-specific first: **user → group → organization → global**.
 - **Pause and resume** — pausing tears the pod down so the operator **returns the GPU**
   (another session can take it immediately) and **compute billing stops**, while the
-  session itself is preserved. Retained volumes keep billing for their capacity. Resuming
+  session itself is preserved; retained volumes are free. Resuming
   **re-acquires a GPU** and rebuilds the pod. Idle GPU sessions can be paused
   automatically by policy, which is how capacity is reclaimed.
 - **Queue and priority** — when capacity is exhausted a session enters the queue instead
   of failing, and is admitted in priority order as resources come back.
 - **Volumes and snapshots** — persistent personal or group storage, read-only or
-  read-write, shareable and snapshottable. Billed continuously against the owner's wallet
-  for the provisioned quota at `STORAGE_CREDIT_PER_GB_HOUR`, whether or not a session is
-  running.
+  read-write, shareable and snapshottable. **Not billed**: storage is bounded by the
+  per-user and per-group quotas in the resource policy, not by credits.
 - **RBAC** — `super_admin` (everything), `org_admin` (one organization), `group_admin`
   (one group), and `member` / `guest`. The user console and the administrator console are
   separate surfaces.

@@ -6,12 +6,15 @@ import { router } from '@/routes/router';
 import { ToastHost } from '@/components/Toast';
 import { ConfirmProvider } from '@/components/ConfirmDialog';
 import { PromptProvider } from '@/components/PromptDialog';
+import { BrandDocument } from '@/components/BrandDocument';
 
 export default function App() {
   return (
     <QueryClientProvider client={queryClient}>
       {/* One icon family, one weight, one default size for the whole console. */}
       <IconContext.Provider value={{ size: 16, weight: 'regular' }}>
+      {/* Tab title and icon follow the branding settings. */}
+      <BrandDocument />
       <ConfirmProvider>
       <PromptProvider>
         <RouterProvider router={router} />

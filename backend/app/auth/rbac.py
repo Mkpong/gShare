@@ -71,6 +71,7 @@ _ACTION_MATRIX: dict[str, tuple] = {
     "offering.update": ("super_admin",),
     # Presets — super_admin only, since the resources, offerings, and presets screens are
     "preset.create": ("super_admin",),
+    "system.branding.set": ("super_admin",),
     # Policies — super_admin·org_admin·group_admin
     "policy.read": ("super_admin", ("scoped", "member")),
     "policy.create": ("super_admin", ("scoped", "group_admin")),

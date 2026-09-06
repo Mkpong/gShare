@@ -1,5 +1,7 @@
 {
-  "images": { "myTag": "내 이미지" },
+  "images": {
+    "myTag": "내 이미지"
+  },
   "account": {
     "backToAccount": "내 정보",
     "changePassword": "비밀번호 변경",
@@ -62,7 +64,8 @@
         "storage": "스토리지",
         "user": "사용자",
         "volume": "볼륨",
-        "webhook": "웹훅"
+        "webhook": "웹훅",
+        "auth": "인증"
       },
       "actionLabel": {
         "audit_read": "감사 로그 조회",
@@ -189,7 +192,9 @@
         "session_stop": "세션 일시정지",
         "session_restart": "세션 재시작",
         "session_terminate": "세션 종료",
-        "image_delete": "이미지 삭제"
+        "image_delete": "이미지 삭제",
+        "auth_login": "로그인",
+        "system_branding_set": "브랜딩 변경"
       },
       "actor": "행위자",
       "actorPlaceholder": "이름 또는 이메일",
@@ -250,8 +255,8 @@
       "summary": "총 {{total}}건 · {{page}}/{{pages}} 페이지",
       "target": "대상",
       "targetKind": {
-      "ntc": "공지",
-      "inq": "문의",
+        "ntc": "공지",
+        "inq": "문의",
         "alc": "할당",
         "alr": "알림규칙",
         "aud": "감사로그",
@@ -301,7 +306,7 @@
         "30d": "30일"
       },
       "actionGroup": {
-      "boards": "공지·문의",
+        "boards": "공지·문의",
         "user": "사용자",
         "org": "조직",
         "group": "부서/멤버십",
@@ -311,7 +316,8 @@
         "infra": "인프라",
         "catalog": "카탈로그",
         "storage": "스토리지",
-        "system": "시스템"
+        "system": "시스템",
+        "auth": "인증"
       },
       "customRange": "직접 설정",
       "resultAccepted": "접수",
@@ -502,7 +508,8 @@
       "viewAudit": "감사 로그 전체 보기",
       "nodeStateBar": "노드 상태",
       "fleetTitle": "플릿 현황",
-      "gpuUtilBasis": "할당 기준 · 사용량은 모니터링"
+      "gpuUtilBasis": "할당 기준 · 사용량은 모니터링",
+      "storageSubShort": "노드 {{count}}대 · 프로비저닝된 볼륨 쿼터"
     },
     "groups": {
       "add": "부서",
@@ -641,7 +648,6 @@
       "colCluster": "클러스터",
       "colEnqueued": "등록",
       "colNode": "노드",
-      "colOwner": "소유자",
       "colOwner": "사용자",
       "colPriority": "우선순위",
       "colResource": "자원",
@@ -1190,6 +1196,32 @@
       },
       "gpu": "GPU",
       "allGpus": "전체 GPU"
+    },
+    "system": {
+      "title": "시스템",
+      "subtitle": "이 인스턴스 전체에 적용되는 설정입니다. 저장 즉시 반영됩니다.",
+      "tab": {
+        "branding": "브랜딩"
+      },
+      "branding": {
+        "title": "브랜딩",
+        "subtitle": "사이드바와 로그인 화면, 브라우저 탭에 표시되는 이름과 로고입니다.",
+        "preview": "미리보기",
+        "name": "서비스 이름",
+        "nameHint": "40자 이내. 로고가 없으면 첫 글자가 아이콘이 됩니다.",
+        "nameSaved": "서비스 이름을 저장했습니다.",
+        "logo": "로고",
+        "logoHint": "PNG, JPEG, WebP, SVG · 180KB 이하. 정사각형에 가까운 이미지가 가장 잘 맞습니다. 없으면 이름의 첫 글자를 씁니다.",
+        "logoUpload": "이미지 올리기",
+        "logoSaved": "로고를 저장했습니다.",
+        "logoRemove": "로고 삭제",
+        "logoRemoved": "로고를 삭제했습니다.",
+        "logoRemoveTitle": "로고를 삭제할까요?",
+        "logoRemoveBody": "아이콘이 서비스 이름의 첫 글자로 돌아갑니다.",
+        "logoType": "PNG, JPEG, WebP, SVG 이미지를 선택하세요.",
+        "logoTooBig": "이미지는 180KB 이하여야 합니다.",
+        "logoUnreadable": "파일을 읽을 수 없습니다."
+      }
     }
   },
   "auth": {
@@ -1570,7 +1602,8 @@
       "policies": "자원 정책",
       "volumes": "볼륨 관리",
       "gpus": "GPU 관리",
-      "monitoring": "모니터링"
+      "monitoring": "모니터링",
+      "system": "시스템"
     },
     "adminConsole": "관리자 콘솔",
     "adminSection": "관리자",
@@ -1713,10 +1746,10 @@
     "compute": "컴퓨트",
     "started": "시작",
     "terminatedAt": "종료 시각",
-      "volumesLabel": "볼륨",
-      "nodeLabel": "노드",
+    "volumesLabel": "볼륨",
+    "nodeLabel": "노드",
     "eventsTitle": "이벤트 로그",
-      "queueWaited": "대기열에서 {{duration}} 대기 후 시작",
+    "queueWaited": "대기열에서 {{duration}} 대기 후 시작",
     "eventsEmpty": "기록된 이벤트 없음",
     "cleanup": "정리",
     "cleanupHint": "이미 중단된 세션입니다. 남은 예약(hold)을 회수하고 종료로 기록합니다.",
@@ -1863,13 +1896,13 @@
     "pendingAdd": "추가 예정",
     "pendingRevoke": "해제 예정",
     "pendingCount": "변경 {{count}}건 대기",
-      "crumbData": "데이터",
-      "crumbVolumes": "볼륨",
-      "shareCrumb": "공유",
-      "sharedTag": "공유됨",
-      "mountsPanelTitle": "{{name}} 마운트 중인 세션",
-      "mountsPanelEmpty": "이 볼륨을 마운트 중인 세션이 없습니다.",
-      "sharedCountTitle": "{{count}}명에게 공유됨",
+    "crumbData": "데이터",
+    "crumbVolumes": "볼륨",
+    "shareCrumb": "공유",
+    "sharedTag": "공유됨",
+    "mountsPanelTitle": "{{name}} 마운트 중인 세션",
+    "mountsPanelEmpty": "이 볼륨을 마운트 중인 세션이 없습니다.",
+    "sharedCountTitle": "{{count}}명에게 공유됨",
     "shareSaved": "공유 변경사항을 저장했습니다."
   },
   "wallet": {
@@ -1916,8 +1949,7 @@
       "hold": "예약",
       "refund": "환불",
       "settle": "정산",
-      "topup": "충전",
-      "storage": "스토리지"
+      "topup": "충전"
     },
     "topupTitle": "시스템 관리자에게 충전 요청",
     "topupNote": "새 크레딧 발행 · 시스템 관리자 승인 필요",
@@ -1969,73 +2001,76 @@
     "quotaRequestCrossLink": "자원 증액 요청 →"
   },
   "boards": {
-      "noticesTitle": "공지",
-      "noticesSubtitle": "전체 공지와 소속 부서의 공지",
-      "adminNoticesTitle": "공지 관리",
-      "adminNoticesSubtitle": "전체(super admin) 또는 내 부서(부서 관리자) 공지 작성·관리",
-      "inquiriesTitle": "문의",
-      "inquiriesSubtitle": "운영진에게 질문을 남기고 답변을 확인",
-      "adminInquiriesTitle": "문의 관리",
-      "adminInquiriesSubtitle": "내 부서원(부서 관리자) 또는 전체(super admin) 문의에 답변",
-      "noNotices": "공지가 없습니다.",
-      "searchPlaceholder": "제목·내용·작성자 검색",
-      "noInquiries": "작성한 문의가 없습니다.",
-      "noIncoming": "받은 문의가 없습니다.",
-      "newNotice": "공지 작성",
-      "editNotice": "공지 수정",
-      "newInquiry": "문의하기",
-      "inquiryDetail": "문의 상세",
-      "scopeLabel": "공개 범위",
-      "scopeGlobal": "전체",
-      "scopeGroup": "부서",
-      "scopeGroupOnly": "부서 관리자는 자기 부서 공지만 작성할 수 있습니다.",
-      "titleLabel": "제목",
-      "toLabel": "받는 사람",
-      "toGroup": "부서 관리자 · {{name}}",
-      "toSystem": "시스템 관리자",
-      "bodyLabel": "내용",
-      "pinLabel": "상단 고정",
-      "pinned": "고정됨",
-      "metaCreated": "작성일",
-      "metaAuthor": "작성자",
-      "metaTitle": "제목",
-      "colNo": "번호",
-      "colTitle": "제목",
-      "colAuthor": "작성자",
-      "colDate": "작성일",
-      "colManage": "관리",
-      "colInquirer": "문의자",
-      "inqTagGroup": "부서 문의",
-      "inqTagSystem": "시스템 문의",
-      "statusFilterAll": "전체 상태",
-      "submitReply": "등록",
-      "pinnedTag": "중요",
-      "badgeNew": "새 공지",
-      "notifyLabel": "대상자에게 알림 보내기",
-      "metaUpdated": "수정일",
-      "post": "게시",
-      "send": "보내기",
-      "sendReply": "답변 등록",
-      "closeOnly": "답변 없이 종료",
-      "close": "종료",
-      "role": { "super_admin": "시스템 관리자", "group_admin": "부서 관리자" },
-      "closeWithAnswer": "답변과 함께 종료 처리",
-      "noticePosted": "공지를 게시했습니다.",
-      "noticeUpdated": "공지를 수정했습니다.",
-      "noticeDeleted": "공지를 삭제했습니다.",
-      "confirmDeleteNotice": "공지 \"{{title}}\"을(를) 삭제할까요?",
-      "inquirySent": "문의를 보냈습니다.",
-      "replySent": "답변을 등록했습니다.",
-      "inquiryHint": "세션 ID나 화면 이름을 함께 적어주시면 더 빨리 도와드릴 수 있습니다.",
-      "answerPlaceholder": "답변을 입력하세요…",
-      "followupPlaceholder": "추가 문의를 입력하세요… (다시 열림)",
-      "replyCount": "답변 {{count}}",
-      "inqStatus": {
-        "open": "대기",
-        "answered": "답변완료",
-        "closed": "종료"
-      }
+    "noticesTitle": "공지",
+    "noticesSubtitle": "전체 공지와 소속 부서의 공지",
+    "adminNoticesTitle": "공지 관리",
+    "adminNoticesSubtitle": "전체(super admin) 또는 내 부서(부서 관리자) 공지 작성·관리",
+    "inquiriesTitle": "문의",
+    "inquiriesSubtitle": "운영진에게 질문을 남기고 답변을 확인",
+    "adminInquiriesTitle": "문의 관리",
+    "adminInquiriesSubtitle": "내 부서원(부서 관리자) 또는 전체(super admin) 문의에 답변",
+    "noNotices": "공지가 없습니다.",
+    "searchPlaceholder": "제목·내용·작성자 검색",
+    "noInquiries": "작성한 문의가 없습니다.",
+    "noIncoming": "받은 문의가 없습니다.",
+    "newNotice": "공지 작성",
+    "editNotice": "공지 수정",
+    "newInquiry": "문의하기",
+    "inquiryDetail": "문의 상세",
+    "scopeLabel": "공개 범위",
+    "scopeGlobal": "전체",
+    "scopeGroup": "부서",
+    "scopeGroupOnly": "부서 관리자는 자기 부서 공지만 작성할 수 있습니다.",
+    "titleLabel": "제목",
+    "toLabel": "받는 사람",
+    "toGroup": "부서 관리자 · {{name}}",
+    "toSystem": "시스템 관리자",
+    "bodyLabel": "내용",
+    "pinLabel": "상단 고정",
+    "pinned": "고정됨",
+    "metaCreated": "작성일",
+    "metaAuthor": "작성자",
+    "metaTitle": "제목",
+    "colNo": "번호",
+    "colTitle": "제목",
+    "colAuthor": "작성자",
+    "colDate": "작성일",
+    "colManage": "관리",
+    "colInquirer": "문의자",
+    "inqTagGroup": "부서 문의",
+    "inqTagSystem": "시스템 문의",
+    "statusFilterAll": "전체 상태",
+    "submitReply": "등록",
+    "pinnedTag": "중요",
+    "badgeNew": "새 공지",
+    "notifyLabel": "대상자에게 알림 보내기",
+    "metaUpdated": "수정일",
+    "post": "게시",
+    "send": "보내기",
+    "sendReply": "답변 등록",
+    "closeOnly": "답변 없이 종료",
+    "close": "종료",
+    "role": {
+      "super_admin": "시스템 관리자",
+      "group_admin": "부서 관리자"
     },
+    "closeWithAnswer": "답변과 함께 종료 처리",
+    "noticePosted": "공지를 게시했습니다.",
+    "noticeUpdated": "공지를 수정했습니다.",
+    "noticeDeleted": "공지를 삭제했습니다.",
+    "confirmDeleteNotice": "공지 \"{{title}}\"을(를) 삭제할까요?",
+    "inquirySent": "문의를 보냈습니다.",
+    "replySent": "답변을 등록했습니다.",
+    "inquiryHint": "세션 ID나 화면 이름을 함께 적어주시면 더 빨리 도와드릴 수 있습니다.",
+    "answerPlaceholder": "답변을 입력하세요…",
+    "followupPlaceholder": "추가 문의를 입력하세요… (다시 열림)",
+    "replyCount": "답변 {{count}}",
+    "inqStatus": {
+      "open": "대기",
+      "answered": "답변완료",
+      "closed": "종료"
+    }
+  },
   "wizard": {
     "back": "이전",
     "billingCpu": "CPU 세션은 크레딧을 소비하지 않습니다. CPU·메모리·디스크는 자원 정책 할당량으로 관리됩니다.",
@@ -2140,9 +2175,18 @@
     "sumDisk": "디스크 {{value}}GB"
   },
   "notif": {
-    "notice_posted": { "title": "새 공지: {{title}}", "body": "공지 메뉴에서 확인하세요." },
-    "inquiry_created": { "title": "새 문의: {{title}}", "body": "문의 관리에서 답변할 수 있습니다." },
-    "inquiry_answered": { "title": "문의 답변 도착: {{title}}", "body": "문의 메뉴에서 답변을 확인하세요." },
+    "notice_posted": {
+      "title": "새 공지: {{title}}",
+      "body": "공지 메뉴에서 확인하세요."
+    },
+    "inquiry_created": {
+      "title": "새 문의: {{title}}",
+      "body": "문의 관리에서 답변할 수 있습니다."
+    },
+    "inquiry_answered": {
+      "title": "문의 답변 도착: {{title}}",
+      "body": "문의 메뉴에서 답변을 확인하세요."
+    },
     "cluster_health": {
       "title": "클러스터 {{new_status}}",
       "body": "클러스터 '{{cluster_name}}' 상태: {{prev_status}} → {{new_status}}"
@@ -2227,8 +2271,14 @@
       "title": "유휴 일시정지 예고",
       "body": "세션 '{{session_name}}'이(가) 유휴 상태입니다. 약 {{minutes_left}}분 후 자동 일시정지됩니다. GPU를 사용하면 타이머가 초기화됩니다."
     },
-    "node_offline": { "title": "노드 오프라인: {{hostname}}", "body": "인벤토리 보고가 {{stale_min}}분 이상 끊겨 배치 대상에서 제외했습니다. 노드 관리에서 확인하세요." },
-    "node_online": { "title": "노드 복귀: {{hostname}}", "body": "인벤토리 보고가 재개되어 다시 배치 대상입니다." },
+    "node_offline": {
+      "title": "노드 오프라인: {{hostname}}",
+      "body": "인벤토리 보고가 {{stale_min}}분 이상 끊겨 배치 대상에서 제외했습니다. 노드 관리에서 확인하세요."
+    },
+    "node_online": {
+      "title": "노드 복귀: {{hostname}}",
+      "body": "인벤토리 보고가 재개되어 다시 배치 대상입니다."
+    },
     "session_paused": {
       "title": "세션 일시정지",
       "body": "세션 '{{session_name}}' 일시정지: GPU 반환, 과금 중지.",
@@ -2300,8 +2350,8 @@
     "cpuLabel": "CPU 합 (vCPU)",
     "memLabel": "메모리 합 (GiB)",
     "diskLabel": "디스크 합 (GB)",
-      "gpuMemLabel": "GPU VRAM (GB)",
-      "gpuCoresLabel": "GPU 코어 (%)",
+    "gpuMemLabel": "GPU VRAM (GB)",
+    "gpuCoresLabel": "GPU 코어 (%)",
     "currentLimit": "현재 한도: {{value}}",
     "noLimit": "현재 한도 없음(무제한)",
     "reasonPlaceholder": "예: 대규모 전처리 작업으로 메모리 128GiB 필요",

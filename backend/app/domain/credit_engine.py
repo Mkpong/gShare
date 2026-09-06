@@ -181,34 +181,6 @@ class CreditEngine:
         if exhausted:
             await self._on_exhaustion(session)
 
-    async def meter(
-        self, wallet_id: str, owed: Decimal, *, ref: str, key: str, type: str = "storage"
-    ) -> bool:
-        """Idempotent per-tick metered charge for a non-session resource (e.g. retained storage).
-
-        Debits ``owed`` from the wallet's AVAILABLE balance (never below ``reserved``, never below 0
-        — the wallet_sigma CheckConstraint). Idempotent on ``key`` (e.g. storage:{vol}:{bucket}), so
-        duplicate ticks cannot double-charge. Returns True when fully charged (or no-op), False when
-        the wallet is exhausted (under-charged this tick) so the caller can signal/reclaim. Unlike
-        session consume there is no running-total differencing — each bucket is an independent
-        slice. """
-        owed = _round2(Decimal(owed))
-        if owed <= _ZERO:
-            return True
-        async with self._keyed_atomic():
-            if await self._txn_exists(key):
-                return True  # per-tick dedupe (idempotent retry)
-            wallet = await self.db.get(CreditWallet, wallet_id, with_for_update=True)
-            if wallet is None:
-                return True
-            available = wallet.balance - wallet.reserved
-            debit = min(owed, available)
-            if debit <= _ZERO:
-                return False  # broke: no available balance → no ledger row, retried next bucket
-            wallet.balance -= debit
-            await self._record(wallet, type=type, amount=-debit, ref=ref, key=key)
-            return debit >= owed
-
     async def settle(self, session, key: str, *, final_consume: bool = True) -> None:
         """Finalize remaining consume + release/refund the hold. key=settle:{ses}.
 

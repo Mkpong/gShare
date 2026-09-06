@@ -1198,13 +1198,12 @@ async def _resolve_ref_names(db: AsyncSession, refs: set[str]) -> dict[str, str]
 async def _grouped_transactions(db: AsyncSession, wallet_id: str, page: Pagination):
     """Ledger with per-session consume folded into one row each.
 
-    The grouping key is the ref for the two per-minute streams — session consume (ref ses_…) and
-    volume storage billing (ref vol_…) — and the transaction's own id for everything else, so
-    discrete events (topup, hold, settle, refund, adjust) stay separate. Session and volume refs
-    live in different id namespaces, so one key column serves both.
+    The grouping key is the ref of the one per-minute stream — session consume (ref ses_…) — and
+    the transaction's own id for everything else, so discrete events (topup, hold, settle, refund,
+    adjust) stay separate.
     """
     key = case(
-        (and_(CreditTransaction.type.in_(("consume", "storage")), CreditTransaction.ref.is_not(None)),
+        (and_(CreditTransaction.type == "consume", CreditTransaction.ref.is_not(None)),
          CreditTransaction.ref),
         else_=CreditTransaction.id,
     ).label("gkey")
@@ -1280,7 +1279,7 @@ async def _grouped_transactions(db: AsyncSession, wallet_id: str, page: Paginati
             entry_count=int(g.entry_count),
             period_start=g.period_start,
             period_end=g.period_end,
-            live=bool(g.ref and g.type in ("consume", "storage") and g.ref in running_refs),
+            live=bool(g.ref and g.type == "consume" and g.ref in running_refs),
         ))
     return _fold_settle_markers(rows)
 
@@ -1335,7 +1334,7 @@ async def spend_daily(
             select(CreditTransaction.created_at, CreditTransaction.amount)
             .where(
                 CreditTransaction.wallet_id == wallet_id,
-                CreditTransaction.type.in_(("consume", "storage")),
+                CreditTransaction.type == "consume",
                 CreditTransaction.created_at >= lo,
                 CreditTransaction.created_at <= hi,
             )

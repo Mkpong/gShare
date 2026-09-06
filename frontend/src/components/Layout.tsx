@@ -15,7 +15,6 @@ import {
   Database,
   Gauge,
   Gear,
-  GraphicsCard,
   Hourglass,
   List,
   SquaresFour,
@@ -24,6 +23,7 @@ import {
   ChatCircleText,
 } from './icons';
 import { ThemeToggle } from './ThemeToggle';
+import { Brand } from './BrandMark';
 import { LanguageToggle } from './LanguageToggle';
 import { NotificationBell } from './NotificationBell';
 import { AccountMenu } from './AccountMenu';
@@ -91,6 +91,7 @@ const ADMIN_GROUPS: { labelKey: string; items: NavItem[] }[] = [
       { to: '/admin/audit', labelKey: 'nav.admin.audit', minRole: 'group_admin' },
       { to: '/admin/notices', labelKey: 'nav.admin.notices', minRole: 'group_admin' },
       { to: '/admin/inquiries', labelKey: 'nav.admin.inquiries', minRole: 'group_admin' },
+      { to: '/admin/system', labelKey: 'nav.admin.system', exactGlobal: 'super_admin' },
     ],
   },
 ];
@@ -248,10 +249,7 @@ export function Layout({ children, variant = 'user' }: { children: ReactNode; va
           aria-label={t('nav.brandHome')}
           title={t('nav.brandHome')}
         >
-          <span className="w-[22px] h-[22px] rounded-ctl bg-primary grid place-items-center shrink-0" aria-hidden="true">
-            <GraphicsCard size={14} weight="bold" className="text-on-primary" />
-          </span>
-          <span className="font-bold text-md tracking-[-0.02em]">gShare</span>
+          <Brand size={22} />
         </Link>
         {isAdminConsole && (
           <span className="gs-pill bg-primary-soft text-primary text-2xs tracking-wide">ADMIN</span>

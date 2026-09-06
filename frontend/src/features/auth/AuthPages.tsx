@@ -6,8 +6,10 @@ import { useUiStore } from '@/store/uiStore';
 import { LanguageToggle } from '@/components/LanguageToggle';
 import { ThemeToggle } from '@/components/ThemeToggle';
 import { AppFooter } from '@/components/Layout';
+import { Brand, BrandMark } from '@/components/BrandMark';
 import { Field, DisabledReason } from '@/components/Field';
 import { asApiError, humanizeError } from '@/lib/errors';
+import { useBranding } from '@/api/hooks/useSystem';
 import { ArrowLeft, ArrowRight, Coins, GraphicsCard, Hourglass } from '@/components/icons';
 
 /** Shared shell for the signed-out screens: a landmark, a heading, and the language control. */
@@ -75,18 +77,15 @@ export function Login() {
   return (
     <main className="h-full overflow-y-auto flex flex-col lg:flex-row bg-bg">
       {/* Brand panel: the one diagram that explains gShare — a card split into sessions. */}
-      <section className="gs-auth-hero relative overflow-hidden shrink-0 lg:w-[56%] lg:min-h-full flex flex-col px-6 pt-4 pb-6 md:px-10 md:pt-5 md:pb-10 lg:px-14 lg:pb-14 border-b lg:border-b-0 lg:border-r border-border" aria-labelledby="gs-auth-hero-title">
+      <section className="gs-auth-hero relative overflow-hidden shrink-0 lg:w-[56%] lg:min-h-full hidden lg:flex flex-col lg:px-14 lg:pt-5 lg:pb-14 lg:border-r border-border" aria-labelledby="gs-auth-hero-title">
         <div className="relative flex items-center gap-2.5 md:-ml-4 lg:-ml-8">
-          <span className="w-9 h-9 rounded-ctl bg-primary grid place-items-center shrink-0" aria-hidden="true">
-            <GraphicsCard size={20} weight="bold" className="text-on-primary" />
-          </span>
-          <span className="text-lg font-bold tracking-[-0.02em]">gShare</span>
+          <Brand size={36} textClass="text-lg font-bold tracking-[-0.02em]" />
         </div>
         <div className="relative my-auto py-10 lg:py-14 max-w-[600px]">
           <p className="gs-num text-2xs uppercase tracking-[0.14em] text-muted">{t('auth.eyebrow')}</p>
-          <h1 id="gs-auth-hero-title" className="mt-3 text-2xl md:text-3xl lg:text-[34px] font-bold leading-[1.25] tracking-[-0.02em] whitespace-pre-line [text-wrap:balance] [word-break:keep-all]">
+          <p id="gs-auth-hero-title" className="mt-3 text-2xl md:text-3xl lg:text-[34px] font-bold leading-[1.25] tracking-[-0.02em] whitespace-pre-line [text-wrap:balance] [word-break:keep-all]">
             {t('auth.heroTitle')}
-          </h1>
+          </p>
           <p className="text-muted mt-4 leading-relaxed max-w-[52ch] [word-break:keep-all]">{t('auth.heroSubtitle')}</p>
 
           <figure className="hidden md:block mt-10" aria-label={t('auth.diagramLabel')}>
@@ -131,9 +130,14 @@ export function Login() {
       {/* Sign-in panel: the console's own card on the console's own ground. */}
       <section className="shrink-0 flex-1 flex flex-col px-6 pt-4 pb-6 md:px-10 md:pt-5 md:pb-10 lg:px-14 lg:pb-14">
         <div className="flex justify-end items-center gap-2 md:-mr-4 lg:-mr-8"><LanguageToggle /><ThemeToggle /></div>
-        <form className="gs-card shadow-raised w-full max-w-[400px] m-auto p-7 md:p-8 space-y-5" onSubmit={handlePassword} noValidate>
+        <div className="w-full max-w-[400px] m-auto py-6">
+          {/* On narrow screens the brand panel is gone, so the wordmark sits above the form. */}
+          <div className="lg:hidden flex items-center justify-center gap-2.5 mb-7">
+            <Brand size={36} textClass="text-lg font-bold tracking-[-0.02em]" />
+          </div>
+        <form className="gs-card shadow-raised w-full p-7 md:p-8 space-y-5" onSubmit={handlePassword} noValidate>
           <div className="mb-7">
-            <h2 className="text-xl font-bold tracking-[-0.02em]">{t('auth.signIn')}</h2>
+            <h1 className="text-xl font-bold tracking-[-0.02em]">{t('auth.signIn')}</h1>
             <p className="text-muted text-sm mt-1.5">{t('auth.signInSubtitle')}</p>
           </div>
           {error && <p role="alert" className="text-danger text-xs">{error}</p>}
@@ -172,6 +176,7 @@ export function Login() {
           </button>
           <p className="text-muted text-xs text-center pt-1">{t('auth.forgotHint')}</p>
         </form>
+        </div>
       </section>
     </main>
   );
@@ -181,6 +186,7 @@ export function Login() {
 export function ChangePassword() {
   const navigate = useNavigate();
   const { t } = useTranslation();
+  const branding = useBranding().data;
   const isAuthed = useAuthStore((s) => s.isAuthed);
   const mustChange = useAuthStore((s) => s.claims.must_change_password);
   const changePassword = useAuthStore((s) => s.changePassword);
@@ -217,9 +223,7 @@ export function ChangePassword() {
     <AuthShell>
       <form className="gs-card space-y-4 shadow-raised" onSubmit={submit} noValidate>
         <div className="flex items-center gap-2.5 mb-3">
-          <span className="w-[22px] h-[22px] rounded-ctl bg-primary grid place-items-center shrink-0" aria-hidden="true">
-            <GraphicsCard size={14} className="text-on-primary" />
-          </span>
+          <BrandMark size={22} logo={branding?.logo} name={branding?.service_name} />
           <h1 className="text-lg font-bold tracking-[-0.02em]">{t('auth.changePassword')}</h1>
           <span className="ml-auto"><LanguageToggle /></span>
         </div>
