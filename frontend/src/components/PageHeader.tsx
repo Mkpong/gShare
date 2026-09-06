@@ -1,7 +1,6 @@
 import { type ReactNode } from 'react';
 import { Link } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
-import { useDocumentTitle } from '@/hooks/useDocumentTitle';
 
 export interface Crumb {
   label: string;
@@ -24,7 +23,6 @@ export function PageHeader({
   description?: ReactNode;
   actions?: ReactNode;
 }) {
-  useDocumentTitle(title);
 
   return (
     <header className="mb-6">

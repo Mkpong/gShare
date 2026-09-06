@@ -4,15 +4,14 @@ import { useTranslation } from 'react-i18next';
 import { useAuthStore } from '@/auth/authStore';
 import { useUiStore } from '@/store/uiStore';
 import { LanguageToggle } from '@/components/LanguageToggle';
+import { ThemeToggle } from '@/components/ThemeToggle';
 import { AppFooter } from '@/components/Layout';
 import { Field, DisabledReason } from '@/components/Field';
-import { useDocumentTitle } from '@/hooks/useDocumentTitle';
 import { asApiError, humanizeError } from '@/lib/errors';
-import { ArrowLeft, GraphicsCard } from '@/components/icons';
+import { ArrowLeft, ArrowRight, Coins, GraphicsCard, Hourglass } from '@/components/icons';
 
 /** Shared shell for the signed-out screens: a landmark, a heading, and the language control. */
-function AuthShell({ title, children }: { title: string; children: React.ReactNode }) {
-  useDocumentTitle(title);
+function AuthShell({ children }: { children: React.ReactNode }) {
   return (
     <main className="min-h-full flex flex-col bg-bg p-4">
       <div className="w-full max-w-[392px] m-auto">{children}</div>
@@ -59,50 +58,122 @@ export function Login() {
     }
   }
 
+  // One card, several sessions: the picture the console exists for. Fractions are a worked
+  // example of a 24 GB card, not live data.
+  const segments = [
+    { key: 'jupyter', cls: 'gs-seg-1', frac: 0.25, label: t('auth.segJupyter') },
+    { key: 'vscode', cls: 'gs-seg-2', frac: 0.25, label: t('auth.segVscode') },
+    { key: 'terminal', cls: 'gs-seg-3', frac: 0.125, label: t('auth.segTerminal') },
+    { key: 'free', cls: 'gs-seg-free', frac: 0.375, label: t('auth.segFree') },
+  ];
+  const facts = [
+    { icon: GraphicsCard, title: t('auth.factAccessTitle'), body: t('auth.factAccessBody') },
+    { icon: Coins, title: t('auth.factBillingTitle'), body: t('auth.factBillingBody') },
+    { icon: Hourglass, title: t('auth.factIdleTitle'), body: t('auth.factIdleBody') },
+  ];
+
   return (
-    <AuthShell title={t('auth.signIn')}>
-      <form className="gs-card space-y-4 shadow-raised" onSubmit={handlePassword} noValidate>
-        <div className="flex items-center gap-2.5 mb-4">
-          <span className="w-[22px] h-[22px] rounded-ctl bg-primary grid place-items-center shrink-0" aria-hidden="true">
-            <GraphicsCard size={14} className="text-on-primary" />
+    <main className="h-full overflow-y-auto flex flex-col lg:flex-row bg-bg">
+      {/* Brand panel: the one diagram that explains gShare — a card split into sessions. */}
+      <section className="gs-auth-hero relative overflow-hidden shrink-0 lg:w-[56%] lg:min-h-full flex flex-col px-6 pt-4 pb-6 md:px-10 md:pt-5 md:pb-10 lg:px-14 lg:pb-14 border-b lg:border-b-0 lg:border-r border-border" aria-labelledby="gs-auth-hero-title">
+        <div className="relative flex items-center gap-2.5 md:-ml-4 lg:-ml-8">
+          <span className="w-9 h-9 rounded-ctl bg-primary grid place-items-center shrink-0" aria-hidden="true">
+            <GraphicsCard size={20} weight="bold" className="text-on-primary" />
           </span>
-          <h1 className="text-lg font-bold tracking-[-0.02em]">gShare</h1>
-          <span className="ml-auto"><LanguageToggle /></span>
+          <span className="text-lg font-bold tracking-[-0.02em]">gShare</span>
         </div>
-        {error && <p role="alert" className="text-danger text-xs">{error}</p>}
-        <Field label={t('auth.email')} required error={emailMalformed ? t('auth.emailMalformed') : null}>
-          {(ids) => (
-            <input
-              {...ids}
-              className="gs-input w-full"
-              type="email"
-              inputMode="email"
-              autoComplete="username"
-              autoFocus
-              value={email}
-              onChange={(e) => setEmail(e.target.value)}
-              onBlur={() => setEmailTouched(true)}
-            />
-          )}
-        </Field>
-        <Field label={t('auth.password')} required>
-          {(ids) => (
-            <input
-              {...ids}
-              className="gs-input w-full"
-              type="password"
-              autoComplete="current-password"
-              value={pw}
-              onChange={(e) => setPw(e.target.value)}
-            />
-          )}
-        </Field>
-        <DisabledReason reasons={[!email && t('auth.email'), !pw && t('auth.password')].filter(Boolean) as string[]} />
-        <button type="submit" className="gs-btn gs-btn-primary w-full justify-center disabled:opacity-50" disabled={busy || !email || !pw || emailMalformed}>
-          {busy ? t('auth.signingIn') : t('auth.signIn')}
-        </button>
-      </form>
-    </AuthShell>
+        <div className="relative my-auto py-10 lg:py-14 max-w-[600px]">
+          <p className="gs-num text-2xs uppercase tracking-[0.14em] text-muted">{t('auth.eyebrow')}</p>
+          <h1 id="gs-auth-hero-title" className="mt-3 text-2xl md:text-3xl lg:text-[34px] font-bold leading-[1.25] tracking-[-0.02em] whitespace-pre-line [text-wrap:balance] [word-break:keep-all]">
+            {t('auth.heroTitle')}
+          </h1>
+          <p className="text-muted mt-4 leading-relaxed max-w-[52ch] [word-break:keep-all]">{t('auth.heroSubtitle')}</p>
+
+          <figure className="hidden md:block mt-10" aria-label={t('auth.diagramLabel')}>
+            <figcaption className="flex items-baseline justify-between gs-num text-xs text-muted">
+              <span>{t('auth.diagramCard')}</span>
+              <span>{t('auth.diagramSessions')}</span>
+            </figcaption>
+            <div className="mt-2 flex h-10 gap-1" aria-hidden="true">
+              {segments.map((sg, i) => (
+                <div key={sg.key} className={`gs-seg ${sg.cls}`} style={{ flexBasis: `${sg.frac * 100}%`, animationDelay: `${60 + i * 80}ms` }} />
+              ))}
+            </div>
+            <ul className="mt-3 flex flex-wrap gap-x-5 gap-y-1 text-xs" aria-hidden="true">
+              {segments.map((sg) => (
+                <li key={sg.key} className="flex items-center gap-1.5">
+                  <span className={`gs-seg gs-seg-swatch ${sg.cls}`} />
+                  <span>{sg.label}</span>
+                  <span className="gs-num text-muted">{(sg.frac * 24).toFixed(sg.frac * 24 % 1 ? 1 : 0)} GB</span>
+                </li>
+              ))}
+            </ul>
+          </figure>
+
+          <dl className="mt-10 grid sm:grid-cols-3 gap-6">
+            {facts.map((f) => (
+              <div key={f.title} className="flex flex-col gap-1.5">
+                <dt className="flex items-center gap-1.5 text-sm font-bold">
+                  <f.icon size={15} weight="bold" className="text-primary" aria-hidden="true" />
+                  {f.title}
+                </dt>
+                <dd className="text-xs text-muted leading-relaxed m-0 [word-break:keep-all]">{f.body}</dd>
+              </div>
+            ))}
+          </dl>
+        </div>
+        <div className="relative text-2xs text-muted leading-relaxed">
+          <a href="https://www.apache.org/licenses/LICENSE-2.0" target="_blank" rel="noreferrer noopener" className="hover:text-text">Apache-2.0</a>
+          <span className="mx-1.5">·</span>Dankook University · Networked Systems and Security Lab.
+        </div>
+      </section>
+
+      {/* Sign-in panel: the console's own card on the console's own ground. */}
+      <section className="shrink-0 flex-1 flex flex-col px-6 pt-4 pb-6 md:px-10 md:pt-5 md:pb-10 lg:px-14 lg:pb-14">
+        <div className="flex justify-end items-center gap-2 md:-mr-4 lg:-mr-8"><LanguageToggle /><ThemeToggle /></div>
+        <form className="gs-card shadow-raised w-full max-w-[400px] m-auto p-7 md:p-8 space-y-5" onSubmit={handlePassword} noValidate>
+          <div className="mb-7">
+            <h2 className="text-xl font-bold tracking-[-0.02em]">{t('auth.signIn')}</h2>
+            <p className="text-muted text-sm mt-1.5">{t('auth.signInSubtitle')}</p>
+          </div>
+          {error && <p role="alert" className="text-danger text-xs">{error}</p>}
+          <Field label={t('auth.email')} required error={emailMalformed ? t('auth.emailMalformed') : null}>
+            {(ids) => (
+              <input
+                {...ids}
+                className="gs-input w-full h-11"
+                type="email"
+                inputMode="email"
+                autoComplete="username"
+                autoFocus
+                placeholder="you@dankook.ac.kr"
+                value={email}
+                onChange={(e) => setEmail(e.target.value)}
+                onBlur={() => setEmailTouched(true)}
+              />
+            )}
+          </Field>
+          <Field label={t('auth.password')} required>
+            {(ids) => (
+              <input
+                {...ids}
+                className="gs-input w-full h-11"
+                type="password"
+                autoComplete="current-password"
+                value={pw}
+                onChange={(e) => setPw(e.target.value)}
+              />
+            )}
+          </Field>
+          <DisabledReason reasons={[!email && t('auth.email'), !pw && t('auth.password')].filter(Boolean) as string[]} />
+          <button type="submit" className="gs-btn gs-btn-primary w-full justify-center h-11 text-sm disabled:opacity-50" disabled={busy || !email || !pw || emailMalformed}>
+            {busy ? t('auth.signingIn') : t('auth.signIn')}
+            {!busy && <ArrowRight size={16} weight="bold" aria-hidden="true" />}
+          </button>
+          <p className="text-muted text-xs text-center pt-1">{t('auth.forgotHint')}</p>
+        </form>
+      </section>
+    </main>
   );
 }
 
@@ -143,7 +214,7 @@ export function ChangePassword() {
   }
 
   return (
-    <AuthShell title={t('auth.changePassword')}>
+    <AuthShell>
       <form className="gs-card space-y-4 shadow-raised" onSubmit={submit} noValidate>
         <div className="flex items-center gap-2.5 mb-3">
           <span className="w-[22px] h-[22px] rounded-ctl bg-primary grid place-items-center shrink-0" aria-hidden="true">
@@ -186,7 +257,6 @@ export function ChangePassword() {
 
 function ErrorScreen({ code, title, hint }: { code: string; title: string; hint?: string }) {
   const { t } = useTranslation();
-  useDocumentTitle(title);
   return (
     <main className="min-h-full grid place-items-center text-center p-4">
       <div>
