@@ -419,3 +419,40 @@ html, body { overflow: hidden; }   /* the html box is the real page scroller —
     font-size: 13px;
   }
 }
+
+/* Signed-out brand panel: a faint 32 px grid — the graph paper a card gets planned on — fading
+   out toward the bottom-right. No glow, no picture: the segmented card below is the picture. */
+.gs-auth-hero {
+  background: var(--surface);
+}
+.gs-auth-hero::before {
+  content: '';
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  background-image:
+    linear-gradient(var(--border) 1px, transparent 1px),
+    linear-gradient(90deg, var(--border) 1px, transparent 1px);
+  background-size: 32px 32px;
+  -webkit-mask-image: radial-gradient(ellipse 90% 80% at 15% 10%, #000 10%, transparent 70%);
+  mask-image: radial-gradient(ellipse 90% 80% at 15% 10%, #000 10%, transparent 70%);
+}
+
+/* The card diagram: one flex row, each session a segment sized by its VRAM share. */
+.gs-seg {
+  border-radius: var(--radius-control);
+  transform-origin: left center;
+  animation: gs-seg-grow 420ms cubic-bezier(0.2, 0.7, 0.2, 1) both;
+}
+.gs-seg-1 { background: var(--primary); }
+.gs-seg-2 { background: color-mix(in srgb, var(--primary) 62%, var(--surface)); }
+.gs-seg-3 { background: color-mix(in srgb, var(--primary) 36%, var(--surface)); }
+.gs-seg-free { background: var(--surface-2); border: 1px dashed var(--border-strong); }
+.gs-seg-swatch { width: 10px; height: 10px; flex: none; animation: none; }
+@keyframes gs-seg-grow {
+  from { transform: scaleX(0); opacity: 0; }
+  to { transform: scaleX(1); opacity: 1; }
+}
+@media (prefers-reduced-motion: reduce) {
+  .gs-seg { animation: none; }
+}
