@@ -57,6 +57,8 @@ const RESULT_TONES: Record<string, { key: string; tone: string }> = {
   failed: { key: 'admin.audit.resultFailed', tone: 'bg-danger-soft text-danger' },
   handoff_failed: { key: 'admin.audit.resultHandoffFailed', tone: 'bg-danger-soft text-danger' },
   escalated: { key: 'admin.audit.resultEscalated', tone: 'bg-warn-soft text-warn' },
+  // A node removal the operator has not finished yet: the request is in, the cluster is next.
+  requested: { key: 'admin.audit.resultRequested', tone: 'bg-warn-soft text-warn' },
 };
 export function resultMeta(r?: string): { label: string; tone: string } {
   if (!r) return { label: i18n.t('admin.audit.resultOk'), tone: 'bg-free-soft text-free' };

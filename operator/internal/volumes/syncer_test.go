@@ -24,14 +24,14 @@ type fakeSoT struct {
 	answer   sot.VolumeSyncResult
 }
 
-func (f *fakeSoT) Report(context.Context, string, sot.StatusEvent) error { return nil }
-func (f *fakeSoT) AuditOperator(context.Context, sot.AuditEvent) error   { return nil }
-func (f *fakeSoT) UpsertGpuDevice(context.Context, sot.GpuDevice) error  { return nil }
-func (f *fakeSoT) UpsertNode(context.Context, sot.Node) error            { return nil }
-func (f *fakeSoT) CordonedNodes(context.Context) ([]string, error)       { return nil, nil }
+func (f *fakeSoT) Report(context.Context, string, sot.StatusEvent) error  { return nil }
+func (f *fakeSoT) AuditOperator(context.Context, sot.AuditEvent) error    { return nil }
+func (f *fakeSoT) UpsertGpuDevice(context.Context, sot.GpuDevice) error   { return nil }
+func (f *fakeSoT) UpsertNode(context.Context, sot.Node) error             { return nil }
+func (f *fakeSoT) CordonedNodes(context.Context) ([]string, error)        { return nil, nil }
 func (f *fakeSoT) DecommissioningNodes(context.Context) ([]string, error) { return nil, nil }
 func (f *fakeSoT) NodeDecommissioned(context.Context, string) error       { return nil }
-func (f *fakeSoT) ReportDrift(context.Context, string, int, int) error   { return nil }
+func (f *fakeSoT) ReportDrift(context.Context, string, int, int) error    { return nil }
 func (f *fakeSoT) CreateNodeHealthEvent(_ context.Context, ev sot.NodeHealthEvent) (sot.NodeHealthEvent, error) {
 	return ev, nil
 }
