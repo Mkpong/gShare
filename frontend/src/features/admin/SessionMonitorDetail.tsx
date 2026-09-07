@@ -6,7 +6,7 @@ import { useSession, useStopSession, useStartSession } from '@/api/hooks/useSess
 import { useSessionUsage, type SessionUsage } from '@/api/hooks/useMonitor';
 import { useSessionUsageSeries } from '@/api/hooks/useMonitoring';
 import { StatusPill } from '@/components/StatusPill';
-import { SessionUsagePanel, type UsageRange } from '@/components/SessionUsagePanel';
+import { SessionUsagePanel, type UsageRange, type UsageSummary } from '@/components/SessionUsagePanel';
 import { Timestamp } from '@/components/Timestamp';
 import { CopyableId } from '@/components/CopyButton';
 import { X } from '@/components/icons';
@@ -34,7 +34,8 @@ export function SessionMonitorOverlay({ sessionId, onClose }: {
   const s = (sessions as SessionRow[] | undefined)?.find((x) => x.id === sessionId);
   const running = s?.status === 'running';
   const { data: u } = useSessionUsage(running ? sessionId : undefined) as { data?: SessionUsage };
-  const { data: hist } = useSessionUsageSeries(sessionId, range);
+  const finished = s?.status === 'terminated';
+  const { data: hist } = useSessionUsageSeries(sessionId, range, !finished);
   // Mounted volumes ride on the single-session read; the list rows do not carry them.
   const mounts = ((useSession(sessionId).data as { mounts?: { volume_id: string; name?: string | null; quota_gb?: number | null; mount_path: string; mode: string }[] } | undefined)?.mounts) ?? [];
 
@@ -101,7 +102,7 @@ export function SessionMonitorOverlay({ sessionId, onClose }: {
                 {[s.cpu != null ? `${s.cpu}c` : null, s.mem_gb != null ? `${s.mem_gb}GiB` : null,
                   s.disk_gb != null ? `${s.disk_gb}GB` : null].filter(Boolean).join(' · ') || dash}
               </Row>
-              {s.gpu_model && <Row label="GPU">{s.gpu_model}</Row>}
+              {s.gpu_model && <Row label="GPU">{s.gpu_alias ? `${s.gpu_alias} · ` : ''}{s.gpu_model}</Row>}
               {/* Which image this session runs — the first thing to check when a library or a
                   CUDA version is not what the user expected. */}
               {(s.image_name || s.image_ref) && (
@@ -135,7 +136,6 @@ export function SessionMonitorOverlay({ sessionId, onClose }: {
             </dl>
           </div>
 
-          {s.status !== 'terminated' && (
           <div className="mt-5 border-t border-border pt-4">
             <SessionUsagePanel
               limits={{ isGpu, cpu: s.cpu, mem_gb: s.mem_gb, gpu_mem_mb: s.gpu_mem_mb, gpu_cores: s.gpu_cores }}
@@ -143,9 +143,10 @@ export function SessionMonitorOverlay({ sessionId, onClose }: {
               series={hist}
               range={range}
               onRange={setRange}
+              finished={finished}
+              summary={(s as { usage_summary?: UsageSummary | null }).usage_summary}
             />
           </div>
-          )}
 
           <DrawerTimeline sessionId={s.id} />
         </div>

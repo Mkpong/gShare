@@ -3,7 +3,7 @@ import { Select } from '@/components/Select';
 import { Link } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
 import {
-  useVolumes, useVolume, useCreateVolume, useDeleteVolume, useStorageQuotaUsage,
+  useVolumes, useVolume, useCreateVolume, useDeleteVolume, useStorageQuotaUsage, useSetVolumeLock,
   useVolumePermissions, useGrantPermission, useRevokePermission, useLeaveShare,
   useUpdateVolumeQuota,
   type CreateVolumeBody,
@@ -27,6 +27,8 @@ import { BlockGauge } from '@/components/BlockGauge';
 
 // The backend's VolumeRead: { id, scope, scope_id, type, access_mode, quota_gb, used_gb }.
 type Vol = Record<string, unknown> & {
+  role?: string | null;
+  mount_locked?: boolean;
   owner_id?: string | null;
   owner_name?: string | null;
   id: string; name?: string; scope?: string; scope_id?: string; type?: string; access_mode?: string; quota_gb?: number; used_gb?: number;
@@ -49,6 +51,7 @@ export function VolumePage() {
   const { t } = useTranslation();
   const { data, isLoading, isError, error, refetch } = useVolumes();
   const del = useDeleteVolume();
+  const lock = useSetVolumeLock();
   const confirm = useConfirm();
   const table = useTableState('', { sort: 'id', dir: 'asc' });
   const pushToast = useUiStore((s) => s.pushToast);
@@ -56,6 +59,7 @@ export function VolumePage() {
   const memberships = useAuthStore((s) => s.memberships);
   const projectName = (pid?: string) => memberships.find((m) => m.group_id === pid)?.project_name ?? pid ?? '-';
   const scopeText = (v: Vol) => {
+    if (v.scope === 'global') return t('volume.scopeGlobal');
     if (v.scope === 'group') return t('volume.scopeGroup', { name: projectName(v.scope_id) });
     if (v.scope === 'user') {
       if (v.scope_id === userId) return t('volume.scopeMine');
@@ -127,6 +131,7 @@ export function VolumePage() {
         <span className="inline-flex items-center gap-2 min-w-0">
           <b className="truncate">{v.name || volumeTypeLabel(v.type)}</b>
           <span className="gs-tag shrink-0">{volumeTypeLabel(v.type)}</span>
+          {v.mount_locked && <span className="gs-tag shrink-0 text-warn" title={t('volume.lockedTitle')}>{t('volume.lockedTag')}</span>}
           {((v as { shared_count?: number }).shared_count ?? 0) > 0 && (
             <span className="gs-tag shrink-0 text-primary" title={t('volume.sharedCountTitle', { count: (v as { shared_count?: number }).shared_count })}>
               {t('volume.sharedTag')}
@@ -162,10 +167,20 @@ export function VolumePage() {
         <div className="flex gap-1.5 justify-end flex-nowrap">
           {isSharedToMe(v) ? (
             <button type="button" className="gs-btn gs-btn-sm gs-btn-danger" disabled={leave.isPending} onClick={() => onLeave(v)}>{t('volume.leaveShare')}</button>
-          ) : (
+          ) : v.role !== 'owner' ? null : (
+            /* Only whoever may manage the volume (the server's `owner` role: the creator, the
+               department's administrators, the system administrator) sees the management buttons;
+               a plain member of a department volume used to see them and get a 403. */
             <>
               <button type="button" className="gs-btn gs-btn-sm" onClick={() => setShareVol(v)}>{t('volume.share')}</button>
               <button type="button" className="gs-btn gs-btn-sm" onClick={() => setQuotaVol(v)}>{t('volume.expand')}</button>
+              <button type="button" className="gs-btn gs-btn-sm" disabled={lock.isPending} title={t('volume.lockHint')}
+                onClick={() => lock.mutate({ id: v.id, locked: !v.mount_locked }, {
+                  onSuccess: () => pushToast('success', v.mount_locked ? t('volume.unlocked') : t('volume.locked')),
+                  onError: (e) => pushToast('error', humanizeError(asApiError(e))),
+                })}>
+                {v.mount_locked ? t('volume.unlock') : t('volume.lock')}
+              </button>
               <button type="button" className="gs-btn gs-btn-sm gs-btn-danger" disabled={del.isPending} onClick={() => onDelete(v)}>{t('common.delete')}</button>
             </>
           )}
@@ -284,7 +299,7 @@ export function NewVolumeForm({ onDone }: { onDone: () => void }) {
   const defaultScopeId = useAuthStore((s) => s.claims.sub) ?? '';
   const memberships = useAuthStore((s) => s.memberships);
 
-  const [scope, setScope] = useState<'user' | 'group'>('user');
+  const [scope, setScope] = useState<'user' | 'group' | 'global'>('user');
   // Group volumes are created by group administrators only (decision 4-10a): the scope choice is
   // hidden for plain members, and the group list offers only the groups the caller administers.
   const globalRole = useAuthStore((st) => st.claims.global_role);
@@ -294,6 +309,8 @@ export function NewVolumeForm({ onDone }: { onDone: () => void }) {
     || globalRole === 'super_admin'
     || (m.org_id != null && orgAdminOrgs.includes(m.org_id)));
   const canCreateGroup = adminMemberships.length > 0;
+  // A shared volume is an instance-wide asset: the system administrator only.
+  const canCreateGlobal = globalRole === 'super_admin';
   // A personal volume always belongs to the caller. A group volume is picked from their memberships,
   // with group_id as the value.
   const [projectId, setProjectId] = useState(adminMemberships[0]?.group_id ?? '');
@@ -301,7 +318,7 @@ export function NewVolumeForm({ onDone }: { onDone: () => void }) {
   const [type, setType] = useState<CreateVolumeBody['type']>('dataset');
   const [accessMode, setAccessMode] = useState<CreateVolumeBody['access_mode']>('RWX');
   const [quota, setQuota] = useState('10');
-  const scopeId = scope === 'user' ? defaultScopeId : projectId;
+  const scopeId = scope === 'user' ? defaultScopeId : scope === 'global' ? 'global' : projectId;
   // The per-scope storage policy limit. A quota beyond the remaining headroom warns and blocks, using
   // the same rule as the backend's _assert_storage_quota.
   const usage = useStorageQuotaUsage(scope, scopeId || undefined).data as
@@ -314,7 +331,7 @@ export function NewVolumeForm({ onDone }: { onDone: () => void }) {
   const overPhysical = physRemaining != null && reqGb > physRemaining;
   // Which types each scope offers: personal hides group, group hides home, and scratch cannot be
   // created here.
-  const typeAllowed = (v: string) => v !== 'scratch' && (scope === 'user' ? v !== 'group' : v !== 'home');
+  const typeAllowed = (v: string) => v !== 'scratch' && (scope === 'global' ? v === 'dataset' : scope === 'user' ? v !== 'group' : v !== 'home');
   const availableTypes = VOLUME_TYPES.filter((v) => typeAllowed(v.value));
   const typeDescKey = VOLUME_TYPES.find((v) => v.value === type)?.descKey;
   const valid = scopeId.trim().length > 0 && name.trim().length > 0 && Number(quota) >= 0 && !overLimit && !overPhysical;
@@ -350,20 +367,24 @@ export function NewVolumeForm({ onDone }: { onDone: () => void }) {
           </Field>
           <label className="block"><span className="text-xs font-semibold text-muted">{t('volume.ownerScope')}</span>
             <Select className="gs-input w-full mt-1" value={scope} onChange={(e) => {
-              const next = e.target.value as 'user' | 'group';
+              const next = e.target.value as 'user' | 'group' | 'global';
               setScope(next);
               // If the selected type is hidden in the new scope, fall back to a valid one.
-              const ok = (v: string) => (next === 'user' ? v !== 'group' : v !== 'home');
+              const ok = (v: string) => (next === 'global' ? v === 'dataset' : next === 'user' ? v !== 'group' : v !== 'home');
               if (!ok(type ?? '')) setType('dataset');
+              // Shared volumes start read-only: everyone can mount them, so writing is opt-in.
+              if (next === 'global') setAccessMode('ROX');
             }}>
               <option value="user">{t('volume.scopeMine')}</option>
               {canCreateGroup && <option value="group">{t('volume.type.group')}</option>}
+              {canCreateGlobal && <option value="global">{t('volume.scopeGlobal')}</option>}
             </Select>
             {scope === 'group' && <span className="text-muted text-2xs mt-1 block">{t('volume.groupAutoShare')}</span>}
+            {scope === 'global' && <span className="text-muted text-2xs mt-1 block">{t('volume.globalHint')}</span>}
             </label>
-          {scope === 'user' ? (
+          {scope === 'user' || scope === 'global' ? (
             <label className="block"><span className="text-xs font-semibold text-muted">{t('volume.target')}</span>
-              <input className="gs-input w-full mt-1" value={t('volume.myAccount')} disabled autoComplete="off" /></label>
+              <input className="gs-input w-full mt-1" value={scope === 'user' ? t('volume.myAccount') : t('volume.everyone')} disabled autoComplete="off" /></label>
           ) : (
             <label className="block"><span className="text-xs font-semibold text-muted">{t('common.group')}</span>
               <Select className="gs-input w-full mt-1" value={projectId} onChange={(e) => setProjectId(e.target.value)}>
@@ -620,7 +641,8 @@ export function VolumeQuotaForm({ volumeId, onDone }: { volumeId: string; onDone
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [volume?.quota_gb]);
   const target = Number(gb);
-  const floor = Math.max(1, used);
+  // A quota only grows: the claim never shrinks on disk, so the floor is the current figure.
+  const floor = Math.max(1, cur);
   // Two ceilings: the scope's policy headroom (unlimited policy = none) and the storage pool's
   // physical headroom. The binding one wins; with neither known, fall back to a wide cap.
   const policyCeiling = usage?.has_limit && usage.remaining_gb != null ? cur + usage.remaining_gb : Infinity;
@@ -633,12 +655,12 @@ export function VolumeQuotaForm({ volumeId, onDone }: { volumeId: string; onDone
   const unchanged = isNum && target === cur;
   const valid = isNum && !belowUsed && !overLimit && !unchanged;
   const error = !isNum ? null
-    : belowUsed ? t('volume.quotaBelowUsed', { used: formatGiB(floor) })
+    : belowUsed ? t('volume.quotaNoShrink', { current: formatGiB(cur) })
     : overLimit ? (boundIsPhysical ? t('volume.overPhysical', { requested: target }) : t('volume.overLimit', { requested: target }))
     : null;
   const reasons = [
     ...(unchanged ? [t('volume.quotaUnchangedShort')] : []),
-    ...(belowUsed ? [t('volume.quotaBelowUsedShort')] : []),
+    ...(belowUsed ? [t('volume.quotaNoShrinkShort')] : []),
   ];
   // Billing before and after. Storage charges max(quota, used), so a shrink below usage would not
   // save anything — which is exactly why the floor sits at usage.

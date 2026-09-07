@@ -54,7 +54,8 @@ export interface ResourcePolicy {
   cpu_session_max_concurrent?: number;
   cpu_session_max_runtime_min?: number;
   cpu_session_idle_timeout_sec?: number;
-  limits: { cpu: number; mem_gb: number; gpu_mem_mb: number; gpu_cores: number; storage_gb: number; volume_gb?: number; shared_pool?: boolean };
+  limits: { cpu: number; mem_gb: number; gpu_mem_mb: number; gpu_cores: number; storage_gb: number; volume_gb?: number; shared_pool?: boolean; allow_privileged?: boolean };
+  allow_privileged?: boolean;   // top-level in the policy view (not inside the public limits object)
 }
 
 export const resourceKeys = {
@@ -77,11 +78,12 @@ export interface GpuModelAvail {
   card_mem_mb: number;
   devices: GpuDeviceAvail[];
 }
-export function useGpuAvailability(opts: { fleet?: boolean } = {}) {
+export function useGpuAvailability(opts: { fleet?: boolean; clusterId?: string } = {}) {
   return useQuery({
-    queryKey: ['gpu-availability', opts.fleet ? 'fleet' : 'mine'],
+    queryKey: ['gpu-availability', opts.fleet ? 'fleet' : 'mine', opts.clusterId ?? ''],
     queryFn: async () => {
-      const { data } = await raw.GET('/api/v1/sessions/gpu-availability', opts.fleet ? { params: { query: { fleet: true } } } : undefined);
+      const query: Record<string, unknown> = { ...(opts.fleet ? { fleet: true } : {}), ...(opts.clusterId ? { cluster_id: opts.clusterId } : {}) };
+      const { data } = await raw.GET('/api/v1/sessions/gpu-availability', Object.keys(query).length ? { params: { query } } : undefined);
       return (data as { data?: GpuModelAvail[] } | undefined)?.data ?? [];
     },
     refetchInterval: 15000,   // availability moves, so refresh periodically
@@ -272,7 +274,7 @@ export interface CreatePolicyBody {
   max_queued: number;
   max_runtime_min: number;
   idle_timeout_sec: number;
-  limits: { cpu: number; mem_gb: number; gpu_mem_mb: number; gpu_cores: number; storage_gb: number; volume_gb?: number; shared_pool?: boolean };
+  limits: { cpu: number; mem_gb: number; gpu_mem_mb: number; gpu_cores: number; storage_gb: number; volume_gb?: number; shared_pool?: boolean; allow_privileged?: boolean };
 }
 
 // POST /resource-policies — (scope,scope_id) UNIQUE.
@@ -309,6 +311,8 @@ export interface EffectivePolicy {
   limits?: { gpu_mem_mb: number; gpu_cores: number; cpu: number; mem_gb: number; storage_gb: number; volume_gb?: number };
   used?: { gpu_mem_mb: number; gpu_cores: number; cpu: number; mem_gb: number; storage_gb: number; volume_gb?: number; active: number; queued: number };
   remaining?: { gpu_mem_mb: number | null; gpu_cores: number | null; cpu: number | null; mem_gb: number | null; storage_gb: number; volume_gb?: number | null };
+  /** The policy grants privileged (root) sessions; the wizard offers the option only then. */
+  allow_privileged?: boolean;
 }
 
 // GET /resource-policies/effective — the caller's effective policy with current usage and headroom,

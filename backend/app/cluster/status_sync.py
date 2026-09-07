@@ -246,10 +246,15 @@ class StatusSync:
             # First running event only: increase device occupancy ledger (FOR UPDATE per device).
             await self._bump_device_usage(sess, ev)
 
-        # Reflect binding result onto the session row.
-        if ev.bound_gpu_uuid and sess.bound_gpu_uuid is None:
+        # Reflect binding result onto the session row. These follow the POD, they are not
+        # write-once: a resumed session is re-admitted onto whatever card is free now, and a
+        # replaced pod gets a new name. Keeping the first values made a session that came back on
+        # another card keep naming the card — and therefore the node — it ran on months ago, which
+        # is how a session on gshare-4090 still reported the retired gshare-rtx4090 (the read model
+        # resolves the node FROM this uuid).
+        if ev.bound_gpu_uuid and sess.bound_gpu_uuid != ev.bound_gpu_uuid:
             sess.bound_gpu_uuid = ev.bound_gpu_uuid
-        if ev.pod_ref and sess.pod_ref is None:
+        if ev.pod_ref and sess.pod_ref != ev.pod_ref:
             sess.pod_ref = ev.pod_ref
         if ev.node_name and sess.node_hostname != ev.node_name:
             sess.node_hostname = ev.node_name
@@ -286,7 +291,11 @@ class StatusSync:
         if sess.terminated_at is None:
             sess.terminated_at = now
         reason = _map_operator_reason(ev.message)
-        if reason is not None and sess.status_reason is None:
+        if reason is not None and not was_terminal:
+            # The operator names why THIS termination happened. `status_reason` is per-status —
+            # a pause writes "idle"/"credit_exhausted" — so keeping the older value made a session
+            # paused for one cause and later reaped for another report the wrong cause for good.
+            # Only an already-terminal row is left alone, so a repeat callback cannot rewrite it.
             sess.status_reason = reason
         await self.db.flush()
         # Finalize remaining consume + release/refund the hold (idempotent settle:{ses}).
@@ -381,9 +390,11 @@ class StatusSync:
         # or the session ends with no recorded cause.
         if mapped == "terminating":
             reason = _map_operator_reason(getattr(ev, "message", None))
-            if reason is not None and sess.status_reason is None:
+            if reason is not None and sess.status not in ("terminated", "error"):
+                # As in _on_terminated: this reason describes the shutdown now under way and
+                # outranks anything a previous pause left behind.
                 sess.status_reason = reason
-        if ev.pod_ref and sess.pod_ref is None:
+        if ev.pod_ref and sess.pod_ref != ev.pod_ref:
             sess.pod_ref = ev.pod_ref
         if ev.node_name and sess.node_hostname != ev.node_name:
             sess.node_hostname = ev.node_name

@@ -1,8 +1,10 @@
 import { useMemo, useState } from 'react';
 import { Select } from '@/components/Select';
 import { useTranslation } from 'react-i18next';
-import { useGpuDevices, useNodes, useSetDeviceMode, useSetDeviceHealth, type GpuMode } from '@/api/hooks/useNodes';
+import { useGpuDevices, useNodes, useSetDeviceMode, useSetDeviceHealth, useSetDeviceAlias, type GpuMode } from '@/api/hooks/useNodes';
 import { useConfirm } from '@/components/ConfirmDialog';
+import { useActiveCluster } from '@/api/hooks/useClusters';
+import { usePrompt } from '@/components/PromptDialog';
 import { PageHeader } from '@/components/PageHeader';
 import { Table, type Column } from '@/components/Table';
 import { StatusPill } from '@/components/StatusPill';
@@ -14,6 +16,7 @@ interface DeviceRow {
   gpu_uuid?: string | null;
   node_id?: string | null;
   model?: string | null;
+  alias?: string | null;
   mode?: string | null;
   desired_mode?: string | null;
   mode_state?: string | null;
@@ -38,16 +41,27 @@ export function AdminGpus() {
   const nodes = useMemo(() => nodesData ?? [], [nodesData]);
   const setMode = useSetDeviceMode();
   const setHealth = useSetDeviceHealth();
+  const setAlias = useSetDeviceAlias();
   const confirm = useConfirm();
+  const prompt = usePrompt();
   const [modelFilter, setModelFilter] = useState('');
+  const [clusterFilter, setClusterFilter] = useState('');
+  const clusterInfo = useActiveCluster();
 
   const nodeName = useMemo(() => {
     const m: Record<string, string> = {};
     for (const n of nodes as { id: string; hostname: string }[]) m[n.id] = n.hostname;
     return m;
   }, [nodes]);
+  // Cards carry a node, nodes carry a cluster: the cluster filter goes through that map.
+  const nodeCluster = useMemo(() => {
+    const m: Record<string, string> = {};
+    for (const n of nodes as { id: string; cluster_id?: string | null }[]) if (n.cluster_id) m[n.id] = n.cluster_id;
+    return m;
+  }, [nodes]);
+  const clusterOpts = useMemo(() => [...new Set(Object.values(nodeCluster))], [nodeCluster]);
   const models = useMemo(() => [...new Set(devices.map((d) => d.model ?? '-'))], [devices]);
-  const rows = modelFilter ? devices.filter((d) => (d.model ?? '-') === modelFilter) : devices;
+  const rows = devices.filter((d) => (!modelFilter || (d.model ?? '-') === modelFilter) && (!clusterFilter || nodeCluster[d.node_id ?? ''] === clusterFilter));
 
   const modeLabel = (m?: string | null) => (m ? t(`enum.gpuMode.${m}`, { defaultValue: m }) : '-');
   const onMode = (d: DeviceRow, mode: GpuMode) => {
@@ -60,8 +74,39 @@ export function AdminGpus() {
 
   const columns: Column<DeviceRow>[] = [
     {
-      key: 'model', header: t('admin.gpus.colModel'), sortBy: (d) => d.model ?? '',
-      render: (d) => <b>{d.model ?? '-'}</b>,
+      // The alias, when set, is the card's name; the model drops to a second line. Without one the
+      // model is the name, as before.
+      key: 'model', header: t('admin.gpus.colModel'), sortBy: (d) => d.alias ?? d.model ?? '',
+      render: (d) => d.alias ? (
+        <span className="inline-flex flex-col leading-tight">
+          <b>{d.alias}</b>
+          <span className="text-muted text-xs">{d.model ?? '-'}</span>
+        </span>
+      ) : <b>{d.model ?? '-'}</b>,
+    },
+    {
+      key: 'alias', header: t('admin.gpus.colAlias'), sortable: false,
+      render: (d) => (
+        <button type="button" className="gs-btn gs-btn-sm" disabled={setAlias.isPending} onClick={async (e) => {
+          e.stopPropagation();
+          const v = await prompt({
+            title: t('admin.gpus.aliasTitle', { model: d.model ?? d.id }),
+            body: t('admin.gpus.aliasBody'),
+            label: t('admin.gpus.colAlias'),
+            defaultValue: d.alias ?? '',
+            placeholder: 'lab-A-01',
+            confirmLabel: t('common.save'),
+          });
+          if (v === null || v === undefined) return;
+          const alias = v.trim() || null;
+          setAlias.mutate({ deviceId: d.id, alias }, {
+            onSuccess: () => pushToast('success', alias ? t('admin.gpus.aliasSaved', { alias }) : t('admin.gpus.aliasCleared')),
+            onError: (err) => pushToast('error', humanizeError(asApiError(err))),
+          });
+        }}>
+          {d.alias ? t('common.edit') : t('admin.gpus.aliasSet')}
+        </button>
+      ),
     },
     {
       key: 'node', header: t('admin.gpus.colNode'), sortBy: (d) => nodeName[d.node_id ?? ''] ?? '',
@@ -162,6 +207,12 @@ export function AdminGpus() {
       <PageHeader title={t('admin.gpus.title')} description={t('admin.gpus.subtitle')} />
       <div className="gs-card">
         <div className="flex items-center gap-3 mb-3 flex-wrap">
+          {clusterInfo.multi && (
+            <Select className="gs-input w-auto" value={clusterFilter} aria-label={t('admin.gpus.allClusters')} onChange={(e) => setClusterFilter(e.target.value)}>
+              <option value="">{t('admin.gpus.allClusters')}</option>
+              {clusterOpts.map((c) => <option key={c} value={c}>{clusterInfo.name(c)}</option>)}
+            </Select>
+          )}
           <Select className="gs-input w-auto" value={modelFilter} aria-label={t('admin.gpus.colModel')}
             onChange={(e) => setModelFilter(e.target.value)}>
             <option value="">{t('admin.gpus.allModels')}</option>

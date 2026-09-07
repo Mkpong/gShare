@@ -1,3 +1,5 @@
+import { fetchRestOfPages, pageTotal, PAGE_MAX } from '@/api/paging';
+import { useUiStore } from '@/store/uiStore';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { api, idemKey } from '@/api/client';
 import type { components } from '@/api/schema';
@@ -18,8 +20,8 @@ export function useClusters(opts?: { enabled?: boolean }) {
     queryKey: ['clusters'],
     enabled: opts?.enabled ?? true,
     queryFn: async () => {
-      const { data } = await api.GET('/api/v1/clusters');
-      return data?.data ?? [];
+      const { data } = await api.GET('/api/v1/clusters', { params: { query: { page: 1, size: PAGE_MAX } } });
+      return await fetchRestOfPages('/api/v1/clusters', {}, data?.data ?? [], pageTotal(data));
     },
   });
 }
@@ -87,4 +89,28 @@ export function useDeleteCluster() {
     },
     onSuccess: () => qc.invalidateQueries({ queryKey: ['clusters'] }),
   });
+}
+
+export interface ClusterSummary { id: string; name: string; status: string }
+
+// GET /clusters/summary — id, name and status for every signed-in user (the full list is
+// super_admin-only). Drives the cluster selector and the wizard's cluster choice.
+export function useClusterSummary() {
+  return useQuery({
+    queryKey: ['clusters', 'summary'],
+    staleTime: 60_000,
+    queryFn: async () => {
+      const { data } = await (api as unknown as { GET: (p: string) => Promise<{ data?: { data?: ClusterSummary[] } }> }).GET('/api/v1/clusters/summary');
+      return data?.data ?? [];
+    },
+  });
+}
+
+/** The cluster filter a screen applies: rows of every cluster while none is chosen. */
+export function useActiveCluster(): { id: string | null; multi: boolean; name: (id?: string | null) => string } {
+  const { data: clusters = [] } = useClusterSummary();
+  const id = useUiStore((s) => s.activeClusterId);
+  const multi = clusters.length > 1;
+  const known = id && clusters.some((c) => c.id === id) ? id : null;
+  return { id: multi ? known : null, multi, name: (cid) => clusters.find((c) => c.id === cid)?.name ?? cid ?? '-' };
 }

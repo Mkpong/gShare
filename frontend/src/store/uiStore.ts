@@ -14,6 +14,13 @@ export interface Toast {
 interface UiState {
   theme: Theme;
   toasts: Toast[];
+  /** The cluster the console is looking at; null = every cluster. Also the wizard's default. */
+  activeClusterId: string | null;
+  setActiveCluster(id: string | null): void;
+  /** Admin nav groups the reader folded away, by label key. Remembered between visits. */
+  navGroupsClosed: string[];
+  toggleNavGroup(key: string): void;
+  openNavGroup(key: string): void;
   toggleTheme(): void;
   applyTheme(): void;
   pushToast(kind: Toast['kind'], message: string, action?: Toast['action']): void;
@@ -25,6 +32,17 @@ export const useUiStore = create<UiState>()(
     (set, get) => ({
       theme: 'dark',
       toasts: [],
+      activeClusterId: null,
+      setActiveCluster(id) { set({ activeClusterId: id }); },
+      navGroupsClosed: [],
+      toggleNavGroup(key) {
+        const closed = get().navGroupsClosed;
+        set({ navGroupsClosed: closed.includes(key) ? closed.filter((k) => k !== key) : [...closed, key] });
+      },
+      openNavGroup(key) {
+        const closed = get().navGroupsClosed;
+        if (closed.includes(key)) set({ navGroupsClosed: closed.filter((k) => k !== key) });
+      },
       toggleTheme() {
         const next: Theme = get().theme === 'dark' ? 'light' : 'dark';
         document.documentElement.dataset.theme = next; // toggles light and dark
@@ -48,7 +66,7 @@ export const useUiStore = create<UiState>()(
     }),
     {
       name: 'gshare-ui',
-      partialize: (s) => ({ theme: s.theme }),
+      partialize: (s) => ({ activeClusterId: s.activeClusterId, theme: s.theme, navGroupsClosed: s.navGroupsClosed }),
     },
   ),
 );

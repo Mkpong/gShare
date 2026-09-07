@@ -50,8 +50,7 @@ export interface SignupPolicy {
 
 const keys = {
   branding: ['system', 'branding'] as const,
-  signup: ['system', 'signup'] as const,
-};
+  signup: ['system', 'signup'] as const, placement: ['system', 'placement'] as const };
 
 /** Readable signed out — the sign-in screen renders the name before anyone has a token. */
 export function useBranding() {
@@ -111,5 +110,29 @@ export function useSignup() {
       if (error) throw error;
       return data as { status: 'pending' | 'active' };
     },
+  });
+}
+
+export type GpuPacking = 'binpack' | 'spread';
+export interface Placement { gpu_packing: GpuPacking }
+
+/** Where a fractional slice lands when several cards fit. Was deploy-time only until now. */
+export function usePlacement() {
+  return useQuery({
+    queryKey: keys.placement,
+    queryFn: async () => (await raw.GET('/api/v1/system/placement')).data as Placement,
+    staleTime: 60_000,
+  });
+}
+
+export function useSetPlacement() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: async (body: { gpu_packing: GpuPacking }) => {
+      const { data, error } = await raw.PUT('/api/v1/system/placement', { body });
+      if (error) throw error;
+      return data as Placement;
+    },
+    onSuccess: (data) => { qc.setQueryData(keys.placement, data); },
   });
 }

@@ -2,7 +2,7 @@ import { useEffect, useMemo, useState } from 'react';
 import { Select } from '@/components/Select';
 import { Link, useNavigate, useSearchParams } from 'react-router-dom';
 import { Trans, useTranslation } from 'react-i18next';
-import { useMyTopupRequests, useTopupRequest, useWallet, useWalletTransactions, type LedgerTxn , useSpendDaily } from '@/api/hooks/useWallet';
+import { useMyTopupRequests, useWallet, useWalletTransactions, type LedgerTxn , useSpendDaily } from '@/api/hooks/useWallet';
 import { useSessions } from '@/api/hooks/useSessions';
 import { useCreateAllocationRequest, useAllocationRequests, type AllocRequest } from '@/api/hooks/useAllocations';
 import { useAuthStore } from '@/auth/authStore';
@@ -512,23 +512,18 @@ export function WalletPage() {
 
 // The credit request form: asks the active group's administrators for an allocation. Requests
 // escalate up the hierarchy. No payment is involved; the request simply waits for approval.
-export function CreditRequestBody({ onDone, initialNeed, initialTab }: {
-  onDone?: () => void; initialNeed?: string; initialTab?: 'dept' | 'system';
+export function CreditRequestBody({ onDone, initialNeed }: {
+  onDone?: () => void; initialNeed?: string;
 }) {
   const { t } = useTranslation();
   const pushToast = useUiStore((s) => s.pushToast);
   const activeProjectId = useAuthStore((s) => s.activeProjectId);
   const membership = useAuthStore((s) => s.memberships.find((m) => m.group_id === activeProjectId));
   const projectName = membership?.project_name;
-  // No live admin in the group means nobody could ever approve the request — steer to the
-  // system top-up path instead of letting the request hang pending forever.
+  // Requests climb one level: a user asks their department. No live administrator in the
+  // department means nobody could approve, so the form says so instead of hanging a request.
   const hasApprover = !!activeProjectId && membership?.has_group_admin !== false;
   const createReq = useCreateAllocationRequest();
-
-  type ReqTab = 'dept' | 'system';
-  const wanted = initialTab || (hasApprover ? 'dept' : 'system');
-  const [reqTabState, setReqTab] = useState<ReqTab>(wanted === 'dept' && !hasApprover ? 'system' : wanted);
-  const reqTab: ReqTab = reqTabState === 'dept' && !hasApprover ? 'system' : reqTabState;
 
   const [amount, setAmount] = useState(initialNeed ?? '');
   const [note, setNote] = useState('');
@@ -561,27 +556,11 @@ export function CreditRequestBody({ onDone, initialNeed, initialTab }: {
 
   return (
     <>
-      {!hasApprover && (
-        <p className="text-warn text-xs mb-2">{t('wallet.deptDisabledNotice')}</p>
-      )}
-      <Tabs
-        ariaLabel={t('wallet.requestCredits')}
-        items={[
-          { key: 'dept', label: t('wallet.tabDeptRequest'), disabled: !hasApprover, disabledReason: t('wallet.noGroupAdmin') },
-          { key: 'system', label: t('wallet.tabSystemRequest') },
-        ]}
-        active={reqTab}
-        onChange={(v) => setReqTab(v as ReqTab)}
-      />
-
-      {reqTab === 'system' ? (
-        <TopupRequestCard onDone={onDone} />
-      ) : (
       <form className="gs-card space-y-3" {...unsavedGuardProps} onSubmit={(e) => { e.preventDefault(); submit(); }}>
         {noDept ? (
           <p role="alert" className="text-danger text-sm">{t('wallet.noActiveGroup')}</p>
         ) : !hasApprover ? (
-          <p role="alert" className="text-warn text-sm">{t('wallet.noGroupAdmin')}</p>
+          <p role="alert" className="text-warn text-sm">{t('wallet.noGroupAdmin')} {t('wallet.noApproverHint')}</p>
         ) : (
           <p className="text-muted text-xs"><Trans i18nKey="wallet.requestGoesTo" values={{ group: projectName ?? activeProjectId }} components={{ 1: <b /> }} /></p>
         )}
@@ -619,7 +598,6 @@ export function CreditRequestBody({ onDone, initialNeed, initialTab }: {
           </button>
         </div>
       </form>
-      )}
     </>
   );
 }
@@ -638,7 +616,6 @@ export function CreditRequestPage() {
       />
       <CreditRequestBody
         initialNeed={params.get('need') ?? undefined}
-        initialTab={(params.get('type') as 'dept' | 'system') ?? undefined}
         onDone={() => navigate('/wallet')}
       />
     </div>
@@ -648,47 +625,3 @@ export function CreditRequestPage() {
 /** Fallback funding path: ask the SYSTEM administrators to mint a top-up (approval required).
  * The form above asks the group's admins to allocate from the group pool - different approvers,
  * different source of funds. */
-function TopupRequestCard({ onDone }: { onDone?: () => void }) {
-  const { t } = useTranslation();
-  const pushToast = useUiStore((s) => s.pushToast);
-  const topup = useTopupRequest();
-  const [amount, setAmount] = useState('');
-  const [note, setNote] = useState('');
-  const n = Number(amount);
-  const valid = !!amount.trim() && Number.isFinite(n) && n > 0 && !!note.trim();
-  return (
-    <form
-      className="gs-card space-y-3"
-      onSubmit={(e) => {
-        e.preventDefault();
-        if (!valid) return;
-        topup.mutate({ amount: amount.trim(), note: note.trim() }, {
-          onSuccess: () => { setAmount(''); setNote(''); pushToast('success', t('wallet.topupSent')); onDone?.(); },
-          onError: (err) => pushToast('error', humanizeError(asApiError(err))),
-        });
-      }}
-    >
-      <h2 className="font-bold">{t('wallet.topupTitle')}</h2>
-      <p className="text-muted text-xs">{t('wallet.topupNote')}</p>
-      <div className="grid grid-cols-2 gap-3 max-[560px]:grid-cols-1">
-        <Field label={t('wallet.amountLabel')} required>
-          {(ids) => (
-            <input {...ids} type="number" inputMode="numeric" min={1} max={1000000} step="any"
-              className="gs-input w-full" value={amount} onChange={(e) => setAmount(e.target.value)} autoComplete="off" />
-          )}
-        </Field>
-        <Field label={t('common.reason')} required>
-          {(ids) => (
-            <input {...ids} className="gs-input w-full" value={note} maxLength={280}
-              onChange={(e) => setNote(e.target.value)} autoComplete="off" />
-          )}
-        </Field>
-      </div>
-      <div className="flex justify-end">
-        <button type="submit" className="gs-btn gs-btn-primary disabled:opacity-50" disabled={topup.isPending || !valid}>
-          {topup.isPending ? t('wallet.sending') : t('wallet.topupSend')}
-        </button>
-      </div>
-    </form>
-  );
-}

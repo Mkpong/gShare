@@ -13,6 +13,7 @@ from pydantic import BaseModel, Field
 from sqlalchemy import delete as sa_delete
 from sqlalchemy import func, select
 from sqlalchemy import update as sa_update
+from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.api.deps import get_current_principal
@@ -1036,6 +1037,7 @@ async def list_gpu_devices(
             "id": d.id,
             "node_id": d.node_id,
             "model": d.model,
+            "alias": d.alias,
             "mode": d.mode or "-",
             "desired_mode": d.desired_mode,
             "mode_state": d.mode_state,
@@ -1056,6 +1058,57 @@ async def list_gpu_devices(
 class GpuDeviceModeSet(BaseModel):
     # fractional | exclusive | mig; null clears the target (follow observed).
     desired_mode: str | None = Field(default=None, pattern="^(fractional|exclusive|mig)$")
+
+
+class _DeviceAliasBody(BaseModel):
+    # null or blank clears the alias; the console then falls back to model + list position.
+    alias: str | None = Field(default=None, max_length=32)
+
+
+class _AliasTaken(DomainError):
+    """Another card in this cluster already carries that alias (409)."""
+
+    code, http = "alias_taken", 409
+
+
+@router.put("/gpu-devices/{device_id}/alias")
+async def set_device_alias(
+    device_id: str,
+    body: _DeviceAliasBody,
+    principal: Principal = Depends(get_current_principal),
+    db: AsyncSession = Depends(get_db),
+):
+    """Name a physical card. super_admin only.
+
+    The console otherwise numbers cards by their position in the list, so "card #2" means a
+    different card the day a card is added or removed. An alias pins a name to the UUID. Unique
+    within the cluster; the ledger owns it and inventory reports never overwrite it.
+    """
+    principal.require(action="gpu_device.set_alias")
+    dev = await db.get(GpuDevice, device_id)
+    if dev is None:
+        raise NotFound(f"device {device_id}")
+    alias = (body.alias or "").strip() or None
+    if alias is not None:
+        dup = await db.scalar(
+            select(GpuDevice.id).where(
+                GpuDevice.cluster_id == dev.cluster_id, GpuDevice.alias == alias, GpuDevice.id != dev.id,
+            )
+        )
+        if dup is not None:
+            raise _AliasTaken("another card in this cluster already has that alias", {"alias": alias})
+    before = dev.alias
+    dev.alias = alias
+    await AuditService(db).record(
+        actor=principal.user_id, action="gpu_device.set_alias", target=dev.id, result="ok",
+        gpu_uuid=dev.gpu_uuid, model=dev.model, alias_from=before, alias_to=alias,
+    )
+    try:
+        await db.commit()
+    except IntegrityError as exc:   # raced unique index
+        await db.rollback()
+        raise _AliasTaken("another card in this cluster already has that alias", {"alias": alias}) from exc
+    return {"device_id": dev.id, "alias": dev.alias}
 
 
 class _DeviceHealthBody(BaseModel):

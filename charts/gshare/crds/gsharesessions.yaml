@@ -188,6 +188,12 @@ spec:
                 description: 'Preemptible: this session may be admitted onto a yielded
                   (lent) card and reclaimed (SIGTERM'
                 type: boolean
+              privileged:
+                description: |-
+                  Privileged: run the session container as root with a relaxed security context (privilege
+                  escalation allowed, the baseline capability set) so the person can install system packages.
+                  Granted per user by the control plane's resource policy; never a default.
+                type: boolean
               projectId:
                 description: |-
                   ProjectID is the owning project (tenant) identifier (informational). Optional: a session

@@ -250,6 +250,10 @@ data:
 
       # Per-pod CPU/memory/net/disk, straight from the kubelet's built-in cAdvisor.
       - job_name: kubelet-cadvisor
+        # Per-session CPU/memory drive the usage graphs people watch while a job starts: 5 s
+        # here (with rate[30s] on the query side) turns a ~60 s lag into single digits. ~200
+        # series per node; the storage cost is negligible next to the 15 s host jobs.
+        scrape_interval: 5s
         scheme: https
         tls_config: { ca_file: /var/run/secrets/kubernetes.io/serviceaccount/ca.crt, insecure_skip_verify: true }
         bearer_token_file: /var/run/secrets/kubernetes.io/serviceaccount/token
@@ -268,6 +272,7 @@ data:
 
       # HAMi's own vGPU monitor: the only source that knows about vGPU splitting.
       - job_name: hami
+        scrape_interval: 5s
         kubernetes_sd_configs:
           - role: pod
             namespaces: { names: [kube-system] }

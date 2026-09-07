@@ -392,6 +392,16 @@ class SessionService:
         sess.terminated_at = now
         if sess.status_reason is None:
             sess.status_reason = reason
+        # Permanent usage summary. Prometheus keeps the series for 30 days; the row keeps the
+        # average and peak for good. Best effort — a monitoring outage must not block termination.
+        if sess.started_at is not None and sess.usage_summary is None:
+            try:
+                from app.api.monitoring_router import session_usage_summary
+                sess.usage_summary = await session_usage_summary(
+                    sess.id, int(sess.started_at.timestamp()), int(now.timestamp()),
+                )
+            except Exception:  # noqa: BLE001
+                log.warning("usage summary skipped for %s (monitoring unavailable)", session_id)
         await self.db.flush()
         # Notify the owner. The operator callback _on_terminated is guarded by was_terminal, so this
         # cannot fire twice.

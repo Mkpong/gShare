@@ -214,3 +214,29 @@ def register_exception_handlers(app: FastAPI) -> None:
                 "timestamp": _utcnow_iso(),
             }},
         )
+
+
+# ── Storage volumes ──
+class VolumeLocked(DomainError):
+    """The owner locked the volume against new mounts (409): sessions already mounting it keep
+    running; a new session cannot attach it until the lock is lifted."""
+    code, http = "volume_locked", 409
+
+
+class VolumeShrinkNotAllowed(DomainError):
+    """A volume quota only grows (409): Kubernetes never shrinks a claim, so a smaller ledger
+    figure would let the pool be over-allocated against space that is still physically taken."""
+    code, http = "volume_shrink_not_allowed", 409
+
+
+# ── Credit requests ──
+class TopupRequestOrgOnly(DomainError):
+    """New credits are issued by the system tier to an ORGANIZATION wallet only (403): a group
+    asks its organization, a user asks their group — each one level up, never the top directly."""
+    code, http = "topup_request_org_only", 403
+
+
+# ── Privileged sessions ──
+class PrivilegedNotAllowed(DomainError):
+    """The effective resource policy does not grant privileged (root) sessions to this user (403)."""
+    code, http = "privileged_not_allowed", 403

@@ -1,3 +1,4 @@
+import { useClusterSummary } from '@/api/hooks/useClusters';
 import { useEffect, useState, type ReactNode } from 'react';
 import { Select } from '@/components/Select';
 import { useNavigate, useSearchParams } from 'react-router-dom';
@@ -35,6 +36,7 @@ type VolumeMount = NonNullable<CreateSessionBody['volume_mounts']>[number];
 // The wizard's form state: the SessionCreate fields plus UI-only intermediate state, which toBody()
 // maps back onto the backend's fields.
 type WizardForm = Partial<CreateSessionBody> & {
+  privileged?: boolean;
   sharing_mode?: 'fractional' | 'exclusive';
   vram_mb?: number;
   core_percent?: number;
@@ -67,11 +69,11 @@ export function mountPathInvalid(path: string): boolean {
   return MOUNT_RESERVED.some((r) => norm === r || norm.startsWith(r + '/'));
 }
 
-// The session creation wizard: two steps (workload, then volumes and review) with an advanced
-// toggle. GPU sessions branch into exclusive and shared.
+// The session creation wizard: one decision per screen — compute, GPU (skipped for CPU sessions),
+// image, volumes — then a review screen that is the only place the session can be started.
 
-type Step = 1 | 2 | 3 | 4;
-type StepKey = 'compute' | 'gpu' | 'image' | 'review';
+type Step = 1 | 2 | 3 | 4 | 5;
+type StepKey = 'compute' | 'gpu' | 'image' | 'volumes' | 'review';
 
 // Tier and occupancy arithmetic lives in ./tier, where it is unit tested.
 
@@ -141,8 +143,10 @@ export function SessionWizard() {
   });
 
   const isGpu = form.resource_class === 'gpu';
-  // One decision per screen: compute → GPU → image → review (CPU sessions skip the GPU step).
-  const wizardSteps: StepKey[] = isGpu ? ['compute', 'gpu', 'image', 'review'] : ['compute', 'image', 'review'];
+  // One decision per screen: compute → GPU → image → volumes → review (CPU sessions skip the GPU step).
+  const wizardSteps: StepKey[] = isGpu
+    ? ['compute', 'gpu', 'image', 'volumes', 'review']
+    : ['compute', 'image', 'volumes', 'review'];
   const stepKey: StepKey = wizardSteps[Math.min(step, wizardSteps.length) - 1];
 
   // Catalogue lookups (offerings, images, cluster, wallet). Without the advanced panel these supply
@@ -154,7 +158,7 @@ export function SessionWizard() {
   const images = imagesRes?.data ?? [];
   const wallet = useWallet().data as { id?: string } | undefined;
   // Real GPU inventory, i.e. the models of ready devices. The model list is restricted to these.
-  const availQuery = useGpuAvailability();
+  const availQuery = useGpuAvailability({ clusterId: form.cluster_id || undefined });
   const availModels = new Set((availQuery.data ?? []).map((a) => a.gpu_model));
   // GPU models are the intersection of the GPU offerings with real inventory, deduplicated by model
   // name (keeping the largest VRAM) and excluding inactive offerings. Before availability has loaded
@@ -294,6 +298,17 @@ export function SessionWizard() {
       : catalogImages[0]?.id;
   // The backend picks an available cluster automatically; form.cluster_id is used only when the user
   // pinned one explicitly.
+  // Multi-cluster: the console's chosen cluster is the default; "automatic" leaves it to the
+  // scheduler. With one cluster there is nothing to choose and the control stays hidden.
+  const { data: clusterList = [] } = useClusterSummary();
+  const activeClusterId = useUiStore((st) => st.activeClusterId);
+  const [clusterTouched, setClusterTouched] = useState(false);
+  useEffect(() => {
+    if (!clusterTouched && !form.cluster_id && activeClusterId && clusterList.some((c) => c.id === activeClusterId)) {
+      patch({ cluster_id: activeClusterId });
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [activeClusterId, clusterList.length]);
   const clusterId = form.cluster_id || undefined;
   const walletId = form.billing_wallet_id || wallet?.id;
 
@@ -340,6 +355,7 @@ export function SessionWizard() {
       image_id: imageId,
       billing_wallet_id: walletId,   // both GPU and CPU sessions are billed, so a wallet is required
       volume_mounts: form.volume_mounts ?? [],
+      ...(form.privileged ? { privileged: true } : {}),
     };
     if (form.resource_class === 'gpu') {
       b.mode = effMode;
@@ -422,11 +438,13 @@ export function SessionWizard() {
     ? formatCredit(previewCost.data.estimated_credit_per_hour)
     : null;
   const modeUnserviceable = isGpu && !modeServiceable(effMode);
+  const badMount = (form.volume_mounts ?? []).some((m) => mountPathInvalid(m.mount_path));
   const stepReasons: string[] = (
     stepKey === 'compute' ? [!form.name && t('wizard.nameLabel')]
     : stepKey === 'gpu' ? [!offeringId && t('wizard.offeringLabel'),
                            modeUnserviceable && t('wizard.modeUnserviceable')]
     : stepKey === 'image' ? [!imageId && t('wizard.imageLabel')]
+    : stepKey === 'volumes' ? [badMount && t('wizard.mountPathInvalid')]
     : []
   ).filter(Boolean) as string[];
 
@@ -445,7 +463,6 @@ export function SessionWizard() {
         </button>
       );
     }
-    const badMount = (form.volume_mounts ?? []).some((m) => mountPathInvalid(m.mount_path));
     return (
       <button
         type="button"
@@ -567,7 +584,7 @@ export function SessionWizard() {
   );
 
   return (
-    <div className="w-full max-w-5xl" {...guard.props}>
+    <div className="w-full max-w-[1280px] mx-auto" {...guard.props}>
       <PageHeader
         title={t('wizard.title')}
         crumbs={[{ label: t('session.title'), to: '/sessions' }, { label: t('wizard.title') }]}
@@ -636,7 +653,7 @@ export function SessionWizard() {
         })}
       </div>
 
-      <div className="lg:grid lg:grid-cols-[minmax(0,1fr)_300px] lg:gap-4 lg:items-start">
+      <div className={stepKey === 'review' ? '' : 'lg:grid lg:grid-cols-[minmax(0,1fr)_320px] lg:gap-6 lg:items-start'}>
         <div className="min-w-0">
           {stepKey === 'compute' && (
             <div className="gs-card space-y-5">
@@ -644,6 +661,30 @@ export function SessionWizard() {
                 <span className="text-xs font-semibold text-muted">{t('wizard.sessionName')}</span>
                 <input className="gs-input w-full mt-1" value={form.name ?? ''} onChange={(e) => patch({ name: e.target.value })} placeholder="my-training" autoComplete="off" />
               </label>
+
+              {clusterList.length > 1 && (
+                <label className="block">
+                  <span className="text-xs font-semibold text-muted">{t('wizard.cluster')}</span>
+                  <Select className="gs-input w-full mt-1" value={form.cluster_id ?? ''} aria-label={t('wizard.cluster')}
+                    onChange={(e) => { setClusterTouched(true); patch({ cluster_id: e.target.value || undefined }); }}>
+                    <option value="">{t('wizard.clusterAuto')}</option>
+                    {clusterList.map((c) => <option key={c.id} value={c.id}>{c.name}</option>)}
+                  </Select>
+                  <span className="text-muted text-2xs mt-1 block">{t('wizard.clusterHint')}</span>
+                </label>
+              )}
+
+              {/* Root inside the container — offered only to users whose resource policy grants it;
+                  everyone else never sees the option. */}
+              {pol?.allow_privileged && (
+                <label className="flex items-start gap-2 text-sm">
+                  <input type="checkbox" className="mt-0.5" checked={!!form.privileged} onChange={(e) => patch({ privileged: e.target.checked })} />
+                  <span>
+                    <span className="font-semibold">{t('wizard.privileged')}</span>
+                    <span className="block text-muted text-xs mt-0.5">{t('wizard.privilegedHint')}</span>
+                  </span>
+                </label>
+              )}
 
               {/* Resource class */}
               <div>
@@ -712,7 +753,7 @@ export function SessionWizard() {
                   {availQuery.isSuccess && gpuModels.length === 0 && (
                     <p className="text-muted text-xs mt-1">{t('wizard.noGpu')}</p>
                   )}
-                  <div className="grid sm:grid-cols-2 gap-3 mt-1" data-model-grid>
+                  <div className="grid sm:grid-cols-2 xl:grid-cols-3 gap-3 mt-1" data-model-grid>
                     {gpuModels.map((o) => {
                       const mAvail = (availQuery.data ?? []).find((a) => a.gpu_model === o.gpu_model);
                       // Same traffic light as the dashboard: share of VRAM still free across the
@@ -845,7 +886,7 @@ export function SessionWizard() {
                 {catalogImages.length === 0 ? (
                   <p className="text-muted text-xs mt-1">{isGpu ? t('wizard.noCompatibleImage') : t('wizard.noImage')}</p>
                 ) : (
-                  <div className="grid sm:grid-cols-2 gap-3 mt-1" data-image-grid>
+                  <div className="grid sm:grid-cols-2 xl:grid-cols-3 gap-3 mt-1" data-image-grid>
                     {catalogImages.map((im) => (
                       <SelTile
                         key={im.id}
@@ -887,10 +928,89 @@ export function SessionWizard() {
             </div>
           )}
 
-          {stepKey === 'review' && (
+          {stepKey === 'volumes' && (
             <div className="gs-card space-y-4">
               <h2 className="font-bold">{t('wizard.volumeMounts')}</h2>
               <VolumePicker mounts={form.volume_mounts ?? []} onChange={(m) => patch({ volume_mounts: m })} />
+            </div>
+          )}
+
+          {stepKey === 'review' && (
+            <div className="gs-card space-y-5" data-review>
+              <div>
+                <h2 className="font-bold">{t('wizard.reviewTitle')}</h2>
+                <p className="text-muted text-xs mt-1">{t('wizard.reviewHint')}</p>
+              </div>
+              {/* Every value here already exists in the form; this is the order read back in full
+                  before money moves. Two columns of label-over-value cells, the price as a footer. */}
+              <dl className="grid sm:grid-cols-2 xl:grid-cols-3 gap-x-8 gap-y-4 text-sm m-0">
+                <ReviewCell label={t('wizard.sumName')} value={form.name || '-'} />
+                <ReviewCell label={t('wizard.resourceClass')} value={isGpu ? t('wizard.gpuTitle') : t('wizard.cpuTitle')} sub={form.privileged ? t('wizard.privileged') : undefined} />
+                {isGpu && (
+                  <ReviewCell label={t('wizard.gpuModel')} value={selectedOffering?.gpu_model || selectedOffering?.name || '-'} />
+                )}
+                {isGpu && (
+                  <ReviewCell
+                    label={t('wizard.gpuTier')}
+                    value={custom ? (isExclusive ? t('wizard.modeExclusiveTitle') : t('wizard.modeFractionalTitle')) : tierName(tier)}
+                    sub={`${t('wizard.vramValue', { value: gbLabel(effVram) })} · ${t('wizard.coresLabel', { percent: effCores })}`}
+                  />
+                )}
+                <ReviewCell
+                  label={t('wizard.computePreset')}
+                  value={customCompute ? t('wizard.customCompute') : (compute?.name ?? '-')}
+                  sub={customCompute
+                    ? `${t('wizard.sumCpu', { value: form.cpu ?? 2 })} · ${t('wizard.sumMem', { value: form.mem_gb ?? 4 })} · ${t('wizard.sumDisk', { value: form.disk_gb ?? 20 })}`
+                    : compute
+                      ? `${t('wizard.sumCpu', { value: compute.cpu ?? 0 })} · ${t('wizard.sumMem', { value: compute.mem_gb ?? 0 })} · ${t('wizard.sumDisk', { value: compute.disk_gb ?? 0 })}`
+                      : undefined}
+                />
+                <ReviewCell label={t('wizard.image')} value={summaryImage?.name ?? '-'} sub={summaryImage?.registry ?? undefined} mono />
+                <div className="sm:col-span-2 xl:col-span-3">
+                  <dt className="text-xs text-muted">{t('wizard.sumVolumes')}</dt>
+                  <dd className="mt-0.5 m-0">
+                    {(form.volume_mounts?.length ?? 0) === 0
+                      ? <span className="text-muted">{t('wizard.sumNoVolumes')}</span>
+                      : (
+                        <ul className="m-0 p-0 list-none space-y-0.5">
+                          {(form.volume_mounts ?? []).map((mnt) => {
+                            const v = summaryVolumes.find((x) => x.id === mnt.volume_id);
+                            return (
+                              <li key={mnt.volume_id} className="min-w-0">
+                                <span className="font-semibold">{v?.name || mnt.volume_id}</span>
+                                <span className="text-muted gs-num ml-1.5">{mnt.mode === 'ro' ? 'RO' : 'RW'} · {mnt.mount_path}</span>
+                              </li>
+                            );
+                          })}
+                        </ul>
+                      )}
+                  </dd>
+                </div>
+              </dl>
+              <div className="border-t border-border pt-4 flex flex-wrap items-end justify-between gap-4">
+                <div>
+                  <div className="text-xs font-semibold text-muted">{t('wizard.estimatedCost')}</div>
+                  <div className="gs-num text-lg font-bold" aria-live="polite">
+                    {previewCost.isPending
+                      ? <span className="text-muted text-sm font-normal">{t('wizard.calculating')}</span>
+                      : previewCost.isError
+                        ? <span className="text-danger text-sm font-normal">{t('wizard.estimateUnavailable')}</span>
+                        : previewCost.data
+                          ? t('wizard.ratePerHour', { amount: formatCredit(previewCost.data.estimated_credit_per_hour) })
+                          : '-'}
+                  </div>
+                  {previewCost.data != null && !previewCost.isError && (
+                    <div className="text-muted text-2xs mt-0.5">{t('wizard.holdOnStart', { amount: formatCredit(previewCost.data.hold_amount) })}</div>
+                  )}
+                  {previewCost.isError && (
+                    <p role="alert" className="text-danger text-2xs mt-0.5">{t('wizard.estimateUnavailableHint')}</p>
+                  )}
+                  {form.resource_class === 'cpu' && (
+                    <p className="text-muted text-2xs mt-1">{t('wizard.cpuBillingNote')}</p>
+                  )}
+                </div>
+                <div className="hidden lg:block shrink-0">{actionButton(false)}</div>
+              </div>
             </div>
           )}
 
@@ -902,9 +1022,11 @@ export function SessionWizard() {
         </div>
 
         {/* Order summary: sticky right column on large screens. */}
-        <aside className="hidden lg:block lg:sticky lg:top-4" data-order-summary>
-          <div className="gs-card p-4">{summaryBody}</div>
-        </aside>
+        {stepKey !== 'review' && (
+          <aside className="hidden lg:block lg:sticky lg:top-4" data-order-summary>
+            <div className="gs-card p-4">{summaryBody}</div>
+          </aside>
+        )}
       </div>
 
       {/* Order bar: the compact sticky equivalent below lg. */}
@@ -926,6 +1048,16 @@ export function SessionWizard() {
         </div>
         {stepKey !== 'review' && <DisabledReason reasons={stepReasons} />}
       </div>
+    </div>
+  );
+}
+
+function ReviewCell({ label, value, sub, mono }: { label: string; value: ReactNode; sub?: string; mono?: boolean }) {
+  return (
+    <div className="min-w-0">
+      <dt className="text-xs text-muted">{label}</dt>
+      <dd className="font-semibold mt-0.5 m-0 break-words">{value}</dd>
+      {sub && <dd className={`text-muted text-xs mt-0.5 m-0 break-all ${mono ? 'font-mono' : 'gs-num'}`}>{sub}</dd>}
     </div>
   );
 }

@@ -191,7 +191,10 @@ async def session_usage_payload(session_id: str) -> dict[str, float | None]:
     """Instant measured usage of one session's pod. The caller owns authorisation."""
     sel = _session_pod_selector(session_id)
     queries = {
-        "cpu_cores": f'sum(rate(container_cpu_usage_seconds_total{{{sel},container="session"}}[1m]))',
+        # irate = the last two samples: with a 5 s scrape the readout follows a load change within
+        # about 10 s, where rate[1m] took a minute to converge. The 1 m window only bounds the
+        # lookback, so a slow scrape leaves no hole in the readout.
+        "cpu_cores": f'sum(irate(container_cpu_usage_seconds_total{{{sel},container="session"}}[1m]))',
         "mem_bytes": f'sum(container_memory_working_set_bytes{{{sel},container="session"}})',
         "gpu_core_pct": f'sum(hami_container_device_utilization_ratio{{{sel}}})',
         "vram_bytes": f'sum(hami_container_device_memory_bytes{{{sel}}})',
@@ -206,25 +209,45 @@ async def session_usage_payload(session_id: str) -> dict[str, float | None]:
     return dict(zip(queries.keys(), vals, strict=True))
 
 
-async def session_usage_series(session_id: str, range_: str) -> dict[str, Any]:
-    """The four usage metrics over a range. The caller owns authorisation."""
-    if range_ not in _RANGES:
+def session_window(sess: Any) -> tuple[int, int] | None:
+    """A finished session's own window (started_at → terminated_at). Prometheus keeps the
+    series for 30 days after the pod is gone, so a terminated session's history is still there;
+    it just has to be asked for by its own dates, not "the last 15 minutes"."""
+    if getattr(sess, "terminated_at", None) is None or getattr(sess, "started_at", None) is None:
+        return None
+    start, end = int(sess.started_at.timestamp()), int(sess.terminated_at.timestamp())
+    return (start, max(end, start + 60))
+
+
+async def session_usage_series(
+    session_id: str, range_: str, *, window: tuple[int, int] | None = None,
+) -> dict[str, Any]:
+    """The four usage metrics over a range, or over ``window`` (a finished session's whole run).
+    The caller owns authorisation."""
+    if window is None and range_ not in _RANGES:
         raise _BadPanel("unknown range", {"range": range_})
     sel = _session_pod_selector(session_id)
     metrics = {
-        "cpu_cores": (f'sum(rate(container_cpu_usage_seconds_total{{{sel},container="session"}}[1m]))', "cores"),
+        "cpu_cores": (f'sum(irate(container_cpu_usage_seconds_total{{{sel},container="session"}}[1m]))', "cores"),
         "mem_mib": (f'sum(container_memory_working_set_bytes{{{sel},container="session"}}) / 1048576', "mib"),
         "vram_mib": (f'sum(hami_container_device_memory_bytes{{{sel}}}) / 1048576', "mib"),
         "gpu_core_pct": (f'sum(hami_container_device_utilization_ratio{{{sel}}})', "percent"),
     }
-    span, step = _RANGES[range_]
     import time
 
-    now = int(time.time())
+    if window is not None:
+        start, end = window
+        # ~240 points across the run, never finer than the scrape cadence.
+        step = max(15, (end - start) // 240)
+        range_ = "session"
+    else:
+        span, step = _RANGES[range_]
+        end = int(time.time())
+        start = end - span
 
     async def one(q: str) -> list[list[float | None]]:
         data = await _prom("/api/v1/query_range", {
-            "query": q, "start": now - span, "end": now, "step": step,
+            "query": q, "start": start, "end": end, "step": step,
         })
         rows = data.get("result", [])
         if not rows:
@@ -236,7 +259,7 @@ async def session_usage_series(session_id: str, range_: str) -> dict[str, Any]:
 
     series = await asyncio.gather(*(one(q) for q, _ in metrics.values()))
     return {
-        "range": range_, "step": step,
+        "range": range_, "step": step, "start": start, "end": end,
         "metrics": {
             k: {"unit": unit, "points": pts}
             for (k, (_, unit)), pts in zip(metrics.items(), series, strict=True)
@@ -270,12 +293,13 @@ async def session_usage_timeseries(
     principal: Principal = Depends(get_current_principal),
     db: AsyncSession = Depends(get_db),
 ):
-    """The four per-session usage metrics over a range, for the monitor detail sparklines."""
+    """The four per-session usage metrics over a range, for the monitor detail sparklines. A
+    finished session gets its whole run instead of a trailing window."""
     principal.require(action="monitoring.read")
     sess = await db.get(SessionRow, session_id)
     if sess is None or sess.deleted_at is not None:
         raise NotFound("session", {"session_id": session_id})
-    return await session_usage_series(session_id, range_)
+    return await session_usage_series(session_id, range_, window=session_window(sess))
 
 
 @router.get("/monitoring/timeseries")
@@ -368,3 +392,30 @@ async def monitoring_gpu_inventory(
             for d, hostname in rows
         ]
     }
+
+
+async def session_usage_summary(session_id: str, start: int, end: int) -> dict[str, Any]:
+    """Average and peak of the four metrics over [start, end] — what the session row keeps after
+    Prometheus has forgotten the series (30-day retention)."""
+    sel = _session_pod_selector(session_id)
+    span = max(60, end - start)
+    inner = {
+        "cpu_cores": f'sum(rate(container_cpu_usage_seconds_total{{{sel},container="session"}}[30s]))',
+        "mem_mib": f'sum(container_memory_working_set_bytes{{{sel},container="session"}}) / 1048576',
+        "vram_mib": f'sum(hami_container_device_memory_bytes{{{sel}}}) / 1048576',
+        "gpu_core_pct": f'sum(hami_container_device_utilization_ratio{{{sel}}})',
+    }
+
+    async def one(expr: str, fn: str) -> float | None:
+        data = await _prom("/api/v1/query", {"query": f"{fn}(({expr})[{span}s:15s])", "time": end})
+        rows = data.get("result", [])
+        if not rows:
+            return None
+        v = float(rows[0]["value"][1])
+        return None if v != v else round(v, 3)   # NaN guard
+
+    vals = await asyncio.gather(*(one(e, fn) for e in inner.values() for fn in ("avg_over_time", "max_over_time")))
+    out: dict[str, Any] = {"start": start, "end": end}
+    for i, k in enumerate(inner):
+        out[k] = {"avg": vals[2 * i], "max": vals[2 * i + 1]}
+    return out

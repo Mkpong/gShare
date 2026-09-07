@@ -134,12 +134,11 @@ const AUDIT_ACTIONS: Record<string, string[]> = {
   credit: ['credit.topup', 'credit.adjust', 'credit.transfer', 'credit.allocate', 'credit.set_monthly_grant', 'credit.bulk_allocate', 'credit.bulk_monthly_grant', 'credit.allocation_request', 'credit.allocation_approve', 'credit.allocation_reject', 'credit.allocation_escalate', 'credit.topup_request.approve', 'credit.topup_request.reject', 'credit.refill_schedule.set'],
   budget: ['budget.create', 'budget.update', 'budget.delete'],
   session: ['session.force_terminate', 'session.pause', 'pod.delete', 'queue.cancel', 'queue.priority.set'],
-  infra: ['node.register', 'node.cordon', 'node.drain', 'node.delete', 'node.set_pool', 'pool.create', 'pool.update', 'pool.delete', 'pool.grant', 'pool.revoke', 'gpu_device.set_mode', 'gpu_pool.set_targets', 'cluster.register', 'cluster.update', 'cluster.deregister', 'cluster.connection_test'],
+  infra: ['node.register', 'node.cordon', 'node.drain', 'node.delete', 'node.set_pool', 'pool.create', 'pool.update', 'pool.delete', 'pool.grant', 'pool.revoke', 'gpu_device.set_mode', 'gpu_device.set_alias', 'gpu_pool.set_targets', 'cluster.register', 'cluster.update', 'cluster.deregister', 'cluster.connection_test'],
   catalog: ['policy.create', 'policy.update', 'policy.delete', 'policy.request', 'policy.request.approve', 'policy.request.reject', 'image.create', 'image.update', 'image.delete', 'image.import', 'image.build.create', 'image.build.finish', 'session.create', 'session.start', 'session.stop', 'session.restart', 'session.terminate', 'offering.create', 'offering.update', 'offering.delete', 'preset.create', 'preset.update', 'preset.delete'],
-  storage: ['storage.volume.delete', 'storage.quota.approve', 'storage.quota.reject', 'storage.snapshot.restore', 'storage.snapshot.delete'],
-  boards: ['notice.create', 'notice.update', 'notice.delete', 'inquiry.create', 'inquiry.reply'],
+  storage: ['storage.volume.delete', 'storage.volume.force_delete', 'storage.volume.lock', 'storage.quota.approve', 'storage.quota.reject', 'storage.snapshot.restore', 'storage.snapshot.delete'],
   auth: ['auth.login'],
-  system: ['webhook.create', 'webhook.delete', 'audit.retention', 'audit.export', 'system.branding.set'],
+  system: ['webhook.create', 'webhook.delete', 'audit.retention', 'audit.export', 'system.branding.set', 'system.placement.set'],
 };
 
 // Quick ranges: most audit questions are "what just happened", not a calendar exercise.
@@ -162,12 +161,14 @@ export function AdminAudit() {
   const actor = q('actor');
   const action = q('action');
   const target = q('target');
+  const result = q('result');
   const from = q('from');
   const to = q('to');
   const period = q('period');
   const page = Number(params.get('page') ?? '1') || 1;
   const setActor = (v: string) => setQ({ actor: v });
   const setAction = (v: string) => setQ({ action: v });
+  const setResult = (v: string) => setQ({ result: v });
   const setTarget = (v: string) => setQ({ target: v });
   const setFrom = (v: string) => setQ({ from: v });
   const setTo = (v: string) => setQ({ to: v });
@@ -191,6 +192,7 @@ export function AdminAudit() {
     () => ({
       actor_q: actor.trim() || undefined,
       action: action.trim() || undefined,
+      result: result || undefined,
       target: target.trim() || undefined,
       // A preset is live: its window is recomputed when the query refires. A custom range is
       // date-only, and the end date is inclusive (through 23:59 of that day).
@@ -204,7 +206,7 @@ export function AdminAudit() {
       size: PAGE_SIZE,
       sort: '-at',
     }),
-    [actor, action, target, from, to, period, page],
+    [actor, action, result, target, from, to, period, page],
   );
 
   const { data, isLoading, isError, error, isFetching, refetch } = useAuditLogs(filter);
@@ -329,6 +331,14 @@ export function AdminAudit() {
           </Select>
         </label>
         <label className="text-xs font-semibold">
+          {t('admin.audit.resultFilterLabel')}
+          <Select className="gs-input mt-1 w-32 block" value={result} onChange={(e) => setResult(e.target.value)}>
+            <option value="">{t('admin.audit.allResults')}</option>
+            <option value="ok">{t('admin.audit.resultOk')}</option>
+            <option value="failed">{t('admin.audit.resultFailed')}</option>
+          </Select>
+        </label>
+        <label className="text-xs font-semibold">
           <span className="inline-flex items-center gap-1">{t('admin.audit.target')}<HelpTip text={t('admin.audit.targetHint')} /></span>
           <input className="gs-input mt-1 w-52 block font-mono" value={targetText} onChange={(e) => { const v = e.target.value; setTargetText(v); applyFilter(() => setTarget(v)); }} placeholder={t('admin.audit.targetPlaceholder')} autoComplete="off" />
         </label>
@@ -374,7 +384,7 @@ export function AdminAudit() {
         <button
           type="button"
           className="gs-btn"
-          onClick={() => applyFilter(() => { setQ({ actor: '', action: '', target: '', from: '', to: '', period: '' }); setCustomPeriod(false); })}
+          onClick={() => applyFilter(() => { setQ({ actor: '', action: '', target: '', result: '', from: '', to: '', period: '' }); setCustomPeriod(false); })}
           disabled={!actor && !action && !target && !from && !to && !period}
         >
           {t('table.clearFilters')}
@@ -396,8 +406,8 @@ export function AdminAudit() {
         ) : isLoading ? (
           <TableSkeleton rows={6} columns={3} />
         ) : rows.length === 0 ? (
-          (actor || action || target || from || to || period)
-            ? <NoResults query={actor || action || target} onClear={() => applyFilter(() => { setQ({ actor: '', action: '', target: '', from: '', to: '', period: '' }); setCustomPeriod(false); })} />
+          (actor || action || target || result || from || to || period)
+            ? <NoResults query={actor || action || target} onClear={() => applyFilter(() => { setQ({ actor: '', action: '', target: '', result: '', from: '', to: '', period: '' }); setCustomPeriod(false); })} />
             : <EmptyState icon={<ClipboardText size={26} />} title={t('admin.audit.empty')} description={t('admin.audit.emptyDescription')} />
         ) : (
           <ul className="divide-y divide-border -mx-1">

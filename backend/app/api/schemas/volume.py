@@ -7,7 +7,7 @@ from app.api.schemas.common import ORMModel
 
 
 class VolumeCreate(BaseModel):
-    scope: str = Field(pattern="^(user|group)$")
+    scope: str = Field(pattern="^(user|group|global)$")   # global: every signed-in user may read it
     scope_id: str
     type: str = Field(pattern="^(home|group|dataset|scratch)$")
     name: str = Field(min_length=1, max_length=80)   # user-chosen volume name
@@ -24,6 +24,7 @@ class VolumeRead(ORMModel):
     access_mode: str
     quota_gb: int
     used_gb: int
+    mount_locked: bool = False
     role: str | None = None  # the caller's role on this volume: owner, rw, or ro; None when they have none
     owner_id: str | None = None
     owner_name: str | None = None  # display name of the creator, for shared/admin listings
@@ -34,11 +35,12 @@ class VolumeRead(ORMModel):
 
 
 class VolumePatch(BaseModel):
-    """Owner-side edits. The quota is self-service in both directions (bounded below by usage and
-    above by the scope's storage policy on the server)."""
+    """Owner-side edits. The quota only grows (bounded above by the scope's storage policy on the
+    server); `mount_locked` blocks new mounts so the volume can be drained for deletion."""
     model_config = ConfigDict(extra="forbid")
     quota_gb: int | None = Field(default=None, ge=1)
     access_mode: str | None = Field(default=None, pattern="^(RWO|RWX|ROX)$")
+    mount_locked: bool | None = None
 
 
 class PermissionBody(BaseModel):

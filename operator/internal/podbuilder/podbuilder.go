@@ -97,8 +97,8 @@ func (b *Builder) BuildPod(s *gsharev1.GShareSession) *corev1.Pod {
 	limits := corev1.ResourceList{}
 	spec := corev1.PodSpec{
 		SecurityContext: &corev1.PodSecurityContext{
-			RunAsNonRoot:   ptr.To(true),
-			RunAsUser:      ptr.To[int64](1000),
+			RunAsNonRoot:   ptr.To(!s.Spec.Privileged),
+			RunAsUser:      ptr.To[int64](sessionUID(s)),
 			FSGroup:        ptr.To[int64](1000),
 			SeccompProfile: &corev1.SeccompProfile{Type: corev1.SeccompProfileTypeRuntimeDefault},
 		},
@@ -220,10 +220,8 @@ func (b *Builder) BuildPod(s *gsharev1.GShareSession) *corev1.Pod {
 		ImagePullPolicy: pullPolicy,
 		// PSA restricted: no privilege escalation + drop all caps. seccomp/runAsNonRoot are on the pod
 		// securityContext. GPU is accessed via the nvidia runtime/device-plugin (no caps needed).
-		SecurityContext: &corev1.SecurityContext{
-			AllowPrivilegeEscalation: ptr.To(false),
-			Capabilities:             &corev1.Capabilities{Drop: []corev1.Capability{"ALL"}},
-		},
+		// A privileged session relaxes this to what PSA baseline still admits (containerSecurity).
+		SecurityContext: containerSecurity(s),
 		Ports: []corev1.ContainerPort{
 			{Name: "vscode", ContainerPort: portVSCode},
 			{Name: "jupyter", ContainerPort: portJupyter},
@@ -347,6 +345,11 @@ func (b *Builder) mounts(s *gsharev1.GShareSession) []corev1.VolumeMount {
 			ReadOnly:  v.ReadOnly || v.Mode == "ReadOnlyMany",
 		})
 	}
+	if s.Spec.Privileged {
+		// Jupyter refuses to run as root unless configured to; /etc/jupyter is one of its system
+		// config paths, so the chart's ConfigMap lands there and the image stays untouched.
+		out = append(out, corev1.VolumeMount{Name: "gshare-privileged-jupyter", MountPath: "/etc/jupyter", ReadOnly: true})
+	}
 	return out
 }
 
@@ -363,6 +366,14 @@ func (b *Builder) volumes(s *gsharev1.GShareSession) []corev1.Volume {
 					ReadOnly:  v.ReadOnly || v.Mode == "ReadOnlyMany",
 				},
 			},
+		})
+	}
+	if s.Spec.Privileged {
+		out = append(out, corev1.Volume{
+			Name: "gshare-privileged-jupyter",
+			VolumeSource: corev1.VolumeSource{ConfigMap: &corev1.ConfigMapVolumeSource{
+				LocalObjectReference: corev1.LocalObjectReference{Name: "gshare-session-privileged"},
+			}},
 		})
 	}
 	return out
@@ -513,3 +524,36 @@ func (b *Builder) BuildVSCodeIngress(s *gsharev1.GShareSession) *netv1.Ingress {
 }
 
 func intStr(p int) intstr.IntOrString { return intstr.FromInt32(int32(p)) }
+
+// sessionUID is the uid the session container runs as: 1000 (coder) normally, root for a
+// policy-granted privileged session.
+func sessionUID(s *gsharev1.GShareSession) int64 {
+	if s.Spec.Privileged {
+		return 0
+	}
+	return 1000
+}
+
+// containerSecurity is the session container's security context. The default is the PSA
+// restricted shape. A privileged session (a per-user policy grant, never a default) gets what a
+// root shell needs to install packages — privilege escalation and the baseline capability set —
+// and nothing beyond what PSA baseline admits: no host namespaces, no privileged mode, no extra
+// mounts. The sessions namespace enforces baseline for exactly this case.
+func containerSecurity(s *gsharev1.GShareSession) *corev1.SecurityContext {
+	if !s.Spec.Privileged {
+		return &corev1.SecurityContext{
+			AllowPrivilegeEscalation: ptr.To(false),
+			Capabilities:             &corev1.Capabilities{Drop: []corev1.Capability{"ALL"}},
+		}
+	}
+	return &corev1.SecurityContext{
+		AllowPrivilegeEscalation: ptr.To(true),
+		Capabilities: &corev1.Capabilities{
+			Drop: []corev1.Capability{"ALL"},
+			Add: []corev1.Capability{
+				"CHOWN", "DAC_OVERRIDE", "FOWNER", "FSETID", "KILL",
+				"SETGID", "SETUID", "SETPCAP", "NET_BIND_SERVICE",
+			},
+		},
+	}
+}

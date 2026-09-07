@@ -67,6 +67,7 @@ _CRD_KEY_MAP = {
     "lossless_pause": "losslessPause",
     "pause_mode": "pauseMode",
     "preemptible": "preemptible",
+    "privileged": "privileged",
     "borrowed_gpu_uuid": "borrowedGpuUuid",
     "borrowed_node": "borrowedNode",
     "pinned_gpu_uuid": "pinnedGpuUuid",
@@ -234,6 +235,9 @@ class GShareSessionCRD:
             spec["pause_mode"] = "yield"
         if getattr(sess, "preemptible", False):
             spec["preemptible"] = True
+        # Policy-granted root session: the operator relaxes the pod's security context.
+        if getattr(sess, "privileged", False):
+            spec["privileged"] = True
         # Per-card pools: pin the pod to the exact card the ledger reserved (Allocation.gpu_uuid),
         # so hami-scheduler binds precisely that card and reservation and physical binding cannot
         # diverge. Emitted only when the feature flag is on and a reservation exists (a queued

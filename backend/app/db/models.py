@@ -400,6 +400,10 @@ class GpuDevice(Base, TimestampMixin):
     cluster_id: Mapped[str] = mapped_column(ForeignKey("cluster.id"), index=True)
     model: Mapped[str] = mapped_column(String)
     gpu_uuid: Mapped[str] = mapped_column(String, unique=True)
+    # Operator-chosen name for the physical card ("lab-A-01"). The console otherwise numbers
+    # cards by list position, which changes whenever a card joins or leaves. Owned by the ledger:
+    # inventory reports never touch it. Unique within a cluster; NULL means "no alias".
+    alias: Mapped[str | None] = mapped_column(String(32), default=None)
     total_mem_mb: Mapped[int] = mapped_column(Integer)
     used_mem_mb: Mapped[int] = mapped_column(Integer, default=0)
     total_cores: Mapped[int] = mapped_column(Integer, default=100)
@@ -484,6 +488,9 @@ class Session(Base, TimestampMixin, SoftDeleteMixin):
     # still holds the card, and start skips readmission — the operator just toggles VRAM back.
     # (See docs/paper/manuscript, §Design.)
     pause_mode: Mapped[str] = mapped_column(String, default="cold", server_default=text("'cold'"))
+    # Privileged session: the container runs as root with a relaxed security context (policy-gated
+    # at admission via limits.allow_privileged). Passed through as spec.privileged.
+    privileged: Mapped[bool] = mapped_column(Boolean, default=False, server_default=text("false"))
     # Spot eligibility: this session may borrow a yielded card, and is reclaimed when the resident
     # comes back.
     preemptible: Mapped[bool] = mapped_column(Boolean, default=False, server_default=text("false"))
@@ -506,6 +513,9 @@ class Session(Base, TimestampMixin, SoftDeleteMixin):
     pod_ref: Mapped[str | None] = mapped_column(String, default=None)
     started_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), default=None)
     terminated_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), default=None)
+    # Average and peak CPU/MEM/VRAM/GPU-core over the run, written at termination: the graph's
+    # source keeps 30 days, this keeps the answer for as long as the row exists.
+    usage_summary: Mapped[dict | None] = mapped_column(JSONB, nullable=True, default=None)
     # Backs the per-user caps and queue-fairness counts (always filtered by owner + status).
     __table_args__ = (Index("ix_sessions_owner_status", "owner_user_id", "status"),)
 
@@ -571,6 +581,9 @@ class StorageVolume(Base, TimestampMixin, SoftDeleteMixin):
     owner_id: Mapped[str | None] = mapped_column(String, default=None)
     quota_gb: Mapped[int] = mapped_column(Integer, default=0)
     used_gb: Mapped[int] = mapped_column(Integer, default=0)
+    # Owner's lock: no NEW session may mount the volume while set (existing mounts keep running),
+    # so a shared volume can be drained and deleted without a race against fresh mounts.
+    mount_locked: Mapped[bool] = mapped_column(Boolean, default=False, server_default=text("false"))
     # Partial unique index including the name, excluding soft-deleted rows, so one scope can hold
     # several volumes as long as their names differ.
     __table_args__ = (
@@ -684,39 +697,6 @@ class WebhookDelivery(Base, TimestampMixin):
     next_attempt_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), default=None, index=True)
     status: Mapped[str] = mapped_column(String, default="pending")       # pending|delivered|failed
     last_error: Mapped[str | None] = mapped_column(String, default=None)
-
-
-class Notice(Base, TimestampMixin, SoftDeleteMixin):
-    """An announcement. scope=global (super_admin, everyone sees it) or scope=group
-    (group_admin; visible to that group's members and super_admin only)."""
-    __tablename__ = "notice"
-    id: Mapped[str] = mapped_column(String, primary_key=True)            # ntc_ULID
-    scope: Mapped[str] = mapped_column(String, default="global")         # global|group
-    group_id: Mapped[str | None] = mapped_column(ForeignKey("group.id"), index=True, default=None)
-    title: Mapped[str] = mapped_column(String)
-    body: Mapped[str] = mapped_column(Text, default="")
-    author_id: Mapped[str] = mapped_column(ForeignKey("user.id"), index=True)
-    pinned: Mapped[bool] = mapped_column(Boolean, default=False, server_default=text("false"))
-
-
-class Inquiry(Base, TimestampMixin, SoftDeleteMixin):
-    """A user question to the operators. Visible to its author, super_admin, and the
-    group_admins of the author's group (captured at creation)."""
-    __tablename__ = "inquiry"
-    id: Mapped[str] = mapped_column(String, primary_key=True)            # inq_ULID
-    author_id: Mapped[str] = mapped_column(ForeignKey("user.id"), index=True)
-    group_id: Mapped[str | None] = mapped_column(ForeignKey("group.id"), index=True, default=None)
-    title: Mapped[str] = mapped_column(String)
-    body: Mapped[str] = mapped_column(Text, default="")
-    status: Mapped[str] = mapped_column(String, default="open", index=True)  # open|answered|closed
-
-
-class InquiryReply(Base, TimestampMixin):
-    __tablename__ = "inquiry_reply"
-    id: Mapped[str] = mapped_column(String, primary_key=True)            # irp_ULID
-    inquiry_id: Mapped[str] = mapped_column(ForeignKey("inquiry.id"), index=True)
-    author_id: Mapped[str] = mapped_column(ForeignKey("user.id"), index=True)
-    body: Mapped[str] = mapped_column(Text)
 
 
 class SystemSetting(Base, TimestampMixin):

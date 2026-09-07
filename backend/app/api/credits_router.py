@@ -33,7 +33,13 @@ from app.api.schemas.credit import (
 )
 from app.auth.rbac import Principal
 from app.core import ids
-from app.core.errors import DomainError, Forbidden, InsufficientCredit, NotFound
+from app.core.errors import (
+    DomainError,
+    Forbidden,
+    InsufficientCredit,
+    NotFound,
+    TopupRequestOrgOnly,
+)
 
 
 class _Validation(DomainError):
@@ -950,14 +956,9 @@ async def create_allocation_request(
             raise NotFound("project wallet not found")
         fscope, fid = "org", prj.org_id
     else:  # org
-        if not body.org_id:
-            raise _Validation("org_id required")
-        if not su and body.org_id not in principal.org_admin_orgs:
-            raise Forbidden("not org_admin of the organization")
-        target = await _wallet_of(db, "org", body.org_id)
-        if target is None:
-            raise NotFound("org wallet not found")
-        fscope, fid = "system", None
+        # The organization's ask to the system tier is a top-up (new credits are issued), not an
+        # allocation from a parent wallet — see create_topup_request.
+        raise _Validation("an organization asks the system tier with a top-up request")
 
     r = CreditAllocationRequest(
         id=ids.new("allocrequest"), requester_id=principal.user_id,
@@ -1475,11 +1476,17 @@ async def create_topup_request(
     wallet = await _get_wallet(db, target_id)
     if not _can_read_wallet(principal, wallet):
         raise Forbidden("not permitted: wallet.read")
-    # A group wallet's top-up is the group administrator asking the system tier for funding —
-    # a plain member can read the wallet but must not raise requests in the group's name.
-    if wallet.owner_type == "group" and principal.global_role != "super_admin":
-        if principal.memberships.get(wallet.owner_id) != "group_admin":
-            raise Forbidden("only the group administrator may request a top-up for the group wallet")
+    # Requests climb one level at a time: user → group → organization → system. Only the top hop
+    # mints new credits, so a top-up request is the ORGANIZATION administrator's ask on the
+    # organization wallet; users and groups raise allocation requests instead.
+    if principal.global_role != "super_admin":
+        if wallet.owner_type != "org":
+            raise TopupRequestOrgOnly(
+                "top-up requests are raised on an organization wallet by its administrator",
+                {"wallet_owner_type": wallet.owner_type},
+            )
+        if wallet.owner_id not in principal.org_admin_orgs:
+            raise Forbidden("only the organization administrator may request a top-up")
     req = TopupRequest(
         id=ids.new("topup"),
         wallet_id=wallet.id,
@@ -1551,12 +1558,14 @@ async def list_topup_requests(
                              .where(CreditWallet.id.in_(wids)))).all()}
     o_uids = {oid for ot, oid in owners.values() if ot == "user"}
     o_gids = {oid for ot, oid in owners.values() if ot == "group"}
+    o_oids = {oid for ot, oid in owners.values() if ot == "org"}
     ou = {u: n for u, n in (await db.execute(select(User.id, User.name).where(User.id.in_(o_uids)))).all()} if o_uids else {}
     og = {g: n for g, n in (await db.execute(select(Project.id, Project.name).where(Project.id.in_(o_gids)))).all()} if o_gids else {}
+    oo = {o: n for o, n in (await db.execute(select(Organization.id, Organization.name).where(Organization.id.in_(o_oids)))).all()} if o_oids else {}
 
     def _owner(r: TopupRequest) -> tuple[str | None, str | None]:
         ot, oid = owners.get(r.wallet_id, (None, None))
-        name = ou.get(oid) if ot == "user" else og.get(oid) if ot == "group" else None
+        name = {"user": ou, "group": og, "org": oo}.get(ot or "", {}).get(oid)
         return ot, name
 
     return {

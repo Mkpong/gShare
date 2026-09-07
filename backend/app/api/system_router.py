@@ -15,6 +15,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.api.deps import get_current_principal
 from app.auth.rbac import Principal
+from app.core.config import settings
 from app.core.errors import DomainError
 from app.db.base import get_db
 from app.db.models import SystemSetting
@@ -27,6 +28,7 @@ KEY_SERVICE_NAME = "branding.service_name"
 KEY_LOGO = "branding.logo"
 KEY_SIGNUP_MODE = "signup.mode"
 KEY_SIGNUP_DOMAINS = "signup.allowed_domains"
+KEY_GPU_PACKING = "placement.gpu_packing"
 
 DEFAULT_SERVICE_NAME = "gShare"
 
@@ -56,7 +58,11 @@ class BrandingUpdate(BaseModel):
     clear_logo: bool = False
 
 
-_ALL_KEYS = (KEY_SERVICE_NAME, KEY_LOGO, KEY_SIGNUP_MODE, KEY_SIGNUP_DOMAINS)
+_ALL_KEYS = (KEY_SERVICE_NAME, KEY_LOGO, KEY_SIGNUP_MODE, KEY_SIGNUP_DOMAINS, KEY_GPU_PACKING)
+
+# How a fractional slice picks among the cards that fit. Previously deployment-time only
+# (GSHARE_GPU_PACKING in the chart's ConfigMap), which meant a redeploy to change it.
+GPU_PACKINGS = ("binpack", "spread")
 
 
 async def _read(db: AsyncSession) -> dict[str, str]:
@@ -194,3 +200,48 @@ async def set_signup_policy(
         )
     await db.commit()
     return SignupPolicyOut(mode=mode, allowed_domains=domains)
+
+
+class PlacementOut(BaseModel):
+    gpu_packing: str          # binpack | spread
+
+
+class PlacementUpdate(BaseModel):
+    gpu_packing: str = Field(pattern="^(binpack|spread)$")
+
+
+async def gpu_packing(db: AsyncSession) -> str:
+    """The effective placement policy: the stored setting, else the deployment default.
+
+    Read on every reservation, so it follows a change immediately — no redeploy, no restart.
+    """
+    cur = await _read(db)
+    value = cur.get(KEY_GPU_PACKING) or getattr(settings, "GPU_PACKING", "binpack")
+    return value if value in GPU_PACKINGS else "binpack"
+
+
+@router.get("/placement", response_model=PlacementOut)
+async def get_placement(
+    principal: Principal = Depends(get_current_principal),
+    db: AsyncSession = Depends(get_db),
+) -> PlacementOut:
+    """The fractional-slice placement policy. Readable by anyone who may see the admin console."""
+    principal.require(action="monitoring.read")
+    return PlacementOut(gpu_packing=await gpu_packing(db))
+
+
+@router.put("/placement", response_model=PlacementOut)
+async def set_placement(
+    body: PlacementUpdate,
+    principal: Principal = Depends(get_current_principal),
+    db: AsyncSession = Depends(get_db),
+) -> PlacementOut:
+    """Set the placement policy. Applies to the next reservation; running sessions do not move."""
+    principal.require(action="system.branding.set")
+    await _write(db, KEY_GPU_PACKING, body.gpu_packing)
+    await AuditService(db).record(
+        actor=principal.user_id, action="system.placement.set", target="system",
+        result="ok", gpu_packing=body.gpu_packing,
+    )
+    await db.commit()
+    return PlacementOut(gpu_packing=body.gpu_packing)

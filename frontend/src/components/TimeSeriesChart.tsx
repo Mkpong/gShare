@@ -19,6 +19,26 @@ export function colorForIndex(i: number): string {
   return CHART_COLORS[i % CHART_COLORS.length];
 }
 
+/**
+ * Axis labels: the precision follows the tick spacing, so a memory line that moves within one
+ * mebibyte does not print the same rounded figure on every gridline ("122 MiB" × 4).
+ */
+export function formatAxis(vals: number[], unit: string): string[] {
+  const step = vals.length > 1 ? Math.abs(vals[1] - vals[0]) : 1;
+  const dec = (s: number) => (s >= 1 ? 0 : s >= 0.1 ? 1 : 2);
+  return vals.map((v) => {
+    switch (unit) {
+      case 'mib':
+        return v >= 1024 || (vals[vals.length - 1] ?? 0) >= 1024
+          ? `${(v / 1024).toFixed(dec(step / 1024) || 1)} GiB`
+          : `${v.toFixed(dec(step))} MiB`;
+      case 'cores': return v.toFixed(Math.max(1, dec(step)));
+      case 'percent': return `${v.toFixed(dec(step))}%`;
+      default: return formatValue(v, unit);
+    }
+  });
+}
+
 export function formatValue(v: number | null | undefined, unit: string): string {
   if (v == null || Number.isNaN(v)) return '-';
   switch (unit) {
@@ -174,7 +194,7 @@ export function TimeSeriesChart({ series, unit, height = 180, seriesLabel, color
           ticks: { stroke: gridColor },
           // Wide enough for the longest label a unit produces ("589 KiB/s", "11.7 GiB").
           size: unit === 'bytes_per_sec' || unit === 'mib' ? 78 : unit === 'mhz' ? 74 : 62,
-          values: (_u, vals) => vals.map((v) => formatValue(v, unit)),
+          values: (_u, vals) => formatAxis(vals, unit),
         },
       ],
       series: [

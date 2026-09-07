@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
+import { usePlacement, useSetPlacement, type GpuPacking } from '@/api/hooks/useSystem';
 import { useSearchParams } from 'react-router-dom';
 import {
   useBranding, useSetBranding, useSignupPolicy, useSetSignupPolicy,
@@ -15,7 +16,7 @@ import { asApiError, humanizeError } from '@/lib/errors';
 
 // Instance-wide settings. One section today (branding); `SECTIONS` is the seam a later section
 // slots into — add a key here and a panel below, and the tab row follows.
-const SECTIONS = ['branding', 'signup'] as const;
+const SECTIONS = ['branding', 'signup', 'placement'] as const;
 type Section = (typeof SECTIONS)[number];
 
 const LOGO_TYPES = ['image/png', 'image/jpeg', 'image/webp', 'image/svg+xml'];
@@ -44,6 +45,7 @@ export function AdminSystem() {
       />
       {active === 'branding' && <BrandingSection />}
       {active === 'signup' && <SignupSection />}
+      {active === 'placement' && <PlacementSection />}
     </div>
   );
 }
@@ -239,7 +241,7 @@ function SignupSection() {
             <input
               {...ids}
               className="gs-input w-full gs-num"
-              placeholder="dankook.ac.kr"
+              placeholder="example.ac.kr"
               value={domains}
               onChange={(e) => setDomains(e.target.value)}
             />
@@ -254,6 +256,69 @@ function SignupSection() {
           {t('common.save')}
         </button>
         <span className="gs-sub">{t('admin.system.signup.applyNote')}</span>
+      </div>
+    </section>
+  );
+}
+
+// Where a fractional slice goes when more than one card fits. It used to live in the chart's
+// ConfigMap, so changing it meant a redeploy; it is a running-fleet decision, so it belongs here.
+function PlacementSection() {
+  const { t } = useTranslation();
+  const pushToast = useUiStore((s) => s.pushToast);
+  const current = usePlacement().data;
+  const save = useSetPlacement();
+  const [packing, setPacking] = useState<GpuPacking>('binpack');
+
+  useEffect(() => { if (current) setPacking(current.gpu_packing); }, [current]);
+  const dirty = !!current && packing !== current.gpu_packing;
+
+  return (
+    <section className="space-y-6">
+      <div>
+        <h2 className="gs-h2">{t('admin.system.placement.title')}</h2>
+        <p className="gs-sub mt-1">{t('admin.system.placement.subtitle')}</p>
+      </div>
+
+      <fieldset className="space-y-2">
+        <legend className="text-xs font-semibold mb-2">{t('admin.system.placement.policy')}</legend>
+        {(['binpack', 'spread'] as const).map((k) => (
+          <label
+            key={k}
+            className={`flex items-start gap-3 rounded-card border p-3 cursor-pointer transition-colors duration-150 ${
+              packing === k ? 'border-primary bg-primary-soft' : 'border-border hover:border-border-strong'
+            }`}
+          >
+            <input
+              type="radio"
+              name="gs-packing"
+              className="mt-0.5"
+              checked={packing === k}
+              onChange={() => setPacking(k)}
+            />
+            <span className="min-w-0">
+              <span className="block font-semibold text-sm">{t(`admin.system.placement.${k}`)}</span>
+              <span className="block text-muted text-xs mt-0.5">{t(`admin.system.placement.${k}Hint`)}</span>
+            </span>
+          </label>
+        ))}
+      </fieldset>
+
+      <p className="text-muted text-2xs">{t('admin.system.placement.appliesNote')}</p>
+
+      <div className="flex items-center gap-2">
+        <button
+          type="button"
+          className="gs-btn gs-btn-primary disabled:opacity-50"
+          disabled={!dirty || save.isPending}
+          onClick={() => save.mutate({ gpu_packing: packing }, {
+            onSuccess: () => pushToast('success', t('admin.system.placement.saved')),
+            onError: (e) => pushToast('error', humanizeError(asApiError(e))),
+          })}
+        >
+          {save.isPending ? t('common.saving') : t('common.save')}
+        </button>
+        
       </div>
     </section>
   );
