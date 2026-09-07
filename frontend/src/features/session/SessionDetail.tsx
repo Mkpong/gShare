@@ -5,7 +5,7 @@ import { useQueryClient } from '@tanstack/react-query';
 import { useSession, sessionKeys, useSessionTimeline, useStopSession, useStartSession, useRestartSession, useTerminateSession, useOwnSessionUsage } from '@/api/hooks/useSessions';
 import { SessionUsagePanel, type UsageRange } from '@/components/SessionUsagePanel';
 import { subscribeSessionEvents } from '@/lib/sse';
-import { formatCredit, formatDuration, formatVram, hoursElapsed, sessionStatusLabel } from '@/lib/format';
+import { formatCredit, formatDuration, formatVram, hoursElapsed, sessionStatusLabel, shortImageRef } from '@/lib/format';
 import { useUiStore } from '@/store/uiStore';
 import { humanizeError, type ApiError, asApiError } from '@/lib/errors';
 import { PageHeader } from '@/components/PageHeader';
@@ -280,6 +280,21 @@ export function SessionDetail() {
                 <dt className="text-muted">{t('session.boundGpu')}</dt>
                 <dd className="min-w-0 truncate" title={session.bound_gpu_uuid ?? undefined}>
                   {session.gpu_model ?? session.bound_gpu_uuid}
+                </dd>
+              </div>
+            )}
+            {/* What the session is built from. The catalogue name is what a person recognises;
+                the registry reference is the answer to "which CUDA, which PyTorch". */}
+            {(session.image_name || session.image_ref) && (
+              <div className="flex justify-between gap-2">
+                <dt className="text-muted">{t('session.imageLabel')}</dt>
+                <dd className="min-w-0 text-right">
+                  <div>{session.image_name ?? shortImageRef(session.image_ref)}</div>
+                  {session.image_ref && session.image_name && (
+                    <div className="text-muted text-xs gs-num break-all" title={session.image_ref}>
+                      {shortImageRef(session.image_ref)}
+                    </div>
+                  )}
                 </dd>
               </div>
             )}

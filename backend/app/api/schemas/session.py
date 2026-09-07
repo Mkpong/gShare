@@ -119,6 +119,11 @@ class SessionRead(ORMModel):
     # "which GPU", shown in the user list/detail instead of the raw card UUID. None for CPU
     # offerings.
     gpu_model: str | None = None
+    # WHICH image the session runs: the catalogue name a person recognises, and the registry
+    # reference behind it. Without these the only clue was the image id, so nobody could tell
+    # what a running session was actually built from.
+    image_name: str | None = None
+    image_ref: str | None = None
     # Live scratch-disk gauge (single-session detail only): the pod's ephemeral-storage usage
     # against its limit — a kubelet /stats/summary reading relayed by the operator, up to
     # ~5 minutes stale. None on lists, for CPU-less-disk pods, or when no fresh reading exists.

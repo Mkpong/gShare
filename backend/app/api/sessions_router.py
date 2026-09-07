@@ -44,6 +44,7 @@ from app.db.base import get_db, get_sessionmaker
 from app.db.models import (
     GpuDevice,
     GpuNode,
+    Image,
     Membership,
     Offering,
     Organization,
@@ -93,6 +94,8 @@ def _session_read(
     gpu_model: str | None = None,
     node_hostname: str | None = None,
     node_id: str | None = None,
+    image_name: str | None = None,
+    image_ref: str | None = None,
 ) -> SessionRead:
     """Project a Session row to SessionRead, computing occupancy from the snapshot/device."""
     occ: float | None = None
@@ -120,6 +123,8 @@ def _session_read(
         mem_gb=sess.mem_gb,
         disk_gb=sess.disk_gb,
         gpu_model=gpu_model,
+        image_name=image_name,
+        image_ref=image_ref,
         owner_user_id=sess.owner_user_id,
         owner_name=owner_name,
         credit_per_hour_snapshot=(
@@ -313,6 +318,14 @@ async def list_sessions(
         oid: model for oid, model in
         (await db.execute(select(Offering.id, Offering.gpu_model).where(Offering.id.in_(off_ids)))).all()
     } if off_ids else {}
+    # Image names, so a list row says what the session is built from, not just an id.
+    img_ids = {s.image_id for s in rows if s.image_id}
+    images = {
+        iid: (name, registry) for iid, name, registry in
+        (await db.execute(
+            select(Image.id, Image.name, Image.registry).where(Image.id.in_(img_ids))
+        )).all()
+    } if img_ids else {}
     # WHERE each session runs: the bound GPU's node wins; a CPU session falls back to the
     # operator-reported hostname, which is matched back to the inventory for the deep link.
     uuids = {s.bound_gpu_uuid for s in rows if s.bound_gpu_uuid}
@@ -374,6 +387,8 @@ async def list_sessions(
             s, owner_name=onames.get(s.owner_user_id),
             group_name=gname, org_id=org_id, org_name=org_names.get(org_id) if org_id else None,
             gpu_model=off_names.get(s.offering_id),
+            image_name=(images.get(s.image_id) or (None, None))[0],
+            image_ref=(images.get(s.image_id) or (None, None))[1],
             node_hostname=host, node_id=nid,
         )
 
@@ -474,6 +489,9 @@ async def get_session(
     sess = await _load_session(db, session_id)
     _require_access(principal, sess)
     gpu_model = await db.scalar(select(Offering.gpu_model).where(Offering.id == sess.offering_id))
+    img = (await db.execute(
+        select(Image.name, Image.registry).where(Image.id == sess.image_id)
+    )).first()
     node_id, node_host = None, None
     if sess.bound_gpu_uuid:
         nrow = (await db.execute(
@@ -486,7 +504,10 @@ async def get_session(
     if node_host is None and sess.node_hostname:
         node_host = sess.node_hostname
         node_id = await db.scalar(select(GpuNode.id).where(GpuNode.hostname == node_host))
-    read = _session_read(sess, gpu_model=gpu_model, node_hostname=node_host, node_id=node_id)
+    read = _session_read(
+        sess, gpu_model=gpu_model, node_hostname=node_host, node_id=node_id,
+        image_name=img[0] if img else None, image_ref=img[1] if img else None,
+    )
     # Mounted volumes, joined with their names — the detail screens list what the session sees.
     from app.api.schemas.session import SessionMountRead
     from app.db.models import StorageVolume, VolumeMount

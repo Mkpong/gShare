@@ -74,3 +74,17 @@ describe('GPU_TIERS', () => {
     expect(GPU_TIERS.filter((t) => t.mode === 'fractional')).toHaveLength(3);
   });
 });
+
+describe('shortImageRef', () => {
+  it('drops a registry host but keeps an org name', async () => {
+    const { shortImageRef } = await import('@/lib/format');
+    expect(shortImageRef('10.10.0.162:5000/gshare-session:pytorch2.8-cuda12.9-cudnn9'))
+      .toBe('gshare-session:pytorch2.8-cuda12.9-cudnn9');
+    expect(shortImageRef('boanlab/gshare-session:ml-ubuntu24.04'))
+      .toBe('boanlab/gshare-session:ml-ubuntu24.04');
+    expect(shortImageRef('docker.io/boanlab/gshare-session:ml-ubuntu24.04'))
+      .toBe('boanlab/gshare-session:ml-ubuntu24.04');
+    expect(shortImageRef('ubuntu:24.04')).toBe('ubuntu:24.04');
+    expect(shortImageRef(null)).toBe('');
+  });
+});

@@ -10,7 +10,7 @@ import { SessionUsagePanel, type UsageRange } from '@/components/SessionUsagePan
 import { Timestamp } from '@/components/Timestamp';
 import { CopyableId } from '@/components/CopyButton';
 import { X } from '@/components/icons';
-import { formatVram, sessionStatusLabel } from '@/lib/format';
+import { formatVram, sessionStatusLabel, shortImageRef } from '@/lib/format';
 import { useUiStore } from '@/store/uiStore';
 import { humanizeError, asApiError } from '@/lib/errors';
 import { DrawerTimeline, type SessionRow } from '@/features/admin/Monitor';
@@ -102,6 +102,18 @@ export function SessionMonitorOverlay({ sessionId, onClose }: {
                   s.disk_gb != null ? `${s.disk_gb}GB` : null].filter(Boolean).join(' · ') || dash}
               </Row>
               {s.gpu_model && <Row label="GPU">{s.gpu_model}</Row>}
+              {/* Which image this session runs — the first thing to check when a library or a
+                  CUDA version is not what the user expected. */}
+              {(s.image_name || s.image_ref) && (
+                <Row label={t('session.imageLabel')}>
+                  <div>{s.image_name ?? shortImageRef(s.image_ref)}</div>
+                  {s.image_ref && s.image_name && (
+                    <div className="text-muted text-xs gs-num break-all" title={s.image_ref}>
+                      {shortImageRef(s.image_ref)}
+                    </div>
+                  )}
+                </Row>
+              )}
               {isGpu && (
                 <Row label={t('admin.monitor.colResource')} mono>
                   {[s.mode, s.gpu_mem_mb ? formatVram(s.gpu_mem_mb) : null,

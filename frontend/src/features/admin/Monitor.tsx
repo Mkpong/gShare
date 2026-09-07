@@ -52,6 +52,8 @@ export interface SessionRow {
   gpu_mem_mb?: number;
   gpu_cores?: number;
   gpu_model?: string | null;
+  image_name?: string | null;
+  image_ref?: string | null;
   status_reason?: string | null;
   cpu?: number;
   mem_gb?: number;

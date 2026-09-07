@@ -5061,6 +5061,10 @@ export interface components {
             disk_gb?: number | null;
             /** Gpu Model */
             gpu_model?: string | null;
+            /** Image Name */
+            image_name?: string | null;
+            /** Image Ref */
+            image_ref?: string | null;
             /** Disk Used Bytes */
             disk_used_bytes?: number | null;
             /** Disk Limit Bytes */

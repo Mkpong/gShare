@@ -260,6 +260,18 @@ export function SessionWizard() {
     }
     return avail.devices.some((d) => d.mode === 'fractional' && d.free_mem_mb >= vram && d.free_cores >= cores);
   }
+  // The custom panel offers the same two modes as the presets, so it needs the same gate: with a
+  // fractional-only fleet there is no exclusive card, the backend rejects the request as
+  // unserviceable, and without this the failure only surfaced on the final step.
+  const modeServiceable = (m: 'fractional' | 'exclusive'): boolean => {
+    if (!availQuery.isSuccess) return true;
+    if (!avail) return false;
+    if (m === 'exclusive') return avail.devices.some((d) => d.mode === 'exclusive');
+    return avail.devices.some((d) => d.mode === 'fractional' || d.mode === 'mig');
+  };
+  const exclusiveOffered = modeServiceable('exclusive');
+  const fractionalOffered = modeServiceable('fractional');
+
   const offeringId = selectedOffering?.id;
   // An image counts as GPU-only when it declares a CUDA version or a list of supported GPUs.
   const isGpuImage = (im: { cuda_version?: string | null; supported_gpus?: string[] }) =>
@@ -409,9 +421,11 @@ export function SessionWizard() {
   const rateStr = previewCost.data && !previewCost.isError
     ? formatCredit(previewCost.data.estimated_credit_per_hour)
     : null;
+  const modeUnserviceable = isGpu && !modeServiceable(effMode);
   const stepReasons: string[] = (
     stepKey === 'compute' ? [!form.name && t('wizard.nameLabel')]
-    : stepKey === 'gpu' ? [!offeringId && t('wizard.offeringLabel')]
+    : stepKey === 'gpu' ? [!offeringId && t('wizard.offeringLabel'),
+                           modeUnserviceable && t('wizard.modeUnserviceable')]
     : stepKey === 'image' ? [!imageId && t('wizard.imageLabel')]
     : []
   ).filter(Boolean) as string[];
@@ -436,9 +450,9 @@ export function SessionWizard() {
       <button
         type="button"
         className={`gs-btn gs-btn-primary ${width}`}
-        disabled={createSession.isPending || concurrencyFull || badMount}
+        disabled={createSession.isPending || concurrencyFull || badMount || modeUnserviceable}
         onClick={handleSubmit}
-        title={concurrencyFull ? t('wizard.concurrencyFullShort') : badMount ? t('wizard.mountPathInvalid') : undefined}
+        title={concurrencyFull ? t('wizard.concurrencyFullShort') : badMount ? t('wizard.mountPathInvalid') : modeUnserviceable ? t('wizard.modeUnserviceable') : undefined}
       >
         {createSession.isPending
           ? t('wizard.starting')
@@ -802,8 +816,10 @@ export function SessionWizard() {
                   {custom && (
                     <div className="mt-2 space-y-3 border border-border rounded-card p-3">
                       <div className="grid grid-cols-2 gap-2">
-                        <ModeOpt active={!isExclusive} title={t('wizard.modeFractionalTitle')} desc={t('wizard.modeFractionalDesc')} onClick={() => patch({ sharing_mode: 'fractional' })} />
-                        <ModeOpt active={isExclusive} title={t('wizard.modeExclusiveTitle')} desc={t('wizard.modeExclusiveDesc')} onClick={() => patch({ sharing_mode: 'exclusive' })} />
+                        <ModeOpt active={!isExclusive} disabled={!fractionalOffered} badge={!fractionalOffered ? t('wizard.tierUnavailable') : undefined}
+                          title={t('wizard.modeFractionalTitle')} desc={t('wizard.modeFractionalDesc')} onClick={() => patch({ sharing_mode: 'fractional' })} />
+                        <ModeOpt active={isExclusive} disabled={!exclusiveOffered} badge={!exclusiveOffered ? t('wizard.tierUnavailable') : undefined}
+                          title={t('wizard.modeExclusiveTitle')} desc={t('wizard.modeExclusiveDesc')} onClick={() => patch({ sharing_mode: 'exclusive' })} />
                       </div>
                       <div className="grid grid-cols-2 gap-4">
                         <Slider label={t('wizard.vramMb')} min={512} max={modelMem} step={512} value={isExclusive ? modelMem : (form.vram_mb ?? effVram)} disabled={isExclusive} onChange={(v) => patch({ vram_mb: v })} />
@@ -985,11 +1001,15 @@ function VolumePicker({ mounts, onChange }: { mounts: VolumeMount[]; onChange: (
   );
 }
 
-function ModeOpt({ active, title, desc, onClick }: { active: boolean; title: string; desc: string; onClick: () => void }) {
+function ModeOpt({ active, title, desc, onClick, disabled, badge }: {
+  active: boolean; title: string; desc: string; onClick: () => void;
+  disabled?: boolean; badge?: string;
+}) {
   return (
-    <SelTile selected={active} className="p-3" onClick={onClick}>
+    <SelTile selected={active} disabled={disabled} className="p-3" onClick={onClick}>
       <div className="font-bold text-sm pr-5">{title}</div>
       <div className="text-muted text-2xs mt-1">{desc}</div>
+      {badge && <span className="gs-tag absolute top-3 right-3 text-2xs">{badge}</span>}
     </SelTile>
   );
 }
