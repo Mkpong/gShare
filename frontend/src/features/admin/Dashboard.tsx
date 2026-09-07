@@ -1,16 +1,20 @@
+import { useState, useMemo } from 'react';
 import { Link } from 'react-router-dom';
 import { useClusterMetrics, useDashboardSummary } from '@/api/hooks/useAdminDashboard';
-import { useGpuDevices } from '@/api/hooks/useNodes';
+import { useGpuDevices, useNodes } from '@/api/hooks/useNodes';
 import { useAuditLogs } from '@/api/hooks/useAudit';
 import { actionLabel, resultMeta, targetDisplay, changesSummary } from '@/features/admin/Audit';
 import { HelpTip } from '@/components/HelpTip';
 import { PageHeader } from '@/components/PageHeader';
 import { useTranslation } from 'react-i18next';
+import { Select } from '@/components/Select';
+import { useActiveCluster } from '@/api/hooks/useClusters';
 import { useAuthStore } from '@/auth/authStore';
 import { formatVram } from '@/lib/format';
 import { ErrorState } from '@/components/EmptyState';
 import { Figure } from '@/components/Figure';
 import { Meter } from '@/components/Meter';
+import { CaretLeft, CaretRight } from '@/components/icons';
 import { Timestamp } from '@/components/Timestamp';
 import type { ReactNode } from 'react';
 
@@ -51,28 +55,93 @@ function shortModel(model: string): string {
   return model.replace(/^NVIDIA\s+(GeForce\s+)?/, '');
 }
 
+/** How many cards one page of the rack view shows. */
+const DEVICE_PAGE = 6;
+
+/**
+ * The rack view's pager: a dot per page between two arrows, and nothing at all while everything
+ * fits on one page. Deliberately not the table pager — this is a handful of cards, so page numbers
+ * and row counts would be more furniture than the thing they navigate.
+ */
+function DevicePager({ page, pages, onPage }: { page: number; pages: number; onPage: (n: number) => void }) {
+  const { t } = useTranslation();
+  if (pages <= 1) return null;
+  const arrow = 'w-6 h-6 grid place-items-center rounded-ctl text-muted transition-colors duration-150 ' +
+    'hover:text-text hover:bg-surface-2 disabled:opacity-35 disabled:hover:bg-transparent disabled:hover:text-muted';
+  return (
+    // Dots are 6px of ink, so the row around them is kept tight and pulled into the card's own
+    // bottom padding — otherwise the control reads as a third row of the grid.
+    <div className="mt-2 -mb-2 flex items-center justify-center gap-1.5">
+      <button type="button" className={arrow} aria-label={t('common.previous')} disabled={page === 0} onClick={() => onPage(page - 1)}>
+        <CaretLeft size={14} weight="bold" aria-hidden="true" />
+      </button>
+      {Array.from({ length: pages }, (_, i) => (
+        <button
+          key={i}
+          type="button"
+          aria-label={t('admin.dashboard.devicePage', { page: i + 1 })}
+          aria-current={i === page ? 'true' : undefined}
+          onClick={() => onPage(i)}
+          className={`h-1.5 rounded-full transition-all duration-150 ${
+            i === page ? 'w-4 bg-primary' : 'w-1.5 bg-border hover:bg-border-strong'
+          }`}
+        />
+      ))}
+      <button type="button" className={arrow} aria-label={t('common.next')} disabled={page >= pages - 1} onClick={() => onPage(page + 1)}>
+        <CaretRight size={14} weight="bold" aria-hidden="true" />
+      </button>
+    </div>
+  );
+}
+
+/**
+ * Why a card cannot take work, or null when it can. The card's own health, its node's state and a
+ * pool transition each disqualify it, and the most specific reason wins.
+ */
+function unavailableReason(status?: string | null, nodeStatus?: string | null, modeState?: string | null) {
+  if (status && status !== 'ready') return { key: `enum.status.${status}`, fallback: status };
+  if (nodeStatus === 'offline' || nodeStatus === 'cordoned') {
+    return { key: `enum.nodeStatus.${nodeStatus}`, fallback: nodeStatus };
+  }
+  if (modeState && modeState !== 'ready') return { key: `enum.modeState.${modeState}`, fallback: modeState };
+  return null;
+}
+
 /** One GPU card: VRAM fill, free cores, mode — the rack view. */
-function DeviceTile({ model, index, freeMemMb, totalMemMb, freeCores, mode }: {
+function DeviceTile({ model, alias, index, freeMemMb, totalMemMb, freeCores, mode, status, nodeStatus, modeState }: {
   model: string;
+  alias?: string | null;
   index: number;
   freeMemMb: number;
   totalMemMb: number;
   freeCores: number;
   mode: string;
+  status?: string | null;
+  nodeStatus?: string | null;
+  modeState?: string | null;
 }) {
   const { t } = useTranslation();
   const usedPct = totalMemMb > 0 ? ((totalMemMb - freeMemMb) / totalMemMb) * 100 : 0;
-  const variant = usedPct >= 90 ? 'danger' : usedPct >= 70 ? 'warn' : 'primary';
+  // A card nothing can be placed on must not read as free capacity: the old tile showed a retired
+  // node's card as "여유 100%", which is exactly the headroom an administrator would go looking for.
+  const out = unavailableReason(status, nodeStatus, modeState);
+  const variant = out ? 'danger' : usedPct >= 90 ? 'danger' : usedPct >= 70 ? 'warn' : 'primary';
   return (
-    <div className="rounded-ctl border border-border bg-surface-2/40 px-3 py-2.5 min-w-0">
+    <div className={`rounded-ctl border px-3 py-2.5 min-w-0 ${out ? 'border-danger/40 bg-danger-soft/20' : 'border-border bg-surface-2/40'}`}>
       <div className="flex items-center justify-between gap-2 mb-1.5">
-        <span className="text-xs font-bold truncate">{shortModel(model)} <span className="text-muted gs-num">#{index + 1}</span></span>
-        <span className="gs-tag shrink-0">{t(`enum.deviceMode.${mode}`, { defaultValue: mode })}</span>
+        {/* An alias is the card's name; without one it is the model plus its list position. */}
+        <span className={`text-xs font-bold truncate ${out ? 'text-muted' : ''}`} title={alias ? model : undefined}>
+          {alias ? alias : <>{shortModel(model)} <span className="text-muted gs-num">#{index + 1}</span></>}
+        </span>
+        <span className={`gs-tag shrink-0 ${out ? 'text-danger' : ''}`}>
+          {out ? t(out.key, { defaultValue: out.fallback }) : t(`enum.deviceMode.${mode}`, { defaultValue: mode })}
+        </span>
       </div>
-      <Meter value={usedPct} variant={variant} />
+      <Meter value={out ? 100 : usedPct} variant={variant} />
       <div className="flex items-center justify-between gap-2 mt-1.5 text-2xs gs-num text-muted">
         <span>{formatVram(totalMemMb - freeMemMb)} / {formatVram(totalMemMb)}</span>
-        <span>{t('admin.dashboard.deviceFreeShort')} {freeCores}%</span>
+        {/* No headroom is reported for a card that cannot be placed on — the figure would be a lie. */}
+        <span>{out ? t('admin.dashboard.deviceUnavailable') : `${t('admin.dashboard.deviceFreeShort')} ${freeCores}%`}</span>
       </div>
     </div>
   );
@@ -89,6 +158,31 @@ export function AdminDashboard() {
   // node-pool access, which hid pool-granted cards from the admin's own grid.
   // gpu-devices is super_admin-only; an org/group admin never renders the grid, so skip the 403.
   const { data: fleetDevices = [] } = useGpuDevices(undefined, { enabled: isSuper });
+  // Multi-cluster: the grid can be narrowed to one cluster (cards → node → cluster). The KPI
+  // figures above stay fleet-wide; per-cluster totals are on the cluster management page.
+  const clusterInfo = useActiveCluster();
+  const [gridCluster, setGridCluster] = useState('');
+  const { data: nodeRows = [] } = useNodes({}, { enabled: isSuper && clusterInfo.multi });
+  const nodeCluster = useMemo(() => {
+    const m: Record<string, string> = {};
+    for (const n of nodeRows as { id: string; cluster_id?: string | null }[]) if (n.cluster_id) m[n.id] = n.cluster_id;
+    return m;
+  }, [nodeRows]);
+  const gridDevices = gridCluster ? fleetDevices.filter((d) => nodeCluster[(d as { node_id?: string | null }).node_id ?? ''] === gridCluster) : fleetDevices;
+  // The per-model number (#1, #2 …) is assigned across the WHOLE fleet, so a card keeps its name
+  // whichever page it appears on.
+  const numberedDevices = useMemo(() => {
+    const perModel: Record<string, number> = {};
+    return gridDevices.map((d) => {
+      const model = (d.model ?? '-') as string;
+      return { d, model, idx: (perModel[model] = (perModel[model] ?? 0) + 1) - 1 };
+    });
+  }, [gridDevices]);
+  const [devPage, setDevPage] = useState(0);
+  const devPages = Math.max(1, Math.ceil(numberedDevices.length / DEVICE_PAGE));
+  // A narrowed filter can leave the current page past the end.
+  const page = Math.min(devPage, devPages - 1);
+  const pagedDevices = numberedDevices.slice(page * DEVICE_PAGE, page * DEVICE_PAGE + DEVICE_PAGE);
   const auditQ = useAuditLogs(isSuper ? { size: 8, sort: '-at' } : {});
   const auditRows = (auditQ.data?.data ?? []) as Array<{
     id: string; action: string; actor_id?: string; actor_name?: string; result?: string; at?: string;
@@ -157,19 +251,28 @@ export function AdminDashboard() {
                 </Link>
               </div>
               <p className="gs-sub mt-1">{t('admin.dashboard.deviceGridSub')}</p>
-              {fleetDevices.length === 0 ? (
+              {clusterInfo.multi && (
+                <div className="mt-3">
+                  <Select className="gs-input w-auto text-sm" value={gridCluster} aria-label={t('admin.dashboard.allClusters')} onChange={(e) => setGridCluster(e.target.value)}>
+                    <option value="">{t('admin.dashboard.allClusters')}</option>
+                    {[...new Set(Object.values(nodeCluster))].map((c) => <option key={c} value={c}>{clusterInfo.name(c)}</option>)}
+                  </Select>
+                </div>
+              )}
+              {gridDevices.length === 0 ? (
                 <p className="text-muted text-sm mt-4">{t('admin.dashboard.unpackedDevices')}</p>
               ) : (
-                <div className="mt-4 grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-3 2xl:grid-cols-4 gap-2.5">
-                  {(() => {
-                    const perModel: Record<string, number> = {};
-                    return fleetDevices.map((d) => {
-                      const model = d.model ?? '-';
-                      const idx = (perModel[model] = (perModel[model] ?? 0) + 1) - 1;
+                <>
+                  <div className="mt-4 grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-3 gap-2.5">
+                    {pagedDevices.map(({ d, model, idx }) => {
                       const total = d.total_mem_mb ?? 0;
                       const used = d.used_mem_mb ?? 0;
                       return (
                         <DeviceTile
+                          alias={d.alias}
+                          status={d.status}
+                          nodeStatus={(d as { node_status?: string | null }).node_status}
+                          modeState={(d as { mode_state?: string | null }).mode_state}
                           key={d.gpu_uuid ?? `${model}-${idx}`}
                           model={model}
                           index={idx}
@@ -179,9 +282,10 @@ export function AdminDashboard() {
                           mode={d.mode ?? '-'}
                         />
                       );
-                    });
-                  })()}
-                </div>
+                    })}
+                  </div>
+                  <DevicePager page={page} pages={devPages} onPage={setDevPage} />
+                </>
               )}
           </section>
 

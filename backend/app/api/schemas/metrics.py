@@ -54,6 +54,8 @@ class GpuDeviceRow(BaseModel):
     id: str
     node_id: str
     model: str
+    # Operator-given card name, when one is set (see PUT /gpu-devices/{id}/alias).
+    alias: str | None = None
     mode: str
     # Per-card pool target + drain state (ready|draining|applying|error); see gpu_device model.
     desired_mode: str | None = None

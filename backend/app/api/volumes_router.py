@@ -24,6 +24,7 @@ from app.core.errors import (
     NotFound,
     NotImplementedFeature,
     QuotaExceeded,
+    VolumeShrinkNotAllowed,
 )
 from app.db.base import get_db
 from app.db.models import (
@@ -171,6 +172,8 @@ async def _assert_storage_quota(
                  "allocated_gb": pool_alloc - exclude},
             )
 
+    if scope == "global":
+        return   # no policy ceiling applies; the physical check above is the only bound
     limit, allocated = await _storage_usage(db, scope, scope_id, exclude_volume_id)
     if limit is None:   # unlimited
         return
@@ -219,6 +222,7 @@ async def list_volumes(
     if not all_scopes:
         member_group_ids = list(principal.memberships.keys())
         visible = or_(
+            StorageVolume.scope == "global",
             and_(StorageVolume.scope == "user", StorageVolume.scope_id == principal.user_id),
             # A group volume is visible to every member of that group (mounting follows the
             # same rule; managing it stays with group_admin and above).
@@ -312,6 +316,9 @@ def _implicit_group_role(principal: Principal, vol: StorageVolume) -> str | None
     """The role a group member holds on a group volume with no explicit permission row.
 
     group_admin+ manage it (owner); members get rw on an RWX volume and ro on a ROX one."""
+    if vol.scope == "global":
+        # Everyone may read a shared volume; writing only when the administrator opened it (RWX).
+        return "rw" if vol.access_mode == "RWX" else "ro"
     if vol.scope != "group":
         return None
     m_role = principal.memberships.get(vol.scope_id)
@@ -333,6 +340,10 @@ def _assert_can_manage_volume(principal: Principal, scope: str, scope_id: str) -
     """
     if "super_admin" in principal.global_roles:
         return
+    if scope == "global":
+        # A volume every user can mount is an instance-wide asset; only the system administrator
+        # creates, resizes, or deletes one.
+        raise Forbidden("not permitted: only a system administrator can manage a shared volume")
     if scope == "user":
         if scope_id == principal.user_id:
             return
@@ -355,6 +366,8 @@ async def _assert_volume_access(db: AsyncSession, principal: Principal, vol: Sto
     """
     if "super_admin" in principal.global_roles:
         return
+    if vol.scope == "global":
+        return   # shared with every signed-in user by construction
     if vol.scope == "user" and vol.scope_id == principal.user_id:
         return
     if vol.scope == "group" and vol.scope_id in principal.memberships:
@@ -381,6 +394,8 @@ async def create_volume(
     Every type — personal workspace, group share, dataset, scratch — can be created as often as
     needed and attached to sessions. There is no auto-provisioned singleton. Within a scope, the
     (type, name) pair is unique."""
+    if body.scope == "global":
+        body.scope_id = "global"   # one shared scope; the id is a constant, not a tenant
     _assert_can_manage_volume(principal, body.scope, body.scope_id)
     # Enforce the scope's total storage limit, as GPU limits are enforced. No policy means
     # unlimited.
@@ -468,25 +483,33 @@ async def update_volume(
     principal: Principal = Depends(get_current_principal),
     db: AsyncSession = Depends(get_db),
 ):
-    """Update volume meta: quota_gb / access_mode.
+    """Update volume meta: quota_gb / access_mode / mount_locked.
 
-    The quota is self-service in both directions. It may shrink down to what is actually in use;
-    an increase is bounded by the scope's storage policy — volumes are governed by the policy
-    limit alone, not billed (the claim itself cannot shrink: Kubernetes only grows a PVC).
+    The quota only grows. Kubernetes never shrinks a claim, so a smaller ledger figure would free
+    policy headroom against space the pool still physically holds (100 GB "shrunk" to 10 GB plus a
+    new 90 GB volume = 190 GB on disk). An increase is bounded by the scope's storage policy —
+    volumes are governed by the policy limit alone, not billed.
     """
     vol = await _load_volume(db, volume_id)
     _assert_can_manage_volume(principal, vol.scope, vol.scope_id)
 
     new_quota = body.quota_gb
-    if new_quota is not None:
-        if int(new_quota) < vol.used_gb:
-            # cannot shrink below current usage: quota_gb >= used_gb.
-            raise _ValidationFailed(
-                "quota_gb below current usage", {"quota_gb": int(new_quota), "used_gb": vol.used_gb}
+    if new_quota is not None and int(new_quota) != vol.quota_gb:
+        if int(new_quota) < vol.quota_gb:
+            raise VolumeShrinkNotAllowed(
+                "a volume quota cannot be reduced",
+                {"quota_gb": int(new_quota), "current_gb": vol.quota_gb},
             )
         # An expansion is bounded by the same scope limit, with this volume excluded from the sum.
         await _assert_storage_quota(db, vol.scope, vol.scope_id, int(new_quota), exclude_volume_id=vol.id)
         vol.quota_gb = int(new_quota)
+
+    if body.mount_locked is not None and body.mount_locked != vol.mount_locked:
+        vol.mount_locked = body.mount_locked
+        await AuditService(db).record(
+            actor=principal.user_id, action="storage.volume.lock", target=volume_id,
+            result="ok", locked=body.mount_locked,
+        )
 
     new_mode = body.access_mode
     if new_mode is not None and new_mode != vol.access_mode:
@@ -504,22 +527,45 @@ async def update_volume(
 async def delete_volume(
     volume_id: str,
     confirm: str | None = Query(default=None),
+    force: bool = Query(default=False),
     principal: Principal = Depends(get_current_principal),
     db: AsyncSession = Depends(get_db),
 ):
-    """Permanently delete a volume; requires confirm==volume_id, rejects if mounted."""
+    """Permanently delete a volume; requires confirm==volume_id, rejects if mounted.
+
+    ``force`` (system administrator only) terminates every active session still mounting the
+    volume and then deletes it — the answer to a mount that keeps a shared volume alive against
+    its owner's will. The audit row names the sessions that were cut off.
+    """
     vol = await _load_volume(db, volume_id)
     _assert_can_manage_volume(principal, vol.scope, vol.scope_id)
     if confirm != volume_id:
         # confirmation token must equal the target volume_id -> 422.
         raise _ValidationFailed("confirmation_required")
-    if await _active_mount_session_ids(db, volume_id):
+    mounted = await _active_mount_session_ids(db, volume_id)
+    if mounted and not force:
         raise VolumeMounted("volume is mounted by an active session")
+    cut: list[str] = []
+    if mounted:
+        principal.require(action="volume.force_delete")
+        from app.domain.session_service import SessionService
+        for sid in mounted:
+            await SessionService(db).terminate(sid, forced=True, reason="volume_force_deleted")
+            cut.append(sid)
+        vol = await _load_volume(db, volume_id)
     vol.deleted_at = datetime.now(UTC)
+    # The audit row goes in the same commit as the deletion: the request scope never commits on
+    # its own, so a row appended after the commit was silently lost.
+    if cut:
+        await AuditService(db).record(
+            actor=principal.user_id, action="storage.volume.force_delete", target=volume_id,
+            result="ok", terminated_sessions=cut,
+        )
+    else:
+        await AuditService(db).record(
+            actor=principal.user_id, action="storage.volume.delete", target=volume_id, result="ok",
+        )
     await db.commit()
-    await AuditService(db).record(
-        actor=principal.user_id, action="storage.volume.delete", target=volume_id
-    )
 
 
 # ── folders ──
@@ -821,10 +867,10 @@ async def delete_snapshot(
     if snap.status == "creating":
         raise InvalidStateTransition("snapshot is still being created")  # 409 
     await db.delete(snap)
-    await db.commit()
     await AuditService(db).record(
         actor=principal.user_id,
         action="storage.snapshot.delete",
         target=snapshot_id,
         volume_id=volume_id,
     )
+    await db.commit()

@@ -28,23 +28,33 @@ export interface UsageSeries {
 }
 export const USAGE_RANGES = ['15m', '1h', '6h'] as const;
 export type UsageRange = (typeof USAGE_RANGES)[number];
+/** Average and peak over the whole run, written by the backend when the session ends. */
+export type UsageSummary = {
+  start?: number; end?: number;
+  cpu_cores?: { avg: number | null; max: number | null };
+  mem_mib?: { avg: number | null; max: number | null };
+  vram_mib?: { avg: number | null; max: number | null };
+  gpu_core_pct?: { avg: number | null; max: number | null };
+};
 
-function MetricBlock({ label, reading, pct, unit, points, chart = true }: {
+function MetricBlock({ label, reading, pct, unit, points, chart = true, finished = false }: {
   label: ReactNode;
   reading: string;
   pct: number | null;
   unit: string;
   points: [number, number | null][];
   chart?: boolean;
+  /** Ended session: no live reading or pressure bar — the history and the summary tell the story. */
+  finished?: boolean;
 }) {
   const variant: MeterVariant = pct == null ? 'primary' : pct >= 90 ? 'danger' : pct >= 70 ? 'warn' : 'primary';
   return (
     <div className="min-w-0">
       <div className="flex items-baseline justify-between gap-2">
         <span className="text-xs font-semibold text-muted">{label}</span>
-        <span className="gs-num text-sm font-bold whitespace-nowrap">{reading}</span>
+        {!finished && <span className="gs-num text-sm font-bold whitespace-nowrap">{reading}</span>}
       </div>
-      <Meter value={pct ?? 0} variant={variant} className="mt-1.5" />
+      {!finished && <Meter value={pct ?? 0} variant={variant} className="mt-1.5" />}
       {chart && (
       <div className="mt-2.5 rounded-ctl border border-border bg-surface-2/40 px-2 pt-2.5 pb-2.5">
         {points.length > 0 ? (
@@ -54,7 +64,6 @@ function MetricBlock({ label, reading, pct, unit, points, chart = true }: {
             height={190}
             seriesLabel={() => (typeof label === 'string' ? label : '')}
             timeOnly
-            hideXAxis
           />
         ) : (
           <div className="h-[190px] grid place-items-center text-2xs text-muted">-</div>
@@ -65,16 +74,24 @@ function MetricBlock({ label, reading, pct, unit, points, chart = true }: {
   );
 }
 
-export function SessionUsagePanel({ limits, usage, series, range, onRange, charts = true }: {
+export function SessionUsagePanel({ limits, usage, series, range, onRange, charts = true, finished = false, summary }: {
   limits: UsageLimits;
   usage?: UsageNow;
   series?: UsageSeries;
   range: UsageRange;
   onRange: (r: UsageRange) => void;
-  /** false = the user detail's lean mode: readings + pressure bars, no history charts. */
+  /** false = readings + pressure bars only, no history charts. */
   charts?: boolean;
+  /** The session has ended: the charts span its whole run and there is no range to pick. */
+  finished?: boolean;
+  /** Permanent average/peak figures, shown once the session has ended. */
+  summary?: UsageSummary | null;
 }) {
   const { t } = useTranslation();
+  const fmtAvgMax = (v: { avg: number | null; max: number | null } | undefined, f: (n: number) => string) =>
+    v && (v.avg != null || v.max != null)
+      ? t('session.usageAvgMax', { avg: v.avg != null ? f(v.avg) : '-', max: v.max != null ? f(v.max) : '-' })
+      : '-';
   const dash = '-';
   const pctOf = (val: number | null | undefined, limit: number | null | undefined) =>
     val != null && limit ? Math.min(100, (val / limit) * 100) : null;
@@ -100,8 +117,11 @@ export function SessionUsagePanel({ limits, usage, series, range, onRange, chart
   return (
     <>
       <div className="flex items-center justify-between gap-3 mb-4 flex-wrap">
-        <h2 className="font-bold">{t('admin.monitor.usageTitle')}</h2>
-        {charts && (
+        <h2 className="font-bold">{finished ? t('session.usageTitleFinished') : t('admin.monitor.usageTitle')}</h2>
+        {charts && finished && (
+          <span className="gs-tag">{t('session.usageWholeRun')}</span>
+        )}
+        {charts && !finished && (
         <div className="flex gap-1" role="group" aria-label={t('admin.monitoring.range')}>
           {USAGE_RANGES.map((r) => (
             <button key={r} type="button" onClick={() => onRange(r)}
@@ -115,6 +135,7 @@ export function SessionUsagePanel({ limits, usage, series, range, onRange, chart
       <div className="grid gap-x-8 gap-y-7 sm:grid-cols-2">
         <MetricBlock
           chart={charts}
+          finished={finished}
           label="CPU"
           reading={limits.cpu != null ? `${cpuNow.toFixed(2)} / ${limits.cpu} vCPU` : dash}
           pct={pctOf(cpuNow, limits.cpu)}
@@ -123,6 +144,7 @@ export function SessionUsagePanel({ limits, usage, series, range, onRange, chart
         />
         <MetricBlock
           chart={charts}
+          finished={finished}
           label={t('admin.monitor.usageMem')}
           reading={limits.mem_gb != null ? `${memGib.toFixed(1)} / ${limits.mem_gb} GiB` : dash}
           pct={pctOf(memGib, limits.mem_gb)}
@@ -132,6 +154,7 @@ export function SessionUsagePanel({ limits, usage, series, range, onRange, chart
         {limits.isGpu && limits.gpu_cores != null && (
           <MetricBlock
             chart={charts}
+            finished={finished}
             label={(
               <span className="inline-flex items-center gap-1">
                 {t('admin.monitor.usageGpuCore')}
@@ -147,6 +170,7 @@ export function SessionUsagePanel({ limits, usage, series, range, onRange, chart
         {limits.isGpu && limits.gpu_mem_mb != null && (
           <MetricBlock
             chart={charts}
+            finished={finished}
             label="VRAM"
             reading={`${vramGib.toFixed(1)} / ${(limits.gpu_mem_mb / 1024).toFixed(0)} GB`}
             pct={pctOf(vramGib, limits.gpu_mem_mb / 1024)}
@@ -155,7 +179,22 @@ export function SessionUsagePanel({ limits, usage, series, range, onRange, chart
           />
         )}
       </div>
-      <p className="text-2xs text-muted mt-3">{t('admin.monitor.usageHint')}</p>
+      {finished && summary && (
+        /* The run's average and peak, kept on the session row: still readable after the graphs'
+           30-day source has forgotten this session. */
+        <dl className="mt-5 grid gap-x-8 gap-y-2 sm:grid-cols-2 text-sm border-t border-border pt-4">
+          <div className="sm:col-span-2 text-xs font-semibold text-muted">{t('session.usageSummaryTitle')}</div>
+          <div className="flex justify-between gap-3"><dt className="text-muted">CPU</dt><dd className="gs-num">{fmtAvgMax(summary.cpu_cores, (n) => `${n.toFixed(2)} vCPU`)}</dd></div>
+          <div className="flex justify-between gap-3"><dt className="text-muted">{t('admin.monitor.usageMem')}</dt><dd className="gs-num">{fmtAvgMax(summary.mem_mib, (n) => `${(n / 1024).toFixed(2)} GiB`)}</dd></div>
+          {limits.isGpu && (
+            <div className="flex justify-between gap-3"><dt className="text-muted">{t('admin.monitor.usageGpuCore')}</dt><dd className="gs-num">{fmtAvgMax(summary.gpu_core_pct, (n) => `${Math.round(n)}%`)}</dd></div>
+          )}
+          {limits.isGpu && (
+            <div className="flex justify-between gap-3"><dt className="text-muted">VRAM</dt><dd className="gs-num">{fmtAvgMax(summary.vram_mib, (n) => `${(n / 1024).toFixed(1)} GB`)}</dd></div>
+          )}
+        </dl>
+      )}
+      {!finished && <p className="text-2xs text-muted mt-3">{t('admin.monitor.usageHint')}</p>}
     </>
   );
 }

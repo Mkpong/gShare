@@ -1,3 +1,4 @@
+import { fetchRestOfPages, pageTotal, PAGE_MAX } from '@/api/paging';
 import { useMutation, useQuery, useQueryClient, type QueryClient } from '@tanstack/react-query';
 import type { Session } from '@/api/types';
 import { api } from '@/api/client';
@@ -69,10 +70,13 @@ export function useSessions(filter: { status?: string; page?: number } = {}) {
     queryKey: sessionKeys.list(filter),
     refetchOnMount: 'always',
     queryFn: async () => {
-      const { data } = await api.GET('/api/v1/sessions', { params: { query: filter } });
-      // Envelope: { data, pagination }. Older callers want the array.
+      // Every session, not the server's first page: the list counts its own tabs, filters and
+      // sorts in the browser, so a truncated fetch silently loses rows and under-reports totals.
+      const q = { status: filter.status };
+      const { data } = await api.GET('/api/v1/sessions', { params: { query: { ...q, page: 1, size: PAGE_MAX } } });
       const env = data as unknown as { data?: Session[] } | Session[] | undefined;
-      return Array.isArray(env) ? env : env?.data ?? [];
+      const rows = Array.isArray(env) ? env : env?.data ?? [];
+      return await fetchRestOfPages<Session>('/api/v1/sessions', q, rows, pageTotal(data) ?? rows.length);
     },
   });
 }
@@ -152,7 +156,7 @@ export function useOwnSessionUsage(id?: string) {
   return useQuery({
     queryKey: ['session', id ?? '', 'usage'],
     enabled: !!id,
-    refetchInterval: 10000,
+    refetchInterval: 5000,
     queryFn: async () => {
       const { data } = await usageRaw.GET('/api/v1/sessions/{session_id}/usage',
         { params: { path: { session_id: id as string } } });
@@ -160,11 +164,11 @@ export function useOwnSessionUsage(id?: string) {
     },
   });
 }
-export function useOwnSessionUsageSeries(id: string | undefined, range: string) {
+export function useOwnSessionUsageSeries(id: string | undefined, range: string, live = true) {
   return useQuery({
     queryKey: ['session', id ?? '', 'usage-series', range],
     enabled: !!id,
-    refetchInterval: range === '15m' ? 15000 : 30000,
+    refetchInterval: live ? (range === '15m' ? 5000 : 15000) : false,
     queryFn: async () => {
       const { data } = await usageRaw.GET('/api/v1/sessions/{session_id}/usage/timeseries',
         { params: { path: { session_id: id as string }, query: { range } } });

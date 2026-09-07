@@ -32,6 +32,7 @@ import { sessionStatusLabel } from '@/lib/format';
 import { useOrganizations, useProjects, type Organization, type Project } from '@/api/hooks/useGroups';
 import { useAuthStore } from '@/auth/authStore';
 import { Table, TableToolbar, sortAccessor, type Column } from '@/components/Table';
+import { useActiveCluster } from '@/api/hooks/useClusters';
 import { EmptyState, NoResults, TableSkeleton, ErrorState } from '@/components/EmptyState';
 import { Timestamp } from '@/components/Timestamp';
 import { useConfirm } from '@/components/ConfirmDialog';
@@ -540,7 +541,10 @@ export function AdminNodes() {
   ], [t, cordon.isPending, toggleCordon, pools, isSuper, removeNode.isPending, onDeleteNode]);
 
   const all = nodes ?? [];
+  const clusterInfo = useActiveCluster();
+  const [clusterFilter, setClusterFilter] = useState('');
   const matched = all.filter((n) => {
+    if (clusterFilter && n.cluster_id !== clusterFilter) return false;
     const q = table.query.trim().toLowerCase();
     return !q || n.hostname.toLowerCase().includes(q) || (n.cluster_name ?? '').toLowerCase().includes(q) || (n.pool_name ?? '').toLowerCase().includes(q);
   });
@@ -585,8 +589,14 @@ export function AdminNodes() {
         placeholder={t('admin.nodes.searchPlaceholder')}
         total={all.length}
         shown={matched.length}
-        onClear={() => { table.clear(); setStatusFilter(''); }}
+        onClear={() => { table.clear(); setStatusFilter(''); setClusterFilter(''); }}
       >
+        {clusterInfo.multi && (
+          <Select className="gs-input w-auto" value={clusterFilter} aria-label={t('admin.nodes.allClusters')} onChange={(e) => setClusterFilter(e.target.value)}>
+            <option value="">{t('admin.nodes.allClusters')}</option>
+            {[...new Map(all.map((n) => [n.cluster_id ?? '', n.cluster_name ?? n.cluster_id ?? ''])).entries()].filter(([id]) => id).map(([id, name]) => <option key={id} value={id}>{name}</option>)}
+          </Select>
+        )}
         <label className="gs-sr-only" htmlFor="gs-node-status">{t('admin.nodes.statusFilter')}</label>
         <Select id="gs-node-status" className="gs-input w-auto" value={statusFilter} onChange={(e) => setStatusFilter(e.target.value)}>
           <option value="">{t('common.all')}</option>

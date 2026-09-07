@@ -111,6 +111,35 @@ people press twice and doubt both presses.
 - The language control is reachable from every screen, including the signed-out and error screens.
 - Names an administrator typed stay as they were typed, in either language.
 
+### Korean wording
+
+The Korean bundle follows one register per kind of string, so a screen never mixes voices:
+
+- **Noun phrases** (no verb ending): screen titles and subtitles, table headers, field labels, tabs,
+  buttons, status badges, filter names. `노드 비우기`, `예약`, `차단 / 오프라인 노드`.
+- **Sentences** are allowed where the text tells the person what happened or what to do: dialog
+  bodies, error messages, toasts, empty states, field hints. They end in `~합니다` / `~하세요`;
+  `~해요` and `~함` are not used. Confirm-dialog titles are questions: `{{name}}을(를) 삭제할까요?`.
+- Product names and units stay as they are (GPU, VRAM, CUDA, GiB, DCGM, kubeconfig, CSV). Every
+  other English term has one Korean word, used everywhere:
+
+| English (code / Kubernetes) | Korean in the console |
+|---|---|
+| cordon / uncordon | 차단 / 차단 해제 |
+| drain | 비우기 |
+| hold (credit reservation) | 예약 |
+| operator | 오퍼레이터 |
+| super_admin | 시스템 관리자 |
+| org_admin | 조직 관리자 |
+| group_admin / member / guest | 부서 관리자 / 구성원 / 게스트 |
+| group (project) | 부서 |
+| organization | 조직 |
+| offering / preset / policy | 오퍼링 / 프리셋 / 정책 |
+| quota | 쿼터 (storage) · 한도 (policy limits) |
+| session / volume / wallet / credit | 세션 / 볼륨 / 지갑 / 크레딧 |
+| pause / terminate / paused | 일시정지 / 종료 / 일시정지됨 |
+| exclusive / fractional | 전용 / 공유 |
+
 ## Adding a screen
 
 Start from `PageHeader` + `Table`/`Field` and most of this comes for free. Then run the audit for

@@ -5,7 +5,7 @@ import { useTranslation } from 'react-i18next';
 import i18n from '@/i18n';
 import {
   useAllocationRequests, useApproveRequest, useRejectRequest,
-  useAllocate, useAllocationScope, useSetMonthlyGrant, useTopupWallet,
+  useAllocate, useAllocationScope, useSetMonthlyGrant, useTopupWallet, useCreateAllocationRequest,
   useBulkAllocate, useBulkMonthlyGrant,
   type AllocRequest, type ScopeWallet, type SystemTotal,
 } from '@/api/hooks/useAllocations';
@@ -108,9 +108,11 @@ export function AdminCreditAllocation() {
 
       {tab === 'requests' && (
         <>
-          {/* The group administrator's funding channel: escalation is gone — short pools are asked
-              for directly, as a top-up request on the GROUP wallet, straight to the system tier. */}
-          {!canMint && <GroupFundingCard pools={pools} />}
+          {/* Funding climbs one level at a time: a group administrator asks the organization for an
+              allocation from its pool; an organization administrator asks the system tier to issue
+              credits (a top-up). Nobody skips a level. */}
+          {!canMint && orgPools.length > 0 && <OrgFundingCard pools={orgPools} />}
+          {!canMint && orgPools.length === 0 && <GroupFundingCard pools={pools} />}
           <RequestsInbox canMint={canMint} />
           <RequestsHistory canMint={canMint} />
         </>
@@ -563,12 +565,12 @@ function RequestsHistory({ canMint }: { canMint: boolean }) {
   );
 }
 
-// The group administrator's ask: fund the GROUP wallet from the system tier. Replaces escalation
-// with a direct, visible request the super admin actually receives.
+// The group administrator's ask: an allocation into the GROUP wallet from the organization's pool,
+// decided by the organization administrator.
 function GroupFundingCard({ pools }: { pools: ScopeWallet[] }) {
   const { t } = useTranslation();
   const pushToast = useUiStore((s) => s.pushToast);
-  const create = useCreateTopupRequest();
+  const create = useCreateAllocationRequest();
   const groupPools = pools.filter((p) => p.scope === 'group');
   const [poolId, setPoolId] = useState('');
   const [amount, setAmount] = useState('');
@@ -578,7 +580,7 @@ function GroupFundingCard({ pools }: { pools: ScopeWallet[] }) {
   const ok = pool && Number(amount) > 0;
   const submit = () => {
     if (!ok) return;
-    create.mutate({ wallet_id: pool.wallet_id, amount, note: note || undefined }, {
+    create.mutate({ level: 'group', group_id: pool.owner_id, amount, note: note || undefined }, {
       onSuccess: () => { pushToast('success', t('admin.credits.askFundingSent')); setAmount(''); setNote(''); },
       onError: (e) => pushToast('error', humanizeError(asApiError(e))),
     });
@@ -591,6 +593,49 @@ function GroupFundingCard({ pools }: { pools: ScopeWallet[] }) {
         {groupPools.length > 1 && (
           <Select className="gs-input w-auto text-sm" value={pool?.wallet_id ?? ''} onChange={(e) => setPoolId(e.target.value)} aria-label={t('common.group')}>
             {groupPools.map((p) => <option key={p.wallet_id} value={p.wallet_id}>{p.name}</option>)}
+          </Select>
+        )}
+        <input className="gs-input w-32 text-sm" type="number" inputMode="numeric" min={1} value={amount}
+          placeholder={t('admin.credits.amountPlaceholder')} aria-label={t('common.amount')}
+          onChange={(e) => setAmount(e.target.value)} />
+        <input className="gs-input flex-1 min-w-[200px] text-sm" value={note} maxLength={200}
+          placeholder={t('admin.credits.askFundingNote')} aria-label={t('common.reason')}
+          onChange={(e) => setNote(e.target.value)} />
+        <button type="button" className="gs-btn gs-btn-primary disabled:opacity-50" disabled={!ok || create.isPending} onClick={submit}>
+          {t('admin.credits.askFundingSubmit')}
+        </button>
+      </div>
+    </div>
+  );
+}
+
+// The organization administrator's ask: new credits issued by the system tier into the
+// ORGANIZATION wallet — the only hop where money is minted rather than moved.
+function OrgFundingCard({ pools }: { pools: ScopeWallet[] }) {
+  const { t } = useTranslation();
+  const pushToast = useUiStore((s) => s.pushToast);
+  const create = useCreateTopupRequest();
+  const [poolId, setPoolId] = useState('');
+  const [amount, setAmount] = useState('');
+  const [note, setNote] = useState('');
+  const pool = pools.find((p) => p.wallet_id === poolId) ?? pools[0];
+  if (!pools.length) return null;
+  const ok = pool && Number(amount) > 0;
+  const submit = () => {
+    if (!ok) return;
+    create.mutate({ wallet_id: pool.wallet_id, amount, note: note || undefined }, {
+      onSuccess: () => { pushToast('success', t('admin.credits.askFundingSent')); setAmount(''); setNote(''); },
+      onError: (e) => pushToast('error', humanizeError(asApiError(e))),
+    });
+  };
+  return (
+    <div className="gs-card mb-4">
+      <h2 className="font-bold">{t('admin.credits.askOrgFundingTitle')}</h2>
+      <p className="text-muted text-xs mt-0.5 mb-3">{t('admin.credits.askOrgFundingHint')}</p>
+      <div className="flex items-end gap-2 flex-wrap">
+        {pools.length > 1 && (
+          <Select className="gs-input w-auto text-sm" value={pool?.wallet_id ?? ''} onChange={(e) => setPoolId(e.target.value)} aria-label={t('admin.credits.colOrg')}>
+            {pools.map((p) => <option key={p.wallet_id} value={p.wallet_id}>{p.name}</option>)}
           </Select>
         )}
         <input className="gs-input w-32 text-sm" type="number" inputMode="numeric" min={1} value={amount}

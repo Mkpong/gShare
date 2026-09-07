@@ -1,3 +1,4 @@
+import { fetchRestOfPages, PAGE_MAX } from '@/api/paging';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { api } from '@/api/client';
 
@@ -21,8 +22,11 @@ export function useVolumes() {
     queryKey: ['volumes'],
     refetchOnMount: 'always',
     queryFn: async () => {
-      const { data } = await api.GET('/api/v1/storage/volumes');
-      return (data ?? []) as Array<Record<string, unknown>>;
+      // The page filters and sorts client-side and its own pager steps 25 rows at a time, so it
+      // must hold every volume; the wizard's mount picker reads the same list.
+      const { data } = await api.GET('/api/v1/storage/volumes', { params: { query: { page: 1, size: PAGE_MAX } } });
+      const rows = (data ?? []) as Array<Record<string, unknown>>;
+      return await fetchRestOfPages('/api/v1/storage/volumes', {}, rows, rows.length);
     },
   });
 }
@@ -32,8 +36,9 @@ export function useAllVolumes() {
   return useQuery({
     queryKey: ['volumes', 'all'],
     queryFn: async () => {
-      const { data } = await raw.GET('/api/v1/storage/volumes', { params: { query: { all: true, size: 100 } } });
-      return (data ?? []) as Array<Record<string, unknown>>;
+      const { data } = await raw.GET('/api/v1/storage/volumes', { params: { query: { all: true, page: 1, size: PAGE_MAX } } });
+      const rows = (data ?? []) as Array<Record<string, unknown>>;
+      return await fetchRestOfPages('/api/v1/storage/volumes', { all: true }, rows, rows.length);
     },
   });
 }
@@ -52,7 +57,7 @@ export function useLeaveShare() {
 }
 
 export interface CreateVolumeBody {
-  scope: 'user' | 'group';
+  scope: 'user' | 'group' | 'global';
   scope_id: string;
   type: 'home' | 'group' | 'dataset' | 'scratch';
   name: string;
@@ -82,7 +87,7 @@ export interface StorageQuotaUsage {
 
 // GET /storage/volumes/quota-usage — the storage policy limit and usage for a scope, which the
 // new-volume form turns into a warning.
-export function useStorageQuotaUsage(scope: 'user' | 'group', scopeId: string | undefined) {
+export function useStorageQuotaUsage(scope: 'user' | 'group' | 'global', scopeId: string | undefined) {
   return useQuery({
     queryKey: ['storage-quota-usage', scope, scopeId ?? ''],
     enabled: !!scopeId,
@@ -112,9 +117,11 @@ export function useCreateVolume() {
 export function useDeleteVolume() {
   const qc = useQueryClient();
   return useMutation({
-    mutationFn: async (id: string) => {
+    mutationFn: async (arg: string | { id: string; force?: boolean }) => {
+      const { id, force } = typeof arg === 'string' ? { id: arg, force: false } : arg;
       // The confirm token has to equal volume_id, which guards against deleting the wrong volume.
-      await raw.DELETE('/api/v1/storage/volumes/{volume_id}', { params: { path: { volume_id: id }, query: { confirm: id } } });
+      // `force` (system administrator) terminates the sessions still mounting it first.
+      await raw.DELETE('/api/v1/storage/volumes/{volume_id}', { params: { path: { volume_id: id }, query: { confirm: id, ...(force ? { force: true } : {}) } } });
     },
     onSuccess: () => qc.invalidateQueries({ queryKey: ['volumes'] }),
   });
@@ -165,3 +172,15 @@ export function useUpdateVolumeQuota(volumeId: string) {
   });
 }
 
+// PATCH /storage/volumes/{id} { mount_locked } — the owner's lock against new mounts. Sessions
+// already mounting the volume keep running; new ones are refused until the lock is lifted.
+export function useSetVolumeLock() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: async ({ id, locked }: { id: string; locked: boolean }) => {
+      const { data } = await raw.PATCH('/api/v1/storage/volumes/{volume_id}', { params: { path: { volume_id: id } }, body: { mount_locked: locked } });
+      return data;
+    },
+    onSuccess: () => qc.invalidateQueries({ queryKey: ['volumes'] }),
+  });
+}

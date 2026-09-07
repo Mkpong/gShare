@@ -43,6 +43,8 @@ export interface GpuDevice {
   id: string;
   node_id: string;
   model: string;
+  /** Operator-given card name; null means the console falls back to model + position. */
+  alias?: string | null;
   mode: GpuMode;
   // Per-card pool target and drain state (ready | draining | applying | error).
   desired_mode?: GpuMode | null;
@@ -139,6 +141,21 @@ export function useGpuDevices(nodeId?: string, opts?: { enabled?: boolean }) {
 
 // PUT /gpu-devices/{id}/health — take a faulty card out of service (ends the sessions bound to
 // it, gpu_fault) or put a repaired one back.
+// PUT /gpu-devices/{id}/alias — name a physical card (super_admin). Empty clears it.
+export function useSetDeviceAlias() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: async ({ deviceId, alias }: { deviceId: string; alias: string | null }) => {
+      const { data } = await raw.PUT('/api/v1/gpu-devices/{device_id}/alias', {
+        params: { path: { device_id: deviceId } },
+        body: { alias },
+      });
+      return data as { device_id: string; alias: string | null };
+    },
+    onSuccess: () => { qc.invalidateQueries({ queryKey: ['gpu-devices'] }); qc.invalidateQueries({ queryKey: nodeKeys.all }); },
+  });
+}
+
 export function useSetDeviceHealth() {
   const qc = useQueryClient();
   return useMutation({

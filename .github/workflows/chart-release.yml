@@ -1,14 +1,20 @@
 name: Release chart
 
-# Publishes charts/gshare to the gh-pages Helm repository whenever the chart version
-# changes on main. chart-releaser is a no-op when the version already has a release,
-# so re-running is safe.
+# Publishes charts/gshare to the gh-pages Helm repository.
+#
+# Manual only. The automatic push trigger is off because this repository has no `gh-pages`
+# branch to publish into, so every chart change failed the run for nothing. gShare is installed
+# by cloning the repository and pointing Helm at charts/gshare, not from a chart repository.
+#
+# To turn the automatic publish back on: create an empty `gh-pages` branch, point GitHub Pages at
+# it, bump `version` in charts/gshare/Chart.yaml on every chart change, and restore the trigger:
+#
+#   push:
+#     branches: [main]
+#     paths:
+#       - charts/**
+#       - .github/workflows/chart-release.yml
 on:
-  push:
-    branches: [main]
-    paths:
-      - charts/**
-      - .github/workflows/chart-release.yml
   workflow_dispatch:
 
 permissions:

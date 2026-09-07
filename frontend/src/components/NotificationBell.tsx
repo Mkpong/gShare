@@ -28,11 +28,6 @@ function hrefFor(n: Notification): string | null {
   if (t === 'cluster_health') return '/admin/clusters';
   if (t === 'node_health') return '/admin/nodes';
   if (t.startsWith('membership') || t === 'org_admin_added') return '/account';
-  // Boards: an answered inquiry goes to MY support thread; a new/reopened one to the admin inbox;
-  // a posted notice to the notice board.
-  if (t === 'inquiry_answered') return '/support';
-  if (t === 'inquiry_created') return '/admin/inquiries';
-  if (t === 'notice_posted') return '/notices';
   return null;
 }
 

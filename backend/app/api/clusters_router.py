@@ -231,6 +231,22 @@ async def _serialize_cluster(c: Cluster, db: AsyncSession) -> dict[str, Any]:
     }
 
 
+@router.get("/summary")
+async def cluster_summary(
+    principal: Principal = Depends(get_current_principal),
+    db: AsyncSession = Depends(get_db),
+):
+    """The clusters a signed-in user can name: id, name and status only. The console's cluster
+    selector (hidden while there is one) and the session wizard's cluster choice read this; the
+    full list with kubeconfig references stays super_admin-only."""
+    rows = (
+        await db.scalars(
+            select(Cluster).where(Cluster.deleted_at.is_(None)).order_by(Cluster.created_at.asc())
+        )
+    ).all()
+    return {"data": [{"id": c.id, "name": c.name, "status": c.status} for c in rows]}
+
+
 @router.get("", response_model=ClusterList)
 async def list_clusters(
     pagination: Pagination = Depends(),

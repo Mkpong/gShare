@@ -12,7 +12,7 @@ from decimal import ROUND_HALF_UP, Decimal
 
 from fastapi import APIRouter, Depends, Query, Request, status
 from pydantic import BaseModel, Field
-from sqlalchemy import func, or_, select
+from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 from sse_starlette.sse import EventSourceResponse
 
@@ -44,6 +44,7 @@ from app.db.base import get_db, get_sessionmaker
 from app.db.models import (
     GpuDevice,
     GpuNode,
+    Image,
     Membership,
     Offering,
     Organization,
@@ -54,6 +55,7 @@ from app.db.models import (
 )
 from app.domain.audit_service import AuditService
 from app.domain.connection_token import ConnectionTokenService
+from app.domain.placement import placeable_device_clauses
 from app.domain.pricing import round_credit
 from app.domain.scheduler import SchedulerService
 from app.domain.session_service import SessionService
@@ -93,6 +95,9 @@ def _session_read(
     gpu_model: str | None = None,
     node_hostname: str | None = None,
     node_id: str | None = None,
+    image_name: str | None = None,
+    image_ref: str | None = None,
+    gpu_alias: str | None = None,
 ) -> SessionRead:
     """Project a Session row to SessionRead, computing occupancy from the snapshot/device."""
     occ: float | None = None
@@ -120,6 +125,9 @@ def _session_read(
         mem_gb=sess.mem_gb,
         disk_gb=sess.disk_gb,
         gpu_model=gpu_model,
+        gpu_alias=gpu_alias,
+        image_name=image_name,
+        image_ref=image_ref,
         owner_user_id=sess.owner_user_id,
         owner_name=owner_name,
         credit_per_hour_snapshot=(
@@ -127,6 +135,8 @@ def _session_read(
         ),
         started_at=sess.started_at,
         terminated_at=sess.terminated_at,
+        usage_summary=sess.usage_summary,
+        privileged=bool(getattr(sess, "privileged", False)),
         created_at=sess.created_at,
         status_changed_at=sess.status_changed_at,
     )
@@ -313,17 +323,27 @@ async def list_sessions(
         oid: model for oid, model in
         (await db.execute(select(Offering.id, Offering.gpu_model).where(Offering.id.in_(off_ids)))).all()
     } if off_ids else {}
+    # Image names, so a list row says what the session is built from, not just an id.
+    img_ids = {s.image_id for s in rows if s.image_id}
+    images = {
+        iid: (name, registry) for iid, name, registry in
+        (await db.execute(
+            select(Image.id, Image.name, Image.registry).where(Image.id.in_(img_ids))
+        )).all()
+    } if img_ids else {}
     # WHERE each session runs: the bound GPU's node wins; a CPU session falls back to the
     # operator-reported hostname, which is matched back to the inventory for the deep link.
     uuids = {s.bound_gpu_uuid for s in rows if s.bound_gpu_uuid}
     node_by_uuid: dict[str, tuple[str, str]] = {}
+    alias_by_uuid: dict[str, str | None] = {}
     if uuids:
         drows = (await db.execute(
-            select(GpuDevice.gpu_uuid, GpuNode.id, GpuNode.hostname)
+            select(GpuDevice.gpu_uuid, GpuNode.id, GpuNode.hostname, GpuDevice.alias)
             .join(GpuNode, GpuNode.id == GpuDevice.node_id)
             .where(GpuDevice.gpu_uuid.in_(uuids))
         )).all()
-        node_by_uuid = {u: (nid, host) for u, nid, host in drows}
+        node_by_uuid = {u: (nid, host) for u, nid, host, _ in drows}
+        alias_by_uuid = {u: alias for u, _, _, alias in drows}
     hostnames = {s.node_hostname for s in rows if s.node_hostname and not s.bound_gpu_uuid}
     node_id_by_host: dict[str, str] = {}
     if hostnames:
@@ -374,6 +394,9 @@ async def list_sessions(
             s, owner_name=onames.get(s.owner_user_id),
             group_name=gname, org_id=org_id, org_name=org_names.get(org_id) if org_id else None,
             gpu_model=off_names.get(s.offering_id),
+            gpu_alias=alias_by_uuid.get(s.bound_gpu_uuid or ""),
+            image_name=(images.get(s.image_id) or (None, None))[0],
+            image_ref=(images.get(s.image_id) or (None, None))[1],
             node_hostname=host, node_id=nid,
         )
 
@@ -402,6 +425,7 @@ async def sessions_monitor_events(
 @router.get("/sessions/gpu-availability")
 async def gpu_availability(
     fleet: bool = Query(default=False),
+    cluster_id: str | None = Query(default=None),   # one cluster's cards only (multi-cluster consoles)
     principal: Principal = Depends(get_current_principal),
     db: AsyncSession = Depends(get_db),
 ):
@@ -416,15 +440,17 @@ async def gpu_availability(
     principal.require(action="session.read")
     # Direct (non-FastAPI) callers hand us the Query default object — coerce to a real bool.
     fleet = fleet is True
-    # A card on a cordoned or offline node is NOT available: admission filters on the node's state
-    # too (scheduler.reserve_slice), so listing it here would offer capacity the scheduler refuses.
+    # "Available" has to mean exactly what admission accepts, so both sides read the same
+    # predicate (app.domain.placement). Listing a card the scheduler would refuse — one on a
+    # cordoned node, mid-pool-transition, or yielded to the lending pool — offers capacity that
+    # turns into an unexplained queue the moment someone asks for it.
     devs = (
         await db.scalars(
             select(GpuDevice)
             .join(GpuNode, GpuNode.id == GpuDevice.node_id, isouter=True)
             .where(
-                GpuDevice.status == "ready",
-                or_(GpuNode.id.is_(None), GpuNode.status == "ready"),
+                *placeable_device_clauses(),
+                *([GpuDevice.cluster_id == cluster_id] if isinstance(cluster_id, str) and cluster_id else []),
             )
         )
     ).all()
@@ -474,19 +500,26 @@ async def get_session(
     sess = await _load_session(db, session_id)
     _require_access(principal, sess)
     gpu_model = await db.scalar(select(Offering.gpu_model).where(Offering.id == sess.offering_id))
-    node_id, node_host = None, None
+    img = (await db.execute(
+        select(Image.name, Image.registry).where(Image.id == sess.image_id)
+    )).first()
+    node_id, node_host, gpu_alias = None, None, None
     if sess.bound_gpu_uuid:
         nrow = (await db.execute(
-            select(GpuNode.id, GpuNode.hostname)
+            select(GpuNode.id, GpuNode.hostname, GpuDevice.alias)
             .join(GpuDevice, GpuDevice.node_id == GpuNode.id)
             .where(GpuDevice.gpu_uuid == sess.bound_gpu_uuid)
         )).first()
         if nrow:
-            node_id, node_host = nrow
+            node_id, node_host, gpu_alias = nrow
     if node_host is None and sess.node_hostname:
         node_host = sess.node_hostname
         node_id = await db.scalar(select(GpuNode.id).where(GpuNode.hostname == node_host))
-    read = _session_read(sess, gpu_model=gpu_model, node_hostname=node_host, node_id=node_id)
+    read = _session_read(
+        sess, gpu_model=gpu_model, node_hostname=node_host, node_id=node_id,
+        image_name=img[0] if img else None, image_ref=img[1] if img else None,
+        gpu_alias=gpu_alias,
+    )
     # Mounted volumes, joined with their names — the detail screens list what the session sees.
     from app.api.schemas.session import SessionMountRead
     from app.db.models import StorageVolume, VolumeMount
@@ -757,9 +790,12 @@ async def session_usage_series_self(
     """The usage metrics over a range (owner·admin) — the detail page's sparklines."""
     sess = await _load_session(db, session_id)
     _require_access(principal, sess)
-    from app.api.monitoring_router import session_usage_series  # lazy: avoid an import cycle
+    from app.api.monitoring_router import (  # lazy: avoid an import cycle
+        session_usage_series,
+        session_window,
+    )
 
-    return await session_usage_series(session_id, range_)
+    return await session_usage_series(session_id, range_, window=session_window(sess))
 
 
 @router.get("/sessions/{session_id}/timeline")

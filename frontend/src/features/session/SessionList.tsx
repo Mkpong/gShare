@@ -16,6 +16,9 @@ import { CopyButton } from '@/components/CopyButton';
 import { Timestamp } from '@/components/Timestamp';
 import { useConfirm } from '@/components/ConfirmDialog';
 import { useTableState, sortRows } from '@/hooks/useTableState';
+import { useUrlFilters, distinct } from '@/hooks/useUrlFilters';
+import { useActiveCluster } from '@/api/hooks/useClusters';
+import { Select } from '@/components/Select';
 import { useUiStore } from '@/store/uiStore';
 import { asApiError, humanizeError } from '@/lib/errors';
 import type { Session } from '@/api/types';
@@ -45,6 +48,8 @@ function vramGb(mb?: number | null): string {
   return mb % 1024 === 0 ? `${mb / 1024}GB` : `${(mb / 1024).toFixed(1)}GB`;
 }
 
+const LIST_FILTERS = ['class', 'model'] as const;
+
 export function SessionList() {
   const { t } = useTranslation();
   const { data, isLoading, isError, refetch } = useSessions();
@@ -65,6 +70,9 @@ export function SessionList() {
 
   const sessions = useMemo(() => (data ?? []) as Session[], [data]);
   const tab = table.tab ?? 'active';
+  const filters = useUrlFilters(LIST_FILTERS);
+  const { class: klass, model } = filters.values;
+  const clearAll = () => { table.clear(); filters.clear(); };
   const counts = useMemo(
     () => ({
       active: sessions.filter((s) => ACTIVE.includes(s.status)).length,
@@ -89,18 +97,25 @@ export function SessionList() {
     return rate * occ * hoursElapsed(s.started_at, endMs);
   }, [now]);
 
+  const cluster = useActiveCluster();
   const inTab = useMemo(() => {
-    if (tab === 'running') return sessions.filter((s) => s.status === 'running');
-    if (tab === 'active') return sessions.filter((s) => ACTIVE.includes(s.status));
-    if (tab === 'terminated') return sessions.filter((s) => s.status === 'terminated' || s.status === 'error');
-    return sessions;
-  }, [sessions, tab]);
+    const pool = cluster.id ? sessions.filter((s) => (s as { cluster_id?: string | null }).cluster_id === cluster.id) : sessions;
+    if (tab === 'running') return pool.filter((s) => s.status === 'running');
+    if (tab === 'active') return pool.filter((s) => ACTIVE.includes(s.status));
+    if (tab === 'terminated') return pool.filter((s) => s.status === 'terminated' || s.status === 'error');
+    return pool;
+  }, [sessions, tab, cluster.id]);
 
+  const classOpts = useMemo(() => distinct(inTab, (s) => s.resource_class), [inTab]);
+  const modelOpts = useMemo(() => distinct(inTab, (s) => s.gpu_model), [inTab]);
   const matched = useMemo(() => {
     const query = table.query.trim().toLowerCase();
-    if (!query) return inTab;
-    return inTab.filter((s) => (s.name ?? '').toLowerCase().includes(query) || s.id.toLowerCase().includes(query));
-  }, [inTab, table.query]);
+    return inTab.filter((s) => {
+      if (klass && s.resource_class !== klass) return false;
+      if (model && s.gpu_model !== model) return false;
+      return !query || (s.name ?? '').toLowerCase().includes(query) || s.id.toLowerCase().includes(query);
+    });
+  }, [inTab, table.query, klass, model]);
 
   const sorted = useMemo(() => {
     const by: Record<string, (s: Session) => unknown> = {
@@ -363,7 +378,17 @@ export function SessionList() {
         placeholder={t('session.searchPlaceholder')}
         total={inTab.length}
         shown={matched.length}
-      />
+        onClear={clearAll}
+      >
+        <Select data-url-state className="gs-input w-auto" value={klass} aria-label={t('session.allClasses')} onChange={(e) => filters.set('class', e.target.value)}>
+          <option value="">{t('session.allClasses')}</option>
+          {classOpts.map((v) => <option key={v} value={v}>{t(`enum.resourceClass.${v}`, { defaultValue: v })}</option>)}
+        </Select>
+        <Select data-url-state className="gs-input w-auto" value={model} aria-label={t('session.allModels')} onChange={(e) => filters.set('model', e.target.value)}>
+          <option value="">{t('session.allModels')}</option>
+          {modelOpts.map((v) => <option key={v} value={v}>{v}</option>)}
+        </Select>
+      </TableToolbar>
 
       {/* Bulk toolbar: appears only while rows are selected, directly above the table it acts on. */}
       {selectedActive.length > 0 && (
@@ -394,8 +419,8 @@ export function SessionList() {
         {isLoading ? (
           <div className="p-4"><TableSkeleton rows={6} columns={5} /></div>
         ) : sorted.length === 0 ? (
-          table.isFiltered
-            ? <NoResults query={table.query} onClear={table.clear} />
+          (table.isFiltered || filters.any)
+            ? <NoResults query={table.query} onClear={clearAll} />
             : (
               <EmptyState
                 icon={<Cube size={26} />}

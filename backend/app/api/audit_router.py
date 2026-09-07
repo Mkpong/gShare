@@ -185,7 +185,8 @@ def _audit_view(row: AuditLog) -> dict:
 
 
 
-def _scoped_query(principal: Principal, actor_id, actor_q, action, target, at_gte, at_lt):
+def _scoped_query(principal: Principal, actor_id, actor_q, action, target, at_gte, at_lt,
+                  result=None):
     """The audit rows this principal may see, narrowed by the list filters. Shared by the pager
     and the CSV export so the file can never contain a row the screen would not show."""
     base = select(AuditLog)
@@ -211,6 +212,8 @@ def _scoped_query(principal: Principal, actor_id, actor_q, action, target, at_gt
         base = base.where(AuditLog.actor.in_(sub))
     if action is not None:
         base = base.where(AuditLog.action == action)
+    if result is not None:
+        base = base.where(AuditLog.result == result)
     if target is not None:
         base = base.where(AuditLog.target == target)
     if at_gte is not None:
@@ -237,6 +240,7 @@ async def export_audit_logs(
     target: str | None = Query(default=None),
     at_gte: datetime | None = Query(default=None, alias="at[gte]"),
     at_lt: datetime | None = Query(default=None, alias="at[lt]"),
+    result: str | None = Query(default=None),  # ok | failed | ... — "what failed today"
     principal: Principal = Depends(get_current_principal),
     db: AsyncSession = Depends(get_db),
 ):
@@ -247,7 +251,7 @@ async def export_audit_logs(
     a file leaving the system is exactly the kind of event the log exists for.
     """
     principal.require(action="audit.read")
-    base = _scoped_query(principal, actor_id, actor_q, action, target, at_gte, at_lt)
+    base = _scoped_query(principal, actor_id, actor_q, action, target, at_gte, at_lt, result)
     rows = (
         await db.scalars(
             base.order_by(AuditLog.created_at.desc(), AuditLog.id.desc()).limit(EXPORT_MAX_ROWS)
@@ -310,13 +314,14 @@ async def list_audit_logs(
     target: str | None = Query(default=None),
     at_gte: datetime | None = Query(default=None, alias="at[gte]"),
     at_lt: datetime | None = Query(default=None, alias="at[lt]"),
+    result: str | None = Query(default=None),  # ok | failed | ... — "what failed today"
     sort: str = Query(default="-at"),
     verify: bool = Query(default=False),
     principal: Principal = Depends(get_current_principal),
     db: AsyncSession = Depends(get_db),
 ):
     principal.require(action="audit.read")
-    base = _scoped_query(principal, actor_id, actor_q, action, target, at_gte, at_lt)
+    base = _scoped_query(principal, actor_id, actor_q, action, target, at_gte, at_lt, result)
 
     total = await db.scalar(select(func.count()).select_from(base.subquery()))
 

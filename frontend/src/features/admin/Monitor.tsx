@@ -13,9 +13,10 @@ import {
 import { Table, TableToolbar, Pagination, sortAccessor, type Column } from '@/components/Table';
 import { EmptyState, NoResults, TableSkeleton } from '@/components/EmptyState';
 import { useTableState, sortRows } from '@/hooks/useTableState';
+import { useUrlFilters, distinct, distinctPairs } from '@/hooks/useUrlFilters';
+import { useActiveCluster } from '@/api/hooks/useClusters';
 import { useConfirm } from '@/components/ConfirmDialog';
 import { useBulkTerminateSessions } from '@/api/hooks/useSessions';
-import { CopyButton } from '@/components/CopyButton';
 import { Timestamp } from '@/components/Timestamp';
 import { useAuthStore } from '@/auth/authStore';
 import { useProjects } from '@/api/hooks/useGroups';
@@ -38,6 +39,7 @@ import { SessionMonitorOverlay } from '@/features/admin/SessionMonitorDetail';
 // back to polling via livePaused.
 
 export interface SessionRow {
+  cluster_id?: string | null;
   id: string;
   name: string;
   status: string;
@@ -52,6 +54,9 @@ export interface SessionRow {
   gpu_mem_mb?: number;
   gpu_cores?: number;
   gpu_model?: string | null;
+  gpu_alias?: string | null;
+  image_name?: string | null;
+  image_ref?: string | null;
   status_reason?: string | null;
   cpu?: number;
   mem_gb?: number;
@@ -64,6 +69,8 @@ export interface SessionRow {
 type QueueRow = components['schemas']['QueueEntryView'];
 
 const MONITOR_PAGE = 25;
+
+const MON_FILTERS = ['org', 'group', 'cluster'] as const;
 
 export function AdminMonitor() {
   const { t } = useTranslation();
@@ -85,6 +92,10 @@ export function AdminMonitor() {
   const confirm = useConfirm();
   const queueTable = useTableState('q', { sort: 'position', dir: 'asc' });
   const statusFilter = table.tab ?? '';
+  const filters = useUrlFilters(MON_FILTERS);
+  const { org, group, cluster: clusterF } = filters.values;
+  const clusterInfo = useActiveCluster();
+  const clearAll = () => { table.clear(); filters.clear(); };
   const setStatusFilter = (v: string) => table.setTab(v || null);
 
   const { connected } = useSessionsStream({ scope: 'all' });
@@ -149,15 +160,9 @@ export function AdminMonitor() {
         key: 'name',
         header: t('admin.monitor.colSession'),
         sortBy: (s) => s.name ?? s.id,
-        render: (s) => (
-          <div className="min-w-0">
-            <b>{s.name}</b>
-            <div className="flex items-center gap-1 text-muted text-xs">
-              <code className="font-mono truncate max-w-[150px]" title={s.id}>{s.id}</code>
-              <CopyButton value={s.id} label={t('admin.monitor.copySessionId')} />
-            </div>
-          </div>
-        ),
+        // Name only. The id and its copy button are in the detail drawer, where someone who needs
+        // the id is already looking; on the list they doubled every row's height.
+        render: (s) => <b className="truncate block max-w-[260px]" title={s.id}>{s.name}</b>,
       },
       {
         key: 'status',
@@ -188,19 +193,14 @@ export function AdminMonitor() {
       {
         key: 'resource',
         header: t('admin.monitor.colResource'),
+        // One line: class, mode and the GPU slice. Host CPU/RAM/disk moved to the detail drawer —
+        // it is a per-session constant and was the second line on every row.
         render: (s) => (
-          <span className="inline-flex flex-col leading-tight text-xs">
-            <span>
-              {s.resource_class ?? '-'}
-              {s.mode ? ` · ${s.mode}` : ''}
-              {s.gpu_mem_mb ? ` · ${formatVram(s.gpu_mem_mb)}` : ''}
-              {s.gpu_mem_mb && s.gpu_cores != null ? <span className="text-muted gs-num"> ({s.gpu_cores}%)</span> : null}
-            </span>
-            {(s.cpu != null || s.mem_gb != null || s.disk_gb != null) && (
-              <span className="text-muted gs-num">
-                {[s.cpu != null ? `${s.cpu}c` : null, s.mem_gb != null ? `${s.mem_gb}GiB` : null, s.disk_gb != null ? `${s.disk_gb}GB` : null].filter(Boolean).join(' · ')}
-              </span>
-            )}
+          <span className="text-xs whitespace-nowrap">
+            {s.resource_class ?? '-'}
+            {s.mode ? ` · ${s.mode}` : ''}
+            {s.gpu_mem_mb ? ` · ${formatVram(s.gpu_mem_mb)}` : ''}
+            {s.gpu_mem_mb && s.gpu_cores != null ? <span className="text-muted gs-num"> · {s.gpu_cores}%</span> : null}
           </span>
         ),
       },
@@ -247,11 +247,17 @@ export function AdminMonitor() {
     [projects], // eslint-disable-line react-hooks/exhaustive-deps
   );
 
+  const orgOpts = useMemo(() => distinctPairs(sessions, (r) => r.org_id, (r) => r.org_name), [sessions]);
+  const groupOpts = useMemo(() => distinctPairs(sessions.filter((r) => !org || r.org_id === org), (r) => r.group_id, (r) => r.group_name), [sessions, org]);
   const matchedSessions = useMemo(() => {
     const q = table.query.trim().toLowerCase();
-    if (!q) return sessions;
-    return sessions.filter((r) => `${r.name ?? ''} ${r.id} ${r.owner_name ?? ''}`.toLowerCase().includes(q));
-  }, [sessions, table.query]);
+    return sessions.filter((r) => {
+      if (org && r.org_id !== org) return false;
+      if (group && r.group_id !== group) return false;
+      if (clusterF && r.cluster_id !== clusterF) return false;
+      return !q || `${r.name ?? ''} ${r.id} ${r.owner_name ?? ''}`.toLowerCase().includes(q);
+    });
+  }, [sessions, table.query, org, group, clusterF]);
   const STATUS_RANK: Record<string, number> = { running: 0, preparing: 1, pending: 2, paused: 3, terminating: 4, error: 5, terminated: 6 };
   const sessionRows = useMemo(() => {
     const acc = sortAccessor(sessionColumns, table.sort);
@@ -374,15 +380,6 @@ export function AdminMonitor() {
       <div className="gs-card mb-5">
         <div className="flex items-center justify-between mb-3">
           <h2 className="font-bold">{t('admin.monitor.sessionsHeading', { count: sessions.length })}</h2>
-          <label className="gs-sr-only" htmlFor="gs-monitor-status">{t('admin.monitor.allStatuses')}</label>
-          <Select id="gs-monitor-status" data-url-state className="gs-input w-auto" value={statusFilter} onChange={(e) => setStatusFilter(e.target.value)}>
-            <option value="">{t('admin.monitor.allStatuses')}</option>
-            <option value="running">{t('enum.sessionStatus.running')}</option>
-            <option value="preparing">{t('enum.sessionStatus.preparing')}</option>
-            <option value="pending">{t('enum.sessionStatus.pending')}</option>
-            <option value="paused">{t('enum.sessionStatus.paused')}</option>
-            <option value="error">{t('enum.sessionStatus.error')}</option>
-          </Select>
         </div>
         <TableToolbar
           query={table.query}
@@ -390,19 +387,44 @@ export function AdminMonitor() {
           placeholder={t('admin.monitor.searchPlaceholder')}
           total={sessions.length}
           shown={matchedSessions.length}
-          onClear={table.clear}
+          onClear={clearAll}
         >
+          {/* The filter lives next to the search box: both narrow the same list, so they read as
+              one control group instead of a box on each edge of the card. Every lifecycle state is
+              listed — terminated and terminating were missing, which made "what ended overnight"
+              unanswerable from here. */}
+          <label className="gs-sr-only" htmlFor="gs-monitor-status">{t('admin.monitor.allStatuses')}</label>
+          <Select id="gs-monitor-status" data-url-state className="gs-input w-auto" value={statusFilter} onChange={(e) => setStatusFilter(e.target.value)}>
+            <option value="">{t('admin.monitor.allStatuses')}</option>
+            {(['running', 'preparing', 'pending', 'paused', 'terminating', 'terminated', 'error'] as const).map((st) => (
+              <option key={st} value={st}>{t(`enum.sessionStatus.${st}`)}</option>
+            ))}
+          </Select>
           {selectedLive.length > 0 && (
             <button type="button" className="gs-btn gs-btn-sm gs-btn-danger" disabled={bulkTerm.isPending} onClick={terminateSelected}>
               {t('admin.monitor.terminateSelected', { count: selectedLive.length })}
             </button>
+          )}
+          <Select data-url-state className="gs-input w-auto" value={org} aria-label={t('admin.monitor.allOrgs')} onChange={(e) => { filters.set('org', e.target.value); if (group) filters.set('group', ''); }}>
+            <option value="">{t('admin.monitor.allOrgs')}</option>
+            {orgOpts.map((o) => <option key={o.value} value={o.value}>{o.label}</option>)}
+          </Select>
+          <Select data-url-state className="gs-input w-auto" value={group} aria-label={t('admin.monitor.allGroups')} onChange={(e) => filters.set('group', e.target.value)}>
+            <option value="">{t('admin.monitor.allGroups')}</option>
+            {groupOpts.map((o) => <option key={o.value} value={o.value}>{o.label}</option>)}
+          </Select>
+          {clusterInfo.multi && (
+            <Select data-url-state className="gs-input w-auto" value={clusterF} aria-label={t('admin.monitor.allClusters')} onChange={(e) => filters.set('cluster', e.target.value)}>
+              <option value="">{t('admin.monitor.allClusters')}</option>
+              {distinct(sessions, (r) => r.cluster_id).map((v) => <option key={v} value={v}>{clusterInfo.name(v)}</option>)}
+            </Select>
           )}
         </TableToolbar>
         {sessionsQ.isLoading ? (
           <TableSkeleton rows={5} columns={5} />
         ) : sessionRows.length === 0 ? (
           table.isFiltered
-            ? <NoResults query={table.query} onClear={table.clear} />
+            ? <NoResults query={table.query} onClear={clearAll} />
             : <EmptyState icon={<Cube size={26} />} title={t('admin.monitor.emptySessions')} />
         ) : (
           <>
@@ -431,7 +453,7 @@ export function AdminMonitor() {
         {queueQ.isLoading ? (
           <TableSkeleton rows={3} columns={4} />
         ) : (
-          <Table
+          <Table dense
             caption={t('admin.monitor.queueHeading', { count: queue.length })}
             columns={queueColumns}
             rows={sortRows(queue, sortAccessor(queueColumns, queueTable.sort), queueTable.dir)}

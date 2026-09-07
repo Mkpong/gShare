@@ -43,8 +43,9 @@ const congestion = (freeMb?: number | null, totalMb?: number | null): Congestion
 };
 
 /**
- * A quota line: label, meter, and a reading split into aligned columns (used / limit / unit).
- * Passing a pre-joined string instead leaves six rows with ragged right edges.
+ * A quota line: the reading on one line, the fill as a hairline under it. The percentage is only
+ * spelled out once there is something to report — an idle account read as seven "0%" columns and
+ * seven dividing rules, which is a lot of ink for "nothing is in use".
  */
 function QuotaRow({ label, used, limit, unit, variant }: {
   label: string;
@@ -55,17 +56,24 @@ function QuotaRow({ label, used, limit, unit, variant }: {
   variant?: 'primary' | 'warn' | 'free';
 }) {
   const { t } = useTranslation();
-  const meter = limit ? pct(used, limit) : used > 0 ? 100 : 0;
+  const bounded = limit != null && limit > 0;
+  const meter = bounded ? pct(used, limit) : 0;
   return (
-    <div className="gs-qrow">
-      <div className="gs-qn">{label}</div>
-      <Meter value={meter} variant={variant} />
-      <div className="gs-qv">
-        <span className="gs-qv-used">{used}</span>
-        <span className="gs-qv-sep" aria-hidden="true">/</span>
-        <span className="gs-qv-lim">{limit ?? t('dashboard.noLimit')}</span>
-        <span className="gs-qv-unit">{unit ?? ''}</span>
+    <div>
+      <div className="flex items-baseline justify-between gap-3">
+        <span className="text-xs font-semibold text-muted truncate">{label}</span>
+        <span className="gs-num text-sm font-semibold whitespace-nowrap">
+          {used}
+          <span className="text-muted font-medium">
+            {bounded ? ` / ${limit}` : ''}{unit ? ` ${unit}` : ''}
+          </span>
+          {bounded && meter >= 1 && (
+            <span className="ml-1.5 text-2xs text-muted font-medium">{Math.round(meter)}%</span>
+          )}
+          {!bounded && <span className="ml-1.5 text-2xs text-muted font-medium">{t('dashboard.noLimit')}</span>}
+        </span>
       </div>
+      {bounded && <Meter value={meter} variant={variant} className="mt-1.5" />}
     </div>
   );
 }
@@ -76,7 +84,6 @@ export function Dashboard() {
   const { data: s } = useDashboardSummary();
   const [newVolOpen, setNewVolOpen] = useState(false);
   const [quotaOpen, setQuotaOpen] = useState(false);
-  const [availPage, setAvailPage] = useState(0);
   const { data: sessions } = useSessions();
 
   const credit = s?.credit ?? { available: null, balance: null, reserved: null };
@@ -155,43 +162,43 @@ export function Dashboard() {
         />
       </section>
 
-      <div className="grid lg:grid-cols-[7fr_5fr] gap-5">
-        {/* Everything the caller is allowed to hold, GPU and host compute together: one policy,
-            one place to read it. */}
-        <section className="gs-panel p-5">
-          <div className="flex items-center justify-between gap-2">
-            <h2 className="gs-h2 inline-flex items-center gap-1.5">{t('dashboard.quota')}<HelpTip text={t('dashboard.computeSubtitle')} /></h2>
-            <button type="button" className="text-primary text-xs font-semibold hover:underline" onClick={() => setQuotaOpen(true)}>{t('quota.requestLink')}</button>
+      {/* Everything the caller is allowed to hold, GPU and host compute together: one policy,
+          one place to read it. Three columns because they are three different ceilings — how many
+          sessions, how much GPU, how much host compute — and side by side they compare at a glance
+          instead of stacking into one long list. */}
+      <section className="gs-panel p-5">
+        <div className="flex items-center justify-between gap-2">
+          <h2 className="gs-h2 inline-flex items-center gap-1.5">{t('dashboard.quota')}<HelpTip text={t('dashboard.computeSubtitle')} /></h2>
+          <button type="button" className="text-primary text-xs font-semibold hover:underline" onClick={() => setQuotaOpen(true)}>{t('quota.requestLink')}</button>
+        </div>
+        <div className="mt-4 grid md:grid-cols-3 gap-x-10 gap-y-6">
+          <div className="flex flex-col gap-3.5">
+            <div className="gs-quota-band">{t('dashboard.bandSessions')}</div>
+            <QuotaRow label={t('dashboard.instances')} used={active} limit={instLimit} unit={t('dashboard.instanceUnit')} variant="warn" />
+            <QuotaRow label={t('dashboard.runningLabel')} used={running} limit={instLimit} unit={t('dashboard.instanceUnit')} variant="free" />
           </div>
-          {/* Three bands, because they are three different ceilings: how many sessions, how much
-              GPU, how much host compute. Flat, the GPU-core row read as one more host number. */}
-          <div className="mt-3 space-y-4">
-            <div>
-              <div className="gs-quota-band">{t('dashboard.bandSessions')}</div>
-              <QuotaRow label={t('dashboard.instances')} used={active} limit={instLimit} unit={t('dashboard.instanceUnit')} variant="warn" />
-              <QuotaRow label={t('dashboard.runningLabel')} used={running} limit={instLimit} unit={t('dashboard.instanceUnit')} variant="free" />
-            </div>
-            <div>
-              <div className="gs-quota-band">{t('dashboard.bandGpu')}</div>
-              <QuotaRow label={t('dashboard.myVram')} used={gb(myVram.used_mb)} limit={myVram.limit_mb ? gb(myVram.limit_mb) : null} unit="GB" variant="primary" />
-              <QuotaRow label={t('dashboard.gpuCores')} used={gpuCores.used} limit={gpuCores.limit} unit="%" variant="primary" />
-            </div>
-            {compute && (
-              <div>
-                <div className="gs-quota-band">{t('dashboard.bandHost')}</div>
-                <QuotaRow label="CPU" used={compute.cpu.used} limit={compute.cpu.limit} unit={t('dashboard.coreUnit')} />
-                <QuotaRow label={t('dashboard.memLabel')} used={compute.mem_gb.used} limit={compute.mem_gb.limit} unit="GiB" />
-                <QuotaRow label={t('dashboard.diskLabel')} used={compute.disk_gb.used} limit={compute.disk_gb.limit} unit="GB" />
-              </div>
-            )}
+          <div className="flex flex-col gap-3.5">
+            <div className="gs-quota-band">{t('dashboard.bandGpu')}</div>
+            <QuotaRow label={t('dashboard.myVram')} used={gb(myVram.used_mb)} limit={myVram.limit_mb ? gb(myVram.limit_mb) : null} unit="GB" variant="primary" />
+            <QuotaRow label={t('dashboard.gpuCores')} used={gpuCores.used} limit={gpuCores.limit} unit="%" variant="primary" />
           </div>
-        </section>
+          {compute && (
+            <div className="flex flex-col gap-3.5">
+              <div className="gs-quota-band">{t('dashboard.bandHost')}</div>
+              <QuotaRow label="CPU" used={compute.cpu.used} limit={compute.cpu.limit} unit={t('dashboard.coreUnit')} />
+              <QuotaRow label={t('dashboard.memLabel')} used={compute.mem_gb.used} limit={compute.mem_gb.limit} unit="GiB" />
+              <QuotaRow label={t('dashboard.diskLabel')} used={compute.disk_gb.used} limit={compute.disk_gb.limit} unit="GB" />
+            </div>
+          )}
+        </div>
+      </section>
 
-        {/* What is free to run on right now. */}
-        <section className="gs-panel p-5">
+      {/* What is free to run on right now: one card per GPU model, in a row under the quota. */}
+      <section className="gs-panel p-5 mt-5">
+        <div className="flex items-center justify-between gap-3 flex-wrap">
           <h2 className="gs-h2 inline-flex items-center gap-1.5">{t('dashboard.regionAvailability')}<HelpTip text={t('dashboard.availabilityHelp')} /></h2>
           {pools.length > 0 && (
-            <div className="mt-2 flex flex-wrap items-center gap-1.5 text-xs" aria-label={t('dashboard.pools.label')}>
+            <div className="flex flex-wrap items-center gap-1.5 text-xs" aria-label={t('dashboard.pools.label')}>
               <span className="text-muted">{t('dashboard.pools.label')}</span>
               {pools.map((p) => (
                 <span key={p.id ?? 'shared'} className="gs-tag" title={t(`dashboard.pools.tier_${p.tier}`)}>
@@ -200,44 +207,30 @@ export function Dashboard() {
               ))}
             </div>
           )}
-          {regions.length === 0 ? (
-            <p className="text-muted text-sm py-3">{t('dashboard.noDevices')}</p>
-          ) : (
-            /* One card per model with a single traffic-light reading. Exact VRAM and idle-card
-               counts are operator detail; to a user they read as "the GPU is being watched". */
-            <ul className="mt-3 grid grid-cols-1 gap-3">
-              {regions.slice(availPage * 4, availPage * 4 + 4).map((r) => {
-                const level = congestion(r.free_mb, r.total_mb);
-                // Per-card VRAM is a SPEC (helps pick a model), not live state — card counts and
-                // exact free GB stay hidden by design.
-                const cardGb = r.total > 0 ? Math.round((r.total_mb ?? 0) / r.total / 1024) : 0;
-                return (
-                  <li key={r.model} className="gs-card p-4">
-                    <div className="flex items-center gap-2.5">
-                      <GraphicsCard size={17} className="shrink-0 text-muted" aria-hidden="true" />
-                      <span className="min-w-0 flex-1 truncate font-medium text-sm" title={r.model}>{r.model}</span>
-                      {cardGb > 0 && <span className="gs-tag shrink-0 gs-num">{cardGb} GB</span>}
-                    </div>
-                    <div className="mt-2.5 pl-[27px]">
-                      <StatusPill kind={level} label={t(`dashboard.congestion.${level}`)} />
-                    </div>
-                  </li>
-                );
-              })}
-            </ul>
-          )}
-          {regions.length > 4 && (
-            /* Compact pager: this is a side panel, not a table — ‹ 1 / 2 › is all it needs. */
-            <div className="mt-2.5 flex items-center justify-end gap-1.5 text-xs text-muted">
-              <button type="button" className="gs-btn gs-btn-sm disabled:opacity-40" aria-label={t('table.previous')}
-                disabled={availPage === 0} onClick={() => setAvailPage((p) => p - 1)}>‹</button>
-              <span className="gs-num">{t('table.pageOf', { page: availPage + 1, pages: Math.ceil(regions.length / 4) })}</span>
-              <button type="button" className="gs-btn gs-btn-sm disabled:opacity-40" aria-label={t('table.next')}
-                disabled={availPage >= Math.ceil(regions.length / 4) - 1} onClick={() => setAvailPage((p) => p + 1)}>›</button>
-            </div>
-          )}
-        </section>
-      </div>
+        </div>
+        {regions.length === 0 ? (
+          <p className="text-muted text-sm py-3">{t('dashboard.noDevices')}</p>
+        ) : (
+          /* One card per model with a single traffic-light reading. Exact VRAM and idle-card
+             counts are operator detail; to a user they read as "the GPU is being watched". */
+          <ul className="mt-3 grid grid-cols-[repeat(auto-fill,minmax(320px,1fr))] gap-3">
+            {regions.map((r) => {
+              const level = congestion(r.free_mb, r.total_mb);
+              // Per-card VRAM is a SPEC (helps pick a model), not live state — card counts and
+              // exact free GB stay hidden by design.
+              const cardGb = r.total > 0 ? Math.round((r.total_mb ?? 0) / r.total / 1024) : 0;
+              return (
+                <li key={r.model} className="gs-card p-4 flex items-center gap-3">
+                  <GraphicsCard size={17} className="shrink-0 text-muted" aria-hidden="true" />
+                  <span className="min-w-0 flex-1 truncate font-medium text-sm" title={r.model}>{r.model}</span>
+                  {cardGb > 0 && <span className="gs-tag shrink-0 gs-num">{cardGb} GB</span>}
+                  <StatusPill kind={level} label={t(`dashboard.congestion.${level}`)} />
+                </li>
+              );
+            })}
+          </ul>
+        )}
+      </section>
 
       <section className="gs-panel p-5 mt-5">
         <div className="flex items-center justify-between gap-3">

@@ -72,6 +72,9 @@ class SessionCreate(BaseModel):
     # resident yielded, and is reclaimed when that resident returns. Exclusive only.
     # (See docs/paper/manuscript, §Design.)
     preemptible: bool = False
+    # Privileged session: root inside the container (apt, system packages). Admitted only when the
+    # effective resource policy grants allow_privileged; otherwise 403 privileged_not_allowed.
+    privileged: bool = False
     # Scheduling priority, higher wins. With no capacity free, a request can actively preempt a
     # lower-priority yieldable session.
     priority: int = Field(default=0, ge=0)
@@ -119,6 +122,13 @@ class SessionRead(ORMModel):
     # "which GPU", shown in the user list/detail instead of the raw card UUID. None for CPU
     # offerings.
     gpu_model: str | None = None
+    # The bound card's operator-given alias ("lab-A-01"), when one is set.
+    gpu_alias: str | None = None
+    # WHICH image the session runs: the catalogue name a person recognises, and the registry
+    # reference behind it. Without these the only clue was the image id, so nobody could tell
+    # what a running session was actually built from.
+    image_name: str | None = None
+    image_ref: str | None = None
     # Live scratch-disk gauge (single-session detail only): the pod's ephemeral-storage usage
     # against its limit — a kubelet /stats/summary reading relayed by the operator, up to
     # ~5 minutes stale. None on lists, for CPU-less-disk pods, or when no fresh reading exists.
@@ -132,6 +142,9 @@ class SessionRead(ORMModel):
     credit_per_hour_snapshot: float | None = None
     started_at: datetime | None = None
     terminated_at: datetime | None = None
+    # avg/max of cpu_cores·mem_mib·vram_mib·gpu_core_pct over the run; set when the session ends
+    usage_summary: dict | None = None
+    privileged: bool = False
     created_at: datetime | None = None
     # When the status last changed — running since, errored at, paused at (admin monitor column).
     status_changed_at: datetime | None = None

@@ -79,11 +79,13 @@ export interface SessionUsageSeries {
   metrics: Record<'cpu_cores' | 'mem_mib' | 'vram_mib' | 'gpu_core_pct',
     { unit: string; points: [number, number | null][] }>;
 }
-export function useSessionUsageSeries(id: string | undefined, range: RangeKey) {
+export function useSessionUsageSeries(id: string | undefined, range: RangeKey, live = true) {
   return useQuery({
     queryKey: ['monitoring', 'session-usage-series', id ?? '', range],
     enabled: !!id,
-    refetchInterval: AUTO_MS[range],
+    // A session's 15-minute window is worth a 5 s cadence: it is what a person watches while a
+    // job starts. Ended sessions never change, so they are not polled at all.
+    refetchInterval: live ? (range === '15m' ? 5000 : AUTO_MS[range]) : false,
     queryFn: async () => {
       const { data } = await (api as unknown as {
         GET: (p: string, o?: { params?: { path?: Record<string, string>; query?: Record<string, unknown> } }) => Promise<{ data?: unknown }>;

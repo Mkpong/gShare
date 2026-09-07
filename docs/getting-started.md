@@ -50,7 +50,7 @@ make compose-up        # build and start api, worker, frontend, postgres, redis
 
 - Console: **http://localhost:8000**
 - API: **http://localhost:8080** (`/healthz`, `/api/v1/...`)
-- Login: **admin@example.com** / **change-me-please** — the Compose defaults. You are
+- Login: **admin@example.com** / **12345678** — the Compose defaults. You are
   forced to change the password at first login.
 
 > Changing the defaults is optional; the stack runs without a `.env` file. To override,
@@ -112,7 +112,7 @@ needed on the step-by-step path.
        console: gshare.example.com   # the real domain — one host for the console and path-based sessions
    bootstrapAdmin:
      email: admin@example.com        # first super_admin login (default: admin@example.com)
-     password: change-me-please      # initial password; must be changed at first login
+     password: 12345678      # initial password; must be changed at first login
    ```
 
    `make deploy-incluster` and `make prod-deploy` apply this file with `-f` when it exists,
@@ -160,7 +160,7 @@ example in [`domain.example.yaml`](../deploy/values/domain.example.yaml)):
 ```bash
 kubectl get pods -n gshare-system   # api, worker, operator, frontend, pg, redis all Running
 
-# The admin password defaults to change-me-please. If you set a different one, or left it
+# The admin password defaults to 12345678. If you set a different one, or left it
 # empty to get a random one, read it from the secret:
 kubectl get secret -n gshare-system gshare-bootstrap-admin -o jsonpath='{.data.password}' | base64 -d
 ```

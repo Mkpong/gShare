@@ -50,7 +50,7 @@ export function Brand({ size = 22, textClass = 'font-bold text-md tracking-[-0.0
   return (
     <>
       <BrandMark size={size} logo={b?.logo} name={name} />
-      <span className={textClass}>{name}</span>
+      <span className={`gs-brand-text ${textClass}`}>{name}</span>
     </>
   );
 }

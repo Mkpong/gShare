@@ -1,3 +1,4 @@
+import { fetchRestOfPages, pageTotal, PAGE_MAX } from '@/api/paging';
 import { useEffect, useRef, useState } from 'react';
 import type { Session } from '@/api/types';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
@@ -32,13 +33,24 @@ export function useAllSessions(filter: SessionMonitorFilter = {}, livePaused = f
   return useQuery({
     queryKey: monitorKeys.sessions(filter),
     queryFn: async () => {
-      // The server accepts only status, group_id, page, and size; owner_id and node_id are not
-      // supported.
-      const { data } = await api.GET('/api/v1/sessions', {
-        params: { query: { status: filter.status, group_id: filter.group_id, page: filter.page, size: filter.size, scope: 'all' } },
-      });
-      const env = data as unknown as { data?: Session[] } | Session[] | undefined;
-      return Array.isArray(env) ? env : env?.data ?? [];
+      // The monitor is a fleet view, so it reads the WHOLE list and pages it in the browser.
+      // Fetching a single server page (20 rows, silently) hid every session past the twentieth:
+      // a running session was absent from the unfiltered list yet appeared the moment the running
+      // filter narrowed the result below one page. The server caps `size` at 100, hence the loop.
+      // The server accepts only status, group_id, page, and size; owner_id and node_id are not.
+      const SIZE = 100;
+      const out: Session[] = [];
+      for (let page = 1; page <= 20; page += 1) {
+        const { data } = await api.GET('/api/v1/sessions', {
+          params: { query: { status: filter.status, group_id: filter.group_id, page, size: SIZE, scope: 'all' } },
+        });
+        const env = data as unknown as { data?: Session[]; pagination?: { total?: number } } | Session[] | undefined;
+        const rows = Array.isArray(env) ? env : env?.data ?? [];
+        out.push(...rows);
+        const total = Array.isArray(env) ? out.length : env?.pagination?.total ?? out.length;
+        if (rows.length < SIZE || out.length >= total) break;
+      }
+      return out;
     },
     refetchInterval: livePaused ? 4000 : false,
     placeholderData: (prev) => prev,
@@ -53,11 +65,11 @@ export function useAdminQueue(
   return useQuery({
     queryKey: monitorKeys.queue(filter),
     queryFn: async () => {
-      // The server accepts only group_id, page, and size; status is not supported.
-      const { data } = await api.GET('/api/v1/queue', {
-        params: { query: { group_id: filter.group_id, page: filter.page, size: filter.size } },
-      });
-      return data?.data ?? [];
+      // The whole queue, not its first page: the tab badge and the heading count it, and a queue
+      // deeper than one page would report and list 20. The server accepts only group_id.
+      const q = { group_id: filter.group_id };
+      const { data } = await api.GET('/api/v1/queue', { params: { query: { ...q, page: 1, size: PAGE_MAX } } });
+      return await fetchRestOfPages('/api/v1/queue', q, data?.data ?? [], pageTotal(data));
     },
     refetchInterval: livePaused ? 5000 : false,
     placeholderData: (prev) => prev,
@@ -72,10 +84,9 @@ export function useNodes(filter: { status?: string; region?: string; gpu_mode?: 
     enabled: opts?.enabled ?? true,
     queryFn: async () => {
       // The server accepts only status and region; gpu_mode is not supported.
-      const { data } = await api.GET('/api/v1/nodes', {
-        params: { query: { status: filter.status, region: filter.region } },
-      });
-      return data?.data ?? [];
+      const q = { status: filter.status, region: filter.region };
+      const { data } = await api.GET('/api/v1/nodes', { params: { query: { ...q, page: 1, size: PAGE_MAX } } });
+      return await fetchRestOfPages('/api/v1/nodes', q, data?.data ?? [], pageTotal(data));
     },
     refetchInterval: 15000,
     placeholderData: (prev) => prev,
@@ -196,7 +207,7 @@ export function useSessionUsage(id?: string) {
   return useQuery({
     queryKey: ['monitor', 'session-usage', id ?? ''],
     enabled: !!id,
-    refetchInterval: 10000,
+    refetchInterval: 5000,
     queryFn: async () => {
       const { data } = await (api as unknown as {
         GET: (p: string, i?: { params?: { path?: Record<string, string> } }) => Promise<{ data?: unknown }>;

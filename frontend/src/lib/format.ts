@@ -111,3 +111,15 @@ export function runwayLabel(h: number): string {
   if (months < 24) return i18n.t('wallet.durMonths', { n: Math.round(months) });
   return i18n.t('wallet.durYears', { n: Math.round(days / 365.25) });
 }
+
+/** An image reference without its registry host: `10.10.0.162:5000/gshare-session:pytorch2.8` and
+ *  `docker.io/boanlab/gshare-session:pytorch2.8` both read as `gshare-session:pytorch2.8`. The host
+ *  is deployment plumbing, not something a person reading a session needs. */
+export function shortImageRef(ref?: string | null): string {
+  if (!ref) return '';
+  const parts = ref.split('/');
+  if (parts.length === 1) return ref;
+  // A first segment carrying a dot or a port is a registry host; a plain word is an org name.
+  const start = /[.:]/.test(parts[0]) ? 1 : 0;
+  return parts.slice(start).join('/');
+}

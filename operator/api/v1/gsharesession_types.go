@@ -83,6 +83,12 @@ type GShareSessionSpec struct {
 	// +optional
 	Preemptible bool `json:"preemptible,omitempty"`
 
+	// Privileged: run the session container as root with a relaxed security context (privilege
+	// escalation allowed, the baseline capability set) so the person can install system packages.
+	// Granted per user by the control plane's resource policy; never a default.
+	// +optional
+	Privileged bool `json:"privileged,omitempty"`
+
 	// BorrowedGpuUuid: when set, this is a spot session placed on a resident's yielded card. The Pod
 	// is built device-plugin-BYPASS — the card is injected by UUID (NVIDIA_VISIBLE_DEVICES), with NO
 	// nvidia.com/gpu request, pinned to BorrowedNode. (docs/paper/manuscript, §Design)

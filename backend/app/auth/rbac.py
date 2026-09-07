@@ -72,6 +72,7 @@ _ACTION_MATRIX: dict[str, tuple] = {
     # Presets — super_admin only, since the resources, offerings, and presets screens are
     "preset.create": ("super_admin",),
     "system.branding.set": ("super_admin",),
+    "gpu_device.set_alias": ("super_admin",),
     # Policies — super_admin·org_admin·group_admin
     "policy.read": ("super_admin", ("scoped", "member")),
     "policy.create": ("super_admin", ("scoped", "group_admin")),
@@ -107,11 +108,8 @@ _ACTION_MATRIX: dict[str, tuple] = {
     "pool.grant": ("super_admin", ("scoped", "org_admin")),
     # Storage volumes — group_admin+
     "volume.create": ("super_admin", ("scoped", "group_admin")),
-    # Notices: super_admin posts globally; a group_admin posts to their own group.
-    "notice.create": ("super_admin", ("scoped", "group_admin")),
-    # Inquiries: answering/closing is for super_admin and the author's group_admins.
-    "inquiry.answer": ("super_admin", ("scoped", "group_admin")),
     "volume.delete": ("super_admin", ("scoped", "group_admin")),
+    "volume.force_delete": ("super_admin",),   # terminates the mounting sessions first
     # Budgets / FinOps — super_admin·org_admin·group_admin
     "budget.read": ("super_admin", ("scoped", "group_admin")),
     "budget.create": ("super_admin", ("scoped", "group_admin")),

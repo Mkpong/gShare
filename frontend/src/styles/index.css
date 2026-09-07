@@ -176,12 +176,52 @@ html, body { overflow: hidden; }   /* the html box is the real page scroller —
 
 @media (min-width: 768px) {
   .gs-shell {
-    grid-template-columns: 232px 1fr;
+    /* 260px: room for an email in the account block without truncating the common case. */
+    grid-template-columns: 260px 1fr;
     grid-template-areas:
       'brand top'
       'nav main';
+    transition: grid-template-columns 160ms ease;
   }
+  /* Collapsed: a thin rail of icons. Labels, section headings and the wallet line are hidden;
+     the brand cell keeps only the mark. Not remembered across visits by design. */
+  .gs-shell.is-collapsed { grid-template-columns: 60px 1fr; }
+  .gs-shell.is-collapsed .gs-nav-label,
+  .gs-shell.is-collapsed .gs-nav-section,
+  .gs-shell.is-collapsed .gs-nav-wallet,
+  .gs-shell.is-collapsed .gs-brand-text { display: none; }
+  /* The rail's inset belongs to the scrolling list and the foot, NOT to the sidebar as well:
+     stacking both insets squeezed each row to 23px, so the 17px glyph spilled out of its own
+     highlight and the active row looked half-painted. */
+  .gs-shell.is-collapsed .gs-nav-scroll,
+  .gs-shell.is-collapsed .gs-nav-foot { padding-left: 0.5rem; padding-right: 0.5rem; }
+  /* A rail row is a square the width of the rail: the glyph sits in the middle of it, so the
+     active fill and the hover fill surround the icon instead of clipping it. */
+  .gs-shell.is-collapsed .gs-nav-row {
+    justify-content: center;
+    padding-left: 0;
+    padding-right: 0;
+  }
+  /* The waiting-dot on a glyph only earns its place on the rail; expanded, the count badge says it. */
+  .gs-nav-dot { display: none; }
+  .gs-shell.is-collapsed .gs-nav-dot { display: block; }
 }
+/* The navigation scrolls only when it outgrows the column, and the bar stays out of the way:
+   thin, no track, and tinted only while the pointer is in the sidebar. */
+.gs-nav-scroll {
+  scrollbar-width: thin;
+  scrollbar-color: transparent transparent;
+  overscroll-behavior: contain;
+}
+.gs-nav-scroll:hover,
+.gs-nav-scroll:focus-within { scrollbar-color: var(--border-strong) transparent; }
+.gs-nav-scroll::-webkit-scrollbar { width: 6px; }
+.gs-nav-scroll::-webkit-scrollbar-track { background: transparent; }
+.gs-nav-scroll::-webkit-scrollbar-thumb { background: transparent; border-radius: 3px; }
+.gs-nav-scroll:hover::-webkit-scrollbar-thumb,
+.gs-nav-scroll:focus-within::-webkit-scrollbar-thumb { background: var(--border-strong); }
+
+@media (prefers-reduced-motion: reduce) { .gs-shell { transition: none; } }
 
 @layer components {
   /* Assistive-technology only; the skip link becomes visible on focus. */
@@ -325,8 +365,10 @@ html, body { overflow: hidden; }   /* the html box is the real page scroller —
   }
 
   /* Sub-head inside a quota card: names a band of related ceilings without becoming a heading. */
+  /* A band names its three ceilings; it is a heading, not a boxed section, so it carries an
+     overline rather than a rule under bold text. */
   .gs-quota-band {
-    @apply text-xs font-bold text-text mb-1.5 pb-1 border-b border-border;
+    @apply text-2xs font-semibold uppercase tracking-[0.08em] text-muted pb-2 border-b border-border;
   }
 
   /* Chart hover readout: every series' value at the cursor's timestamp. Positioned by the plugin;

@@ -1,3 +1,4 @@
+import { fetchRestOfPages, pageTotal, PAGE_MAX } from '@/api/paging';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { api, idemKey } from '@/api/client';
 
@@ -23,8 +24,10 @@ export function useWallets(filter: WalletFilter = {}) {
   return useQuery({
     queryKey: billingKeys.wallets(filter),
     queryFn: async () => {
-      const { data } = await api.GET('/api/v1/credits/wallets', { params: { query: filter } });
-      return data ?? [];
+      // The settlement report builds its scope picker from this list client-side.
+      const { data } = await api.GET('/api/v1/credits/wallets', { params: { query: { ...filter, page: 1, size: PAGE_MAX } } });
+      const rows = data ?? [];
+      return await fetchRestOfPages('/api/v1/credits/wallets', { ...filter }, rows, rows.length);
     },
   });
 }
@@ -42,8 +45,11 @@ export function useTopupRequests(filter: TopupRequestFilter = {}) {
   return useQuery({
     queryKey: billingKeys.topupRequests(filter),
     queryFn: async () => {
-      const { data } = await api.GET('/api/v1/credits/topup-requests', { params: { query: filter } });
-      return data ?? { data: [] };
+      // The history tab filters this list client-side; with a first page of nothing but pending
+      // rows it rendered empty while decided requests existed.
+      const { data } = await api.GET('/api/v1/credits/topup-requests', { params: { query: { ...filter, page: 1, size: PAGE_MAX } } });
+      const rows = data?.data ?? [];
+      return { ...(data ?? {}), data: await fetchRestOfPages('/api/v1/credits/topup-requests', { ...filter }, rows, pageTotal(data)) };
     },
   });
 }

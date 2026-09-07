@@ -153,7 +153,6 @@ export function Login() {
         </div>
         <div className="relative text-2xs text-muted leading-relaxed">
           <a href="https://www.apache.org/licenses/LICENSE-2.0" target="_blank" rel="noreferrer noopener" className="hover:text-text">Apache-2.0</a>
-          <span className="mx-1.5">·</span>Dankook University · Networked Systems and Security Lab.
         </div>
       </section>
 
@@ -222,7 +221,7 @@ export function Login() {
                 inputMode="email"
                 autoComplete="username"
                 autoFocus
-                placeholder="you@dankook.ac.kr"
+                placeholder="you@example.com"
                 value={email}
                 onChange={(e) => setEmail(e.target.value)}
                 onBlur={() => setEmailTouched(true)}

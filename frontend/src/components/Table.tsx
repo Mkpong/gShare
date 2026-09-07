@@ -36,6 +36,8 @@ interface TableProps<T> {
   onSelectedChange?: (next: Set<string>) => void;
   selectable?: (row: T) => boolean;
   isLoading?: boolean;
+  /** Tighter rows for long operational lists (session monitor). */
+  dense?: boolean;
   /** Row click opens a detail view. Clicks on interactive children (links, buttons, inputs) are
    *  ignored so row actions keep working. */
   onRowClick?: (row: T) => void;
@@ -61,7 +63,7 @@ export function sortAccessor<T>(columns: Column<T>[], key: string | null | undef
 export function Table<T>({
   columns, rows, rowKey, empty, caption, sort, dir = 'asc', onSort,
   selected, onSelectedChange, selectable, isLoading, onRowClick,
-  expandedKey, renderExpansion,
+  expandedKey, renderExpansion, dense = false,
 }: TableProps<T>) {
   const { t } = useTranslation();
   const captionId = useId();
@@ -165,7 +167,7 @@ export function Table<T>({
                   } : undefined}
                 >
                   {bulk && (
-                    <td className="px-3 py-3 border-b border-border group-last:border-b-0">
+                    <td className={`px-3 ${dense ? 'py-1.5' : 'py-3'} border-b border-border group-last:border-b-0`}>
                       <input
                         type="checkbox"
                         className="w-4 h-4 align-middle"
@@ -180,7 +182,7 @@ export function Table<T>({
                     <td
                       key={c.key}
                       className={[
-                        'px-3 py-3 border-b border-border group-last:border-b-0 text-sm',
+                        `px-3 ${dense ? 'py-1.5' : 'py-3'} border-b border-border group-last:border-b-0 text-sm`,
                         c.align === 'right' ? 'text-right tabular-nums' : c.align === 'center' ? 'text-center tabular-nums' : '',
                         c.hideOnMobile ? 'hidden md:table-cell' : '',
                         c.cellClassName ?? '',

@@ -119,7 +119,10 @@ class PolicyUpdate(BaseModel):
 # Keys of ResourcePolicy.limits exposed through the public `limits` object: the resource quotas
 # plus the node-pool spill switch (see app.domain.node_pools). CPU-session limits have their own
 # top-level fields.
-_PUBLIC_LIMIT_KEYS = ("cpu", "mem_gb", "gpu_mem_mb", "gpu_cores", "storage_gb", "shared_pool", "volume_gb")
+_PUBLIC_LIMIT_KEYS = (
+    "cpu", "mem_gb", "gpu_mem_mb", "gpu_cores", "storage_gb", "shared_pool", "volume_gb",
+    "allow_privileged",   # the privileged-session grant rides in limits like shared_pool
+)
 
 
 def _policy_view(p: ResourcePolicy) -> dict:
@@ -137,6 +140,7 @@ def _policy_view(p: ResourcePolicy) -> dict:
         "cpu_session_idle_timeout_sec": limits.get("cpu_session_idle_timeout_sec"),
         # Only the resource-quota keys belong in the public limits object.
         "limits": {k: v for k, v in limits.items() if k in _PUBLIC_LIMIT_KEYS},
+        "allow_privileged": bool(limits.get("allow_privileged")),
     }
 
 
@@ -208,6 +212,8 @@ async def effective_policy(
         "max_runtime_min": pol.max_runtime,
         "idle_timeout_sec": pol.idle_timeout,
         "limits": limits,
+        # Whether the wizard may offer a privileged (root) session.
+        "allow_privileged": bool(pol.limits.get("allow_privileged")),
         "used": {**used, "active": active, "queued": queued},
         "remaining": remaining,
     }

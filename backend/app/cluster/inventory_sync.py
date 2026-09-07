@@ -155,10 +155,24 @@ class InventorySync:
                 )
             else:
                 # Reflect capacity/status; DO NOT touch used_* (ledger owns occupancy).
+                # The node follows the report: a card moved to another chassis, or a host renamed
+                # and re-registered, otherwise kept pointing at the node row it first appeared on
+                # — and the session read model resolves the node FROM the card, so every session
+                # on it would name a machine it no longer runs on.
+                if node.id and dev.node_id != node.id:
+                    dev.node_id = node.id
                 dev.total_mem_mb = ev.total_mem_mb
                 if ev.total_cores:
                     dev.total_cores = ev.total_cores
-                dev.status = ev.status
+                # Health is a DECISION, not an observation. `unhealthy` is written either by an
+                # administrator marking a card faulted or by the operator's health monitor
+                # (xid/ECC), and both end every session bound to the card. A routine inventory
+                # report saying "the card is present and idle" must not undo that — it did, on the
+                # very next tick, so a faulted card killed its sessions and was handed straight
+                # back out five seconds later. A report may still FAIL a healthy card; only
+                # set_device_health() returns one to service.
+                if ev.status == "unhealthy" or dev.status != "unhealthy":
+                    dev.status = ev.status
                 # Mode is split into OBSERVATION and POLICY. The report decides only the
                 # hami-core↔mig axis (a card-level hardware fact); within hami-core the pool
                 # (fractional vs exclusive) is GShare policy: desired_mode wins, then the current

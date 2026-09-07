@@ -14,7 +14,7 @@ global:
 # The super_admin account created on first start. The display name is edited from the console.
 bootstrapAdmin:
   email: admin@example.com        # the administrator's real email, which is the login id
-  password: change-me-please      # initial password, forced to change at first login;
+  password: "12345678"    # initial password, forced to change at first login;
                                   # set to "" to have one generated
 
 # ── Optional per-deployment knobs (all have working chart defaults) ─────────────────────────────

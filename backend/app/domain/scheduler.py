@@ -31,8 +31,10 @@ from app.core.errors import (
     IncompatibleImage,
     NoCapacity,
     NotFound,
+    PrivilegedNotAllowed,
     QuotaExceeded,
     Unserviceable,
+    VolumeLocked,
     VramBelowMinimum,
 )
 from app.core.logging import get_logger
@@ -56,6 +58,7 @@ from app.domain import queue_ranking
 from app.domain.budget_service import BudgetService
 from app.domain.credit_engine import CreditEngine
 from app.domain.node_pools import node_pool_map, resolve_pool_access
+from app.domain.placement import placeable_device_clauses
 from app.domain.policy import EffectivePolicy, resolve_effective_policy
 from app.domain.pool import maybe_apply_drained_mode
 from app.domain.pricing import round_credit
@@ -427,6 +430,12 @@ class SchedulerService:
                 vol = await self.db.get(StorageVolume, m.volume_id)
                 if vol is None or vol.deleted_at is not None:
                     raise NotFound("volume not found", {"volume_id": m.volume_id})
+                # The owner's lock holds for everyone, owner included: it exists to drain the
+                # volume for deletion, and the owner lifts it when they change their mind.
+                if vol.mount_locked:
+                    raise VolumeLocked(
+                        "volume is locked against new mounts", {"volume_id": vol.id}
+                    )
                 # Admin case: super_admin, or group_admin and above on that group's volume.
                 is_mgr = su or (
                     vol.scope == "group"
@@ -442,6 +451,10 @@ class SchedulerService:
                 # mount it — rw when the volume is RWX, ro otherwise — without an explicit
                 # permission row (which can still upgrade/downgrade an individual).
                 if role is None and vol.scope == "group" and vol.scope_id in principal.memberships:
+                    role = "rw" if vol.access_mode == "RWX" else "ro"
+                # A shared (global) volume is readable by every signed-in user; writable only when
+                # the administrator created it RWX.
+                if role is None and vol.scope == "global":
                     role = "rw" if vol.access_mode == "RWX" else "ro"
                 if not is_mgr and role is None:
                     raise Forbidden(
@@ -643,6 +656,15 @@ class SchedulerService:
                         .limit(1)
                     )
                 ) is not None
+            # Privileged (root) sessions are a policy grant, never a default.
+            privileged = bool(getattr(req, "privileged", False))
+            if privileged:
+                eff = await resolve_effective_policy(self.db, principal.user_id, req.group_id)
+                if not (eff and eff.limits.get("allow_privileged")):
+                    raise PrivilegedNotAllowed(
+                        "privileged sessions are not granted by the resource policy",
+                        {"group_id": req.group_id},
+                    )
             sess = Session(
                 id=ids.new("session"),
                 name=getattr(req, "name", None),
@@ -667,6 +689,7 @@ class SchedulerService:
                 pause_mode="yield" if lossless else "cold",
                 # Spot eligibility is exclusive-only; the snapshot taken above is discounted too.
                 preemptible=preemptible,
+                privileged=privileged,
                 priority=int(getattr(req, "priority", 0) or 0),
                 status="pending",
                 credit_per_hour_snapshot=snapshot,
@@ -943,16 +966,12 @@ class SchedulerService:
             # cordon and drain promise "no new scheduling", and resume re-reservation relies on it.
             .join(GpuNode, GpuNode.id == GpuDevice.node_id, isouter=True)
             .where(
-                or_(GpuNode.id.is_(None), GpuNode.status == "ready"),
+                # Health, pool transition, lending and node state — the same predicate the
+                # availability read model uses, so the two can never disagree about what is free.
+                *placeable_device_clauses(),
                 GpuDevice.cluster_id == cluster_id,
-                GpuDevice.status == "ready",
+                # Request-specific: a fractional request may also land on a MIG card.
                 GpuDevice.mode.in_(modes),
-                # Draining/applying cards accept no new placements (pool rebalancing).
-                GpuDevice.mode_state == "ready",
-                # Yielded and lent cards are out of the normal placement pool: the resident
-                # still holds them (its pod is alive) and only spot sessions may use them. This
-                # check holds even when inventory drift has reset used_* to 0.
-                GpuDevice.lend_state == "",
             )
         )
         if gpu_model is not None:
@@ -974,6 +993,11 @@ class SchedulerService:
             self.db, cluster_id=cluster_id, user_id=sess.owner_user_id, group_id=sess.group_id
         )
         node_pool = await node_pool_map(self.db, {d.node_id for d in devs})
+        # Placement policy is a system setting an administrator changes from the console, so it is
+        # read per reservation rather than baked in at deploy time.
+        from app.api.system_router import gpu_packing
+
+        packing = await gpu_packing(self.db)
         # Exclusive: reserve one completely empty card whole (used = total) so no_overcommit blocks
         # co-tenancy. Fractional: best-fit the slice onto a card, allowing several sessions per
         # card.
@@ -982,7 +1006,9 @@ class SchedulerService:
             cands = [d for d in devs if node_pool.get(d.node_id) in tier]
             if not cands:
                 continue
-            target, eff_mem, eff_cores = self._reserve_target(cands, req_mem, req_cores, exclusive)
+            target, eff_mem, eff_cores = self._reserve_target(
+                cands, req_mem, req_cores, exclusive, spread=packing == "spread"
+            )
             if target is not None:
                 break
         if target is None:
@@ -1148,7 +1174,7 @@ class SchedulerService:
 
     # ── private helpers ──
     @staticmethod
-    def _reserve_target(devs, req_mem: int, req_cores: int, exclusive: bool):
+    def _reserve_target(devs, req_mem: int, req_cores: int, exclusive: bool, spread: bool = False):
         """Choose the card to reserve and the occupancy to record (eff_mem, eff_cores).
 
         Exclusive: pick a completely empty card and occupy its **entire capacity**, which blocks
@@ -1177,7 +1203,7 @@ class SchedulerService:
                     # a rounded-up request falls through to exact hami-core placement first.
                     if r_mem == req_mem:
                         return d, r_mem, r_cores
-        d = SchedulerService._pick_device(core, req_mem, req_cores)
+        d = SchedulerService._pick_device(core, req_mem, req_cores, spread=spread)
         if d is not None:
             return d, req_mem, req_cores
         # No hami-core capacity: accept a MIG rounding as the fallback.
@@ -1253,7 +1279,7 @@ class SchedulerService:
                 record_session_event(self.db, session_id, "error", reason=sess.status_reason)
 
     @staticmethod
-    def _pick_device(devs, req_mem: int, req_cores: int):
+    def _pick_device(devs, req_mem: int, req_cores: int, spread: bool | None = None):
         """Occupancy-aware 2D best-fit (VRAM + cores) for a fractional slice.
 
         Candidates are cards that fit in both dimensions. The score is the headroom left after
@@ -1280,7 +1306,10 @@ class SchedulerService:
             # headroom as the tie-break.
             return (max(f_mem, f_core), f_mem + f_core)
 
-        spread = getattr(settings, "GPU_PACKING", "binpack") == "spread"
+        # `spread` comes from the system setting; the deployment default only fills in for direct
+        # callers (tests) that do not pass one.
+        if spread is None:
+            spread = getattr(settings, "GPU_PACKING", "binpack") == "spread"
         return (max if spread else min)(candidates, key=_free_after)
 
     async def _estimate(self, req: SessionCreate) -> _Estimate:

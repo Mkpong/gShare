@@ -17,8 +17,11 @@ metadata:
   name: {{ .Values.global.namespaces.sessions }}
   labels:
     {{- include "gshare.labels" . | nindent 4 }}
-    # PSA 1.27 and later: enforce the restricted profile (rejecting violations), and audit and warn.
-    pod-security.kubernetes.io/enforce: restricted
+    # Enforce baseline (audit and warn at restricted): every ordinary session pod still carries the
+    # restricted shape (non-root, no escalation, all capabilities dropped), and the one relaxation
+    # — a policy-granted privileged session running as root — is exactly what baseline admits
+    # and restricted would reject. Host namespaces, privileged mode and host paths stay rejected.
+    pod-security.kubernetes.io/enforce: baseline
     pod-security.kubernetes.io/enforce-version: latest
     pod-security.kubernetes.io/audit: restricted
     pod-security.kubernetes.io/warn: restricted

@@ -938,6 +938,7 @@ function EditPolicyForm({ policy, onDone }: { policy: ResourcePolicy; onDone: ()
   // Whether a tenant holding a dedicated node pool may spill onto the shared pool when its own is
   // full. Absent means yes; a tenant with no dedicated pool always keeps the shared pool.
   const [sharedPool, setSharedPool] = useState(policy.limits.shared_pool !== false);
+  const [allowPrivileged, setAllowPrivileged] = useState(policy.allow_privileged === true);
 
   const submit = () =>
     update.mutate(
@@ -945,7 +946,7 @@ function EditPolicyForm({ policy, onDone }: { policy: ResourcePolicy; onDone: ()
         id: policy.id,
         max_concurrent: Number(maxConcurrent), max_queued: Number(maxQueued),
         max_runtime_min: Number(maxRuntime), idle_timeout_sec: Number(idle),
-        limits: { cpu: Number(cpu), mem_gb: Number(memGb), gpu_mem_mb: Math.round(Number(gpuMemGb) * 1024), gpu_cores: Number(gpuCores), storage_gb: Number(storageGb), volume_gb: Number(volumeGb), shared_pool: sharedPool },
+        limits: { cpu: Number(cpu), mem_gb: Number(memGb), gpu_mem_mb: Math.round(Number(gpuMemGb) * 1024), gpu_cores: Number(gpuCores), storage_gb: Number(storageGb), volume_gb: Number(volumeGb), shared_pool: sharedPool, allow_privileged: allowPrivileged },
       },
       {
         onSuccess: () => { guard.clear(); pushToast('success', t('admin.resources.policyUpdated')); onDone(); },
@@ -994,6 +995,11 @@ function EditPolicyForm({ policy, onDone }: { policy: ResourcePolicy; onDone: ()
           {t('admin.resources.sharedPoolFallback')}
         </label>
         <p className="text-muted text-2xs">{t('admin.resources.sharedPoolFallbackHint')}</p>
+        <label className="flex items-center gap-2 text-sm mt-2">
+          <input type="checkbox" checked={allowPrivileged} onChange={(e) => setAllowPrivileged(e.target.checked)} />
+          {t('admin.resources.allowPrivileged')}
+        </label>
+        <p className="text-muted text-2xs">{t('admin.resources.allowPrivilegedHint')}</p>
         </div>
       </div>
       {serverError && <p role="alert" className="text-danger text-xs mt-3">{serverError}</p>}
@@ -1037,6 +1043,7 @@ function PolicyCreateForm({ onDone }: { onDone: () => void }) {
   const [storageGb, setStorageGb] = useState('500');
   const [volumeGb, setVolumeGb] = useState('500');
   const [sharedPool, setSharedPool] = useState(true);
+  const [allowPrivileged, setAllowPrivileged] = useState(false);
 
   const valid = isGlobal || effScopeId.length > 0;
   const blockers = valid ? [] : [t('admin.resources.scopeTargetBlocker')];
@@ -1051,7 +1058,7 @@ function PolicyCreateForm({ onDone }: { onDone: () => void }) {
         max_queued: Number(maxQueued),
         max_runtime_min: Number(maxRuntime),
         idle_timeout_sec: Number(idle),
-        limits: { cpu: Number(cpu), mem_gb: Number(memGb), gpu_mem_mb: Math.round(Number(gpuMemGb) * 1024), gpu_cores: Number(gpuCores), storage_gb: Number(storageGb), volume_gb: Number(volumeGb), shared_pool: sharedPool },
+        limits: { cpu: Number(cpu), mem_gb: Number(memGb), gpu_mem_mb: Math.round(Number(gpuMemGb) * 1024), gpu_cores: Number(gpuCores), storage_gb: Number(storageGb), volume_gb: Number(volumeGb), shared_pool: sharedPool, allow_privileged: allowPrivileged },
       },
       {
         onSuccess: () => { guard.clear(); pushToast('success', t('admin.resources.policyCreated', { scope, target: scopeId })); onDone(); },
@@ -1157,6 +1164,11 @@ function PolicyCreateForm({ onDone }: { onDone: () => void }) {
             {t('admin.resources.sharedPoolFallback')}
           </label>
           <p className="text-muted text-2xs">{t('admin.resources.sharedPoolFallbackHint')}</p>
+        <label className="flex items-center gap-2 text-sm mt-2">
+          <input type="checkbox" checked={allowPrivileged} onChange={(e) => setAllowPrivileged(e.target.checked)} />
+          {t('admin.resources.allowPrivileged')}
+        </label>
+        <p className="text-muted text-2xs">{t('admin.resources.allowPrivilegedHint')}</p>
         </div>
         </div>
         <p className="text-muted text-xs">{t('admin.resources.uniqueNote')}</p>

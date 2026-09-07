@@ -9,6 +9,7 @@ export interface AuditFilter {
   actor_id?: string;
   actor_q?: string;   // search by actor name or email
   action?: string;
+  result?: string;
   target?: string;
   'at[gte]'?: string;
   'at[lt]'?: string;

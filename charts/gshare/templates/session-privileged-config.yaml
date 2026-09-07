@@ -1,0 +1,13 @@
+# Jupyter refuses to start as root unless told otherwise. A privileged session mounts this file at
+# /etc/jupyter — one of Jupyter's system config paths — so the stock session image needs no change.
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: gshare-session-privileged
+  namespace: {{ .Values.global.namespaces.sessions }}
+  labels:
+    {{- include "gshare.labels" . | nindent 4 }}
+data:
+  jupyter_server_config.py: |
+    c = get_config()  # noqa: F821
+    c.ServerApp.allow_root = True

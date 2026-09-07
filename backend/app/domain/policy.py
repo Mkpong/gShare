@@ -25,6 +25,9 @@ LIMIT_KEYS = (
     # bool: may sessions spill onto shared-pool nodes when the tenant holds a dedicated pool?
     # (default True; see app.domain.node_pools)
     "shared_pool",
+    # bool: may this user start a privileged session (root in the container, relaxed security
+    # context)? Default False; the wizard offers the option only when the effective policy says so.
+    "allow_privileged",
 )
 
 _FIELDS = ("max_concurrent", "max_queued", "max_runtime", "idle_timeout")

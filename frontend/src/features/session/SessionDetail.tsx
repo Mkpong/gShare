@@ -2,10 +2,10 @@ import { useEffect, useState } from 'react';
 import { Link, useNavigate, useParams } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
 import { useQueryClient } from '@tanstack/react-query';
-import { useSession, sessionKeys, useSessionTimeline, useStopSession, useStartSession, useRestartSession, useTerminateSession, useOwnSessionUsage } from '@/api/hooks/useSessions';
-import { SessionUsagePanel, type UsageRange } from '@/components/SessionUsagePanel';
+import { useSession, sessionKeys, useSessionTimeline, useStopSession, useStartSession, useRestartSession, useTerminateSession, useOwnSessionUsage, useOwnSessionUsageSeries } from '@/api/hooks/useSessions';
+import { SessionUsagePanel, type UsageRange, type UsageSeries, type UsageSummary } from '@/components/SessionUsagePanel';
 import { subscribeSessionEvents } from '@/lib/sse';
-import { formatCredit, formatDuration, formatVram, hoursElapsed, sessionStatusLabel } from '@/lib/format';
+import { formatCredit, formatDuration, formatVram, hoursElapsed, sessionStatusLabel, shortImageRef } from '@/lib/format';
 import { useUiStore } from '@/store/uiStore';
 import { humanizeError, type ApiError, asApiError } from '@/lib/errors';
 import { PageHeader } from '@/components/PageHeader';
@@ -223,6 +223,9 @@ export function SessionDetail() {
           <h2 className="font-bold mb-3">{t('session.resources')}</h2>
           <dl className="text-sm space-y-1.5">
             <div className="flex justify-between"><dt className="text-muted">{t('session.class')}</dt><dd>{session.resource_class}</dd></div>
+            {session.privileged && (
+              <div className="flex justify-between"><dt className="text-muted">{t('session.privileged')}</dt><dd className="text-warn font-semibold">{t('session.privilegedValue')}</dd></div>
+            )}
             <div className="flex justify-between"><dt className="text-muted">{t('session.sharing')}</dt><dd>{session.resource_class === 'gpu' ? (session.mode === 'mig' ? 'MIG' : t(session.mode === 'exclusive' ? 'session.modeExclusive' : 'session.modeShared')) : '-'}</dd></div>
             <div className="flex justify-between"><dt className="text-muted">VRAM</dt><dd>{session.mode === 'exclusive' ? t('session.exclusiveOneCard') : formatVram(session.gpu_mem_mb)}</dd></div>
             <div className="flex justify-between"><dt className="text-muted">{t('session.cores')}</dt><dd>{session.mode === 'exclusive' ? '100%' : session.gpu_cores != null ? `${session.gpu_cores}%` : '-'}</dd></div>
@@ -279,7 +282,22 @@ export function SessionDetail() {
               <div className="flex justify-between gap-2">
                 <dt className="text-muted">{t('session.boundGpu')}</dt>
                 <dd className="min-w-0 truncate" title={session.bound_gpu_uuid ?? undefined}>
-                  {session.gpu_model ?? session.bound_gpu_uuid}
+                  {session.gpu_alias ? `${session.gpu_alias} · ` : ''}{session.gpu_model ?? session.bound_gpu_uuid}
+                </dd>
+              </div>
+            )}
+            {/* What the session is built from. The catalogue name is what a person recognises;
+                the registry reference is the answer to "which CUDA, which PyTorch". */}
+            {(session.image_name || session.image_ref) && (
+              <div className="flex justify-between gap-2">
+                <dt className="text-muted">{t('session.imageLabel')}</dt>
+                <dd className="min-w-0 text-right">
+                  <div>{session.image_name ?? shortImageRef(session.image_ref)}</div>
+                  {session.image_ref && session.image_name && (
+                    <div className="text-muted text-xs gs-num break-all" title={session.image_ref}>
+                      {shortImageRef(session.image_ref)}
+                    </div>
+                  )}
                 </dd>
               </div>
             )}
@@ -293,9 +311,9 @@ export function SessionDetail() {
         </div>
       </div>
 
-      {(session.started_at != null || running) && !terminal && (
+      {(session.started_at != null || running) && (
         <div className="gs-card mt-4">
-          <OwnUsagePanel session={session} running={running} range={usageRange} onRange={setUsageRange} />
+          <OwnUsagePanel session={session} running={running} finished={session.status === 'terminated'} range={usageRange} onRange={setUsageRange} />
         </div>
       )}
 
@@ -343,16 +361,22 @@ export function SessionDetail() {
 
 
 // Data wiring for the shared usage panel on the user's own session page.
-function OwnUsagePanel({ session, running, range, onRange }: {
-  session: { id: string; resource_class?: string | null; cpu?: number | null; mem_gb?: number | null; gpu_mem_mb?: number | null; gpu_cores?: number | null };
+function OwnUsagePanel({ session, running, finished, range, onRange }: {
+  session: { id: string; resource_class?: string | null; cpu?: number | null; mem_gb?: number | null; gpu_mem_mb?: number | null; gpu_cores?: number | null; usage_summary?: UsageSummary | null };
   running: boolean;
+  finished: boolean;
   range: UsageRange;
   onRange: (r: UsageRange) => void;
 }) {
   const { data: usage } = useOwnSessionUsage(running ? session.id : undefined);
+  // History for the owner too: what the session used, over the picked window while it runs and
+  // over its whole run once it has ended.
+  const { data: series } = useOwnSessionUsageSeries(session.id, range, !finished);
   return (
     <SessionUsagePanel
-      charts={false}
+      series={series as UsageSeries | undefined}
+      finished={finished}
+      summary={session.usage_summary}
       limits={{
         isGpu: session.resource_class === 'gpu',
         cpu: session.cpu, mem_gb: session.mem_gb,

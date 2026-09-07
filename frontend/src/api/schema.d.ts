@@ -1790,17 +1790,22 @@ export interface paths {
         /**
          * Delete Volume
          * @description Permanently delete a volume; requires confirm==volume_id, rejects if mounted.
+         *
+         *     ``force`` (system administrator only) terminates every active session still mounting the
+         *     volume and then deletes it — the answer to a mount that keeps a shared volume alive against
+         *     its owner's will. The audit row names the sessions that were cut off.
          */
         delete: operations["delete_volume_api_v1_storage_volumes__volume_id__delete"];
         options?: never;
         head?: never;
         /**
          * Update Volume
-         * @description Update volume meta: quota_gb / access_mode.
+         * @description Update volume meta: quota_gb / access_mode / mount_locked.
          *
-         *     The quota is self-service in both directions. It may shrink down to what is actually in use;
-         *     an increase is bounded by the scope's storage policy — volumes are governed by the policy
-         *     limit alone, not billed (the claim itself cannot shrink: Kubernetes only grows a PVC).
+         *     The quota only grows. Kubernetes never shrinks a claim, so a smaller ledger figure would free
+         *     policy headroom against space the pool still physically holds (100 GB "shrunk" to 10 GB plus a
+         *     new 90 GB volume = 190 GB on disk). An increase is bounded by the scope's storage policy —
+         *     volumes are governed by the policy limit alone, not billed.
          */
         patch: operations["update_volume_api_v1_storage_volumes__volume_id__patch"];
         trace?: never;
@@ -1938,6 +1943,28 @@ export interface paths {
          * @description Delete a snapshot; reject while still creating.
          */
         delete: operations["delete_snapshot_api_v1_storage_volumes__volume_id__snapshots__snapshot_id__delete"];
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/clusters/summary": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Cluster Summary
+         * @description The clusters a signed-in user can name: id, name and status only. The console's cluster
+         *     selector (hidden while there is one) and the session wizard's cluster choice read this; the
+         *     full list with kubeconfig references stays super_admin-only.
+         */
+        get: operations["cluster_summary_api_v1_clusters_summary_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
         options?: never;
         head?: never;
         patch?: never;
@@ -2294,112 +2321,6 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
-    "/api/v1/notices": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        /** List Notices */
-        get: operations["list_notices_api_v1_notices_get"];
-        put?: never;
-        /** Create Notice */
-        post: operations["create_notice_api_v1_notices_post"];
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/api/v1/notices/{notice_id}": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        get?: never;
-        put?: never;
-        post?: never;
-        /** Delete Notice */
-        delete: operations["delete_notice_api_v1_notices__notice_id__delete"];
-        options?: never;
-        head?: never;
-        /** Update Notice */
-        patch: operations["update_notice_api_v1_notices__notice_id__patch"];
-        trace?: never;
-    };
-    "/api/v1/inquiries": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        /** List Inquiries */
-        get: operations["list_inquiries_api_v1_inquiries_get"];
-        put?: never;
-        /** Create Inquiry */
-        post: operations["create_inquiry_api_v1_inquiries_post"];
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/api/v1/inquiries/{inquiry_id}": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        /** Get Inquiry */
-        get: operations["get_inquiry_api_v1_inquiries__inquiry_id__get"];
-        put?: never;
-        post?: never;
-        /** Delete Inquiry */
-        delete: operations["delete_inquiry_api_v1_inquiries__inquiry_id__delete"];
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/api/v1/inquiries/{inquiry_id}/replies": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        get?: never;
-        put?: never;
-        /** Reply Inquiry */
-        post: operations["reply_inquiry_api_v1_inquiries__inquiry_id__replies_post"];
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/api/v1/inquiries/{inquiry_id}/close": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        get?: never;
-        put?: never;
-        /** Close Inquiry */
-        post: operations["close_inquiry_api_v1_inquiries__inquiry_id__close_post"];
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
     "/api/v1/audit-logs/export": {
         parameters: {
             query?: never;
@@ -2732,6 +2653,30 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/gpu-devices/{device_id}/alias": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        /**
+         * Set Device Alias
+         * @description Name a physical card. super_admin only.
+         *
+         *     The console otherwise numbers cards by their position in the list, so "card #2" means a
+         *     different card the day a card is added or removed. An alias pins a name to the UUID. Unique
+         *     within the cluster; the ledger owns it and inventory reports never overwrite it.
+         */
+        put: operations["set_device_alias_api_v1_gpu_devices__device_id__alias_put"];
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/gpu-devices/{device_id}/health": {
         parameters: {
             query?: never;
@@ -2899,7 +2844,8 @@ export interface paths {
         };
         /**
          * Session Usage Timeseries
-         * @description The four per-session usage metrics over a range, for the monitor detail sparklines.
+         * @description The four per-session usage metrics over a range, for the monitor detail sparklines. A
+         *     finished session gets its whole run instead of a trailing window.
          */
         get: operations["session_usage_timeseries_api_v1_monitoring_sessions__session_id__usage_timeseries_get"];
         put?: never;
@@ -3014,6 +2960,30 @@ export interface paths {
          * @description Set the sign-up policy; super_admin only.
          */
         put: operations["set_signup_policy_api_v1_system_signup_put"];
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/system/placement": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Get Placement
+         * @description The fractional-slice placement policy. Readable by anyone who may see the admin console.
+         */
+        get: operations["get_placement_api_v1_system_placement_get"];
+        /**
+         * Set Placement
+         * @description Set the placement policy. Applies to the next reservation; running sessions do not move.
+         */
+        put: operations["set_placement_api_v1_system_placement_put"];
         post?: never;
         delete?: never;
         options?: never;
@@ -3878,6 +3848,8 @@ export interface components {
             node_id: string;
             /** Model */
             model: string;
+            /** Alias */
+            alias?: string | null;
             /** Mode */
             mode: string;
             /** Desired Mode */
@@ -4049,18 +4021,6 @@ export interface components {
             /** Supported Gpus */
             supported_gpus?: string[] | null;
         };
-        /** InquiryCreate */
-        InquiryCreate: {
-            /** Title */
-            title: string;
-            /** Body */
-            body: string;
-            /**
-             * To
-             * @default group
-             */
-            to: string;
-        };
         /**
          * MeMembership
          * @description One membership row resolved for the context switcher / RBAC.
@@ -4215,39 +4175,6 @@ export interface components {
             pool_id?: string | null;
             /** Pool Name */
             pool_name?: string | null;
-        };
-        /** NoticeCreate */
-        NoticeCreate: {
-            /** Scope */
-            scope: string;
-            /** Group Id */
-            group_id?: string | null;
-            /** Title */
-            title: string;
-            /**
-             * Body
-             * @default
-             */
-            body: string;
-            /**
-             * Pinned
-             * @default false
-             */
-            pinned: boolean;
-            /**
-             * Notify
-             * @default true
-             */
-            notify: boolean;
-        };
-        /** NoticePatch */
-        NoticePatch: {
-            /** Title */
-            title?: string | null;
-            /** Body */
-            body?: string | null;
-            /** Pinned */
-            pinned?: boolean | null;
         };
         /** OfferingCreate */
         OfferingCreate: {
@@ -4579,6 +4506,16 @@ export interface components {
             /** Role */
             role: string;
         };
+        /** PlacementOut */
+        PlacementOut: {
+            /** Gpu Packing */
+            gpu_packing: string;
+        };
+        /** PlacementUpdate */
+        PlacementUpdate: {
+            /** Gpu Packing */
+            gpu_packing: string;
+        };
         /** PolicyCreate */
         PolicyCreate: {
             /** Scope */
@@ -4802,6 +4739,11 @@ export interface components {
              */
             preemptible: boolean;
             /**
+             * Privileged
+             * @default false
+             */
+            privileged: boolean;
+            /**
              * Priority
              * @default 0
              */
@@ -4912,16 +4854,6 @@ export interface components {
             /** Hour */
             hour: number;
         };
-        /** ReplyCreate */
-        ReplyCreate: {
-            /** Body */
-            body: string;
-            /**
-             * Close
-             * @default false
-             */
-            close: boolean;
-        };
         /** ResourceRequestCreate */
         ResourceRequestCreate: {
             /** Group Id */
@@ -4988,6 +4920,11 @@ export interface components {
              * @default false
              */
             preemptible: boolean;
+            /**
+             * Privileged
+             * @default false
+             */
+            privileged: boolean;
             /**
              * Priority
              * @default 0
@@ -5061,6 +4998,12 @@ export interface components {
             disk_gb?: number | null;
             /** Gpu Model */
             gpu_model?: string | null;
+            /** Gpu Alias */
+            gpu_alias?: string | null;
+            /** Image Name */
+            image_name?: string | null;
+            /** Image Ref */
+            image_ref?: string | null;
             /** Disk Used Bytes */
             disk_used_bytes?: number | null;
             /** Disk Limit Bytes */
@@ -5080,6 +5023,15 @@ export interface components {
             started_at?: string | null;
             /** Terminated At */
             terminated_at?: string | null;
+            /** Usage Summary */
+            usage_summary?: {
+                [key: string]: unknown;
+            } | null;
+            /**
+             * Privileged
+             * @default false
+             */
+            privileged: boolean;
             /** Created At */
             created_at?: string | null;
             /** Status Changed At */
@@ -5294,14 +5246,16 @@ export interface components {
         };
         /**
          * VolumePatch
-         * @description Owner-side edits. The quota is self-service in both directions (bounded below by usage and
-         *     above by the scope's storage policy on the server).
+         * @description Owner-side edits. The quota only grows (bounded above by the scope's storage policy on the
+         *     server); `mount_locked` blocks new mounts so the volume can be drained for deletion.
          */
         VolumePatch: {
             /** Quota Gb */
             quota_gb?: number | null;
             /** Access Mode */
             access_mode?: string | null;
+            /** Mount Locked */
+            mount_locked?: boolean | null;
         };
         /** VolumeRead */
         VolumeRead: {
@@ -5321,6 +5275,11 @@ export interface components {
             quota_gb: number;
             /** Used Gb */
             used_gb: number;
+            /**
+             * Mount Locked
+             * @default false
+             */
+            mount_locked: boolean;
             /** Role */
             role?: string | null;
             /** Owner Id */
@@ -5410,6 +5369,11 @@ export interface components {
             cordon: boolean;
             /** Reason */
             reason?: string | null;
+        };
+        /** _DeviceAliasBody */
+        _DeviceAliasBody: {
+            /** Alias */
+            alias?: string | null;
         };
         /** _DeviceHealthBody */
         _DeviceHealthBody: {
@@ -8824,6 +8788,7 @@ export interface operations {
         parameters: {
             query?: {
                 fleet?: boolean;
+                cluster_id?: string | null;
                 /** @description Token fallback for clients that cannot set custom headers, such as EventSource (SSE) */
                 access_token?: string | null;
             };
@@ -9769,6 +9734,7 @@ export interface operations {
         parameters: {
             query?: {
                 confirm?: string | null;
+                force?: boolean;
                 /** @description Token fallback for clients that cannot set custom headers, such as EventSource (SSE) */
                 access_token?: string | null;
             };
@@ -10189,6 +10155,41 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content?: never;
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    cluster_summary_api_v1_clusters_summary_get: {
+        parameters: {
+            query?: {
+                /** @description Token fallback for clients that cannot set custom headers, such as EventSource (SSE) */
+                access_token?: string | null;
+            };
+            header?: {
+                /** @description Bearer <jwt> */
+                authorization?: string | null;
+            };
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": unknown;
+                };
             };
             /** @description Validation Error */
             422: {
@@ -11040,386 +11041,6 @@ export interface operations {
             };
         };
     };
-    list_notices_api_v1_notices_get: {
-        parameters: {
-            query?: {
-                all?: boolean;
-                page?: number;
-                size?: number;
-                /** @description Token fallback for clients that cannot set custom headers, such as EventSource (SSE) */
-                access_token?: string | null;
-            };
-            header?: {
-                /** @description Bearer <jwt> */
-                authorization?: string | null;
-            };
-            path?: never;
-            cookie?: never;
-        };
-        requestBody?: never;
-        responses: {
-            /** @description Successful Response */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": unknown;
-                };
-            };
-            /** @description Validation Error */
-            422: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["HTTPValidationError"];
-                };
-            };
-        };
-    };
-    create_notice_api_v1_notices_post: {
-        parameters: {
-            query?: {
-                /** @description Token fallback for clients that cannot set custom headers, such as EventSource (SSE) */
-                access_token?: string | null;
-            };
-            header?: {
-                /** @description Bearer <jwt> */
-                authorization?: string | null;
-            };
-            path?: never;
-            cookie?: never;
-        };
-        requestBody: {
-            content: {
-                "application/json": components["schemas"]["NoticeCreate"];
-            };
-        };
-        responses: {
-            /** @description Successful Response */
-            201: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": unknown;
-                };
-            };
-            /** @description Validation Error */
-            422: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["HTTPValidationError"];
-                };
-            };
-        };
-    };
-    delete_notice_api_v1_notices__notice_id__delete: {
-        parameters: {
-            query?: {
-                /** @description Token fallback for clients that cannot set custom headers, such as EventSource (SSE) */
-                access_token?: string | null;
-            };
-            header?: {
-                /** @description Bearer <jwt> */
-                authorization?: string | null;
-            };
-            path: {
-                notice_id: string;
-            };
-            cookie?: never;
-        };
-        requestBody?: never;
-        responses: {
-            /** @description Successful Response */
-            204: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content?: never;
-            };
-            /** @description Validation Error */
-            422: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["HTTPValidationError"];
-                };
-            };
-        };
-    };
-    update_notice_api_v1_notices__notice_id__patch: {
-        parameters: {
-            query?: {
-                /** @description Token fallback for clients that cannot set custom headers, such as EventSource (SSE) */
-                access_token?: string | null;
-            };
-            header?: {
-                /** @description Bearer <jwt> */
-                authorization?: string | null;
-            };
-            path: {
-                notice_id: string;
-            };
-            cookie?: never;
-        };
-        requestBody: {
-            content: {
-                "application/json": components["schemas"]["NoticePatch"];
-            };
-        };
-        responses: {
-            /** @description Successful Response */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": unknown;
-                };
-            };
-            /** @description Validation Error */
-            422: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["HTTPValidationError"];
-                };
-            };
-        };
-    };
-    list_inquiries_api_v1_inquiries_get: {
-        parameters: {
-            query?: {
-                box?: string;
-                page?: number;
-                size?: number;
-                /** @description Token fallback for clients that cannot set custom headers, such as EventSource (SSE) */
-                access_token?: string | null;
-            };
-            header?: {
-                /** @description Bearer <jwt> */
-                authorization?: string | null;
-            };
-            path?: never;
-            cookie?: never;
-        };
-        requestBody?: never;
-        responses: {
-            /** @description Successful Response */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": unknown;
-                };
-            };
-            /** @description Validation Error */
-            422: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["HTTPValidationError"];
-                };
-            };
-        };
-    };
-    create_inquiry_api_v1_inquiries_post: {
-        parameters: {
-            query?: {
-                /** @description Token fallback for clients that cannot set custom headers, such as EventSource (SSE) */
-                access_token?: string | null;
-            };
-            header?: {
-                /** @description Bearer <jwt> */
-                authorization?: string | null;
-            };
-            path?: never;
-            cookie?: never;
-        };
-        requestBody: {
-            content: {
-                "application/json": components["schemas"]["InquiryCreate"];
-            };
-        };
-        responses: {
-            /** @description Successful Response */
-            201: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": unknown;
-                };
-            };
-            /** @description Validation Error */
-            422: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["HTTPValidationError"];
-                };
-            };
-        };
-    };
-    get_inquiry_api_v1_inquiries__inquiry_id__get: {
-        parameters: {
-            query?: {
-                /** @description Token fallback for clients that cannot set custom headers, such as EventSource (SSE) */
-                access_token?: string | null;
-            };
-            header?: {
-                /** @description Bearer <jwt> */
-                authorization?: string | null;
-            };
-            path: {
-                inquiry_id: string;
-            };
-            cookie?: never;
-        };
-        requestBody?: never;
-        responses: {
-            /** @description Successful Response */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": unknown;
-                };
-            };
-            /** @description Validation Error */
-            422: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["HTTPValidationError"];
-                };
-            };
-        };
-    };
-    delete_inquiry_api_v1_inquiries__inquiry_id__delete: {
-        parameters: {
-            query?: {
-                /** @description Token fallback for clients that cannot set custom headers, such as EventSource (SSE) */
-                access_token?: string | null;
-            };
-            header?: {
-                /** @description Bearer <jwt> */
-                authorization?: string | null;
-            };
-            path: {
-                inquiry_id: string;
-            };
-            cookie?: never;
-        };
-        requestBody?: never;
-        responses: {
-            /** @description Successful Response */
-            204: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content?: never;
-            };
-            /** @description Validation Error */
-            422: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["HTTPValidationError"];
-                };
-            };
-        };
-    };
-    reply_inquiry_api_v1_inquiries__inquiry_id__replies_post: {
-        parameters: {
-            query?: {
-                /** @description Token fallback for clients that cannot set custom headers, such as EventSource (SSE) */
-                access_token?: string | null;
-            };
-            header?: {
-                /** @description Bearer <jwt> */
-                authorization?: string | null;
-            };
-            path: {
-                inquiry_id: string;
-            };
-            cookie?: never;
-        };
-        requestBody: {
-            content: {
-                "application/json": components["schemas"]["ReplyCreate"];
-            };
-        };
-        responses: {
-            /** @description Successful Response */
-            201: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": unknown;
-                };
-            };
-            /** @description Validation Error */
-            422: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["HTTPValidationError"];
-                };
-            };
-        };
-    };
-    close_inquiry_api_v1_inquiries__inquiry_id__close_post: {
-        parameters: {
-            query?: {
-                /** @description Token fallback for clients that cannot set custom headers, such as EventSource (SSE) */
-                access_token?: string | null;
-            };
-            header?: {
-                /** @description Bearer <jwt> */
-                authorization?: string | null;
-            };
-            path: {
-                inquiry_id: string;
-            };
-            cookie?: never;
-        };
-        requestBody?: never;
-        responses: {
-            /** @description Successful Response */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": unknown;
-                };
-            };
-            /** @description Validation Error */
-            422: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["HTTPValidationError"];
-                };
-            };
-        };
-    };
     export_audit_logs_api_v1_audit_logs_export_get: {
         parameters: {
             query?: {
@@ -11429,6 +11050,7 @@ export interface operations {
                 target?: string | null;
                 "at[gte]"?: string | null;
                 "at[lt]"?: string | null;
+                result?: string | null;
                 /** @description Token fallback for clients that cannot set custom headers, such as EventSource (SSE) */
                 access_token?: string | null;
             };
@@ -11468,6 +11090,7 @@ export interface operations {
                 target?: string | null;
                 "at[gte]"?: string | null;
                 "at[lt]"?: string | null;
+                result?: string | null;
                 sort?: string;
                 verify?: boolean;
                 page?: number;
@@ -12184,6 +11807,47 @@ export interface operations {
             };
         };
     };
+    set_device_alias_api_v1_gpu_devices__device_id__alias_put: {
+        parameters: {
+            query?: {
+                /** @description Token fallback for clients that cannot set custom headers, such as EventSource (SSE) */
+                access_token?: string | null;
+            };
+            header?: {
+                /** @description Bearer <jwt> */
+                authorization?: string | null;
+            };
+            path: {
+                device_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["_DeviceAliasBody"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": unknown;
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
     set_device_health_api_v1_gpu_devices__device_id__health_put: {
         parameters: {
             query?: {
@@ -12711,6 +12375,80 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["SignupPolicyOut"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    get_placement_api_v1_system_placement_get: {
+        parameters: {
+            query?: {
+                /** @description Token fallback for clients that cannot set custom headers, such as EventSource (SSE) */
+                access_token?: string | null;
+            };
+            header?: {
+                /** @description Bearer <jwt> */
+                authorization?: string | null;
+            };
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PlacementOut"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    set_placement_api_v1_system_placement_put: {
+        parameters: {
+            query?: {
+                /** @description Token fallback for clients that cannot set custom headers, such as EventSource (SSE) */
+                access_token?: string | null;
+            };
+            header?: {
+                /** @description Bearer <jwt> */
+                authorization?: string | null;
+            };
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["PlacementUpdate"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PlacementOut"];
                 };
             };
             /** @description Validation Error */

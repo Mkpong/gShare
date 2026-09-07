@@ -9,8 +9,6 @@ from ulid import ULID
 # Canonical entity prefixes. Extend as needed.
 PREFIXES = {
     "ireply": "irp",
-    "inquiry": "inq",
-    "notice": "ntc",
     "user": "usr", "org": "org", "group": "grp", "membership": "mbr",
     "wallet": "wal", "transaction": "txn", "topup": "top",
     "offering": "off", "preset": "pst", "policy": "pol", "image": "img", "build": "bld",

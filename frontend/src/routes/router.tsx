@@ -15,7 +15,7 @@ import { PasswordPage } from '@/features/account/PasswordPage';
 import { type ComponentType, lazy, Suspense } from 'react';
 import { TableSkeleton } from '@/components/EmptyState';
 
-// Route-level code splitting: the admin console, the boards and the session wizard load on first
+// Route-level code splitting: the admin console and the session wizard load on first
 // visit instead of riding in the entry bundle every user downloads to reach their dashboard.
 // Each module still becomes ONE chunk, so sibling pages of a feature share the download.
 function RouteFallback() {
@@ -47,8 +47,6 @@ export const router = createBrowserRouter(
         { path: 'wallet', element: <WalletPage /> },
         { path: 'wallet/request', element: <CreditRequestPage /> },
         { path: 'data', element: <VolumePage /> },
-        { path: 'notices', element: lazyPage(() => import('@/features/boards/Boards'), 'NoticesPage') },
-        { path: 'support', element: lazyPage(() => import('@/features/boards/Boards'), 'InquiriesPage') },
         { path: 'account', element: <AccountPage /> },
         { path: 'account/password', element: <PasswordPage /> },
       ],
@@ -88,8 +86,6 @@ export const router = createBrowserRouter(
             { path: 'monitoring', element: <RequireRole role="super_admin">{lazyPage(() => import('@/features/admin/Monitoring'), 'AdminMonitoring')}</RequireRole> },
             { path: 'monitor/sessions/:sessionId/terminate', element: lazyPage(() => import('@/features/admin/Monitor'), 'ForceTerminatePage') },
             { path: 'audit', element: <RequireRole min="group_admin">{lazyPage(() => import('@/features/admin/Audit'), 'AdminAudit')}</RequireRole> },
-            { path: 'notices', element: <RequireRole min="group_admin">{lazyPage(() => import('@/features/boards/Boards'), 'AdminNoticesPage')}</RequireRole> },
-            { path: 'inquiries', element: <RequireRole min="group_admin">{lazyPage(() => import('@/features/boards/Boards'), 'AdminInquiriesPage')}</RequireRole> },
             { path: 'images', element: <RequireRole role="super_admin">{lazyPage(() => import('@/features/admin/Images'), 'AdminImages')}</RequireRole> },
             { path: 'volumes', element: <RequireRole role="super_admin">{lazyPage(() => import('@/features/admin/Volumes'), 'AdminVolumes')}</RequireRole> },
           ],

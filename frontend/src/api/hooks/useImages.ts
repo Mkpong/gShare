@@ -1,3 +1,4 @@
+import { fetchRestOfPages, pageTotal, PAGE_MAX } from '@/api/paging';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { api, idemKey } from '@/api/client';
 import type { components } from '@/api/schema';
@@ -32,8 +33,11 @@ export function useImages(filter: ImageFilter = {}) {
   return useQuery({
     queryKey: imageKeys.list(filter),
     queryFn: async () => {
-      const { data } = await api.GET('/api/v1/images', { params: { query: filter } });
-      return data ?? { data: [], pagination: { page: 1, size: 20, total: 0, total_pages: 0 } };
+      // The session wizard offers its images from here and the admin page counts them, so the
+      // 21st image must not be invisible.
+      const { data } = await api.GET('/api/v1/images', { params: { query: { ...filter, page: 1, size: PAGE_MAX } } });
+      if (!data) return { data: [], pagination: { page: 1, size: 20, total: 0, total_pages: 0 } };
+      return { ...data, data: await fetchRestOfPages('/api/v1/images', { ...filter }, data.data ?? [], pageTotal(data)) };
     },
   });
 }
@@ -110,8 +114,9 @@ export function useImageBuilds(filter: ImageBuildFilter = {}) {
   return useQuery({
     queryKey: imageKeys.builds(filter),
     queryFn: async () => {
-      const { data } = await api.GET('/api/v1/image-builds', { params: { query: filter } });
-      return data ?? { data: [], pagination: { page: 1, size: 20, total: 0, total_pages: 0 } };
+      const { data } = await api.GET('/api/v1/image-builds', { params: { query: { ...filter, page: 1, size: PAGE_MAX } } });
+      if (!data) return { data: [], pagination: { page: 1, size: 20, total: 0, total_pages: 0 } };
+      return { ...data, data: await fetchRestOfPages('/api/v1/image-builds', { ...filter }, data.data ?? [], pageTotal(data)) };
     },
     refetchInterval: (q) => {
       const rows = (q.state.data?.data ?? []) as { status?: string }[];
