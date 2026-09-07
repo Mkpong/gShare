@@ -191,7 +191,8 @@ frontend:
 # ── Bootstrap super_admin (ensured on startup; password in the gshare-bootstrap-admin secret) ──
 bootstrapAdmin:
   email: admin@example.com
-  password: 12345678   # initial password (change forced on first login). Empty "" → random when secrets.generate.
+  # Quoted: an unquoted 12345678 is a YAML number, and the template base64-encodes this value.
+  password: "12345678"   # initial password (change forced on first login). Empty "" → random when secrets.generate.
 
 # ── All-in-one (in-cluster) local-cluster auto-registration ──
 # true → control plane ensures a Cluster row with the same ID as operator.clusterId (inventory FK
