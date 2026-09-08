@@ -2,7 +2,7 @@ import { useEffect, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { Link } from 'react-router-dom';
 import { useAllSessions } from '@/api/hooks/useMonitor';
-import { useSession, useStopSession, useStartSession } from '@/api/hooks/useSessions';
+import { useSession, useStopSession, useStartSession, useOwnSessionUsageLive } from '@/api/hooks/useSessions';
 import { useSessionUsage, type SessionUsage } from '@/api/hooks/useMonitor';
 import { useSessionUsageSeries } from '@/api/hooks/useMonitoring';
 import { StatusPill } from '@/components/StatusPill';
@@ -36,6 +36,9 @@ export function SessionMonitorOverlay({ sessionId, onClose }: {
   const { data: u } = useSessionUsage(running ? sessionId : undefined) as { data?: SessionUsage };
   const finished = s?.status === 'terminated';
   const { data: hist } = useSessionUsageSeries(sessionId, range, !finished);
+  // The per-node agent's one-second CPU and memory, the same source the owner's own session page
+  // uses. The endpoint is owner-or-admin, so the monitor may read any session's samples.
+  const { data: liveUsage } = useOwnSessionUsageLive(running ? sessionId : undefined, running);
   // Mounted volumes ride on the single-session read; the list rows do not carry them.
   const mounts = ((useSession(sessionId).data as { mounts?: { volume_id: string; name?: string | null; quota_gb?: number | null; mount_path: string; mode: string }[] } | undefined)?.mounts) ?? [];
 
@@ -58,7 +61,7 @@ export function SessionMonitorOverlay({ sessionId, onClose }: {
         role="dialog"
         aria-modal="true"
         tabIndex={-1}
-        className="relative w-full max-w-6xl max-h-[88vh] flex flex-col
+        className="relative w-full max-w-[88rem] max-h-[88vh] flex flex-col
                    bg-surface border border-border rounded-card shadow-raised outline-none"
       >
         <div className="flex items-center gap-2.5 px-5 py-3.5 border-b border-border">
@@ -145,6 +148,7 @@ export function SessionMonitorOverlay({ sessionId, onClose }: {
               onRange={setRange}
               finished={finished}
               summary={(s as { usage_summary?: UsageSummary | null }).usage_summary}
+              live={liveUsage?.live ? liveUsage.samples : null}
             />
           </div>
 

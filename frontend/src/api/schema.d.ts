@@ -1546,6 +1546,31 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/sessions/{session_id}/usage/live": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Session Usage Live
+         * @description The last few minutes of one-second samples from the node agent (owner·admin).
+         *
+         *     This is the live view. It is deliberately separate from the Prometheus-backed series: that one
+         *     is the record and covers GPU and history, this one answers "is it running yet" without waiting
+         *     for a scrape. `live` says whether an agent is actually reporting, so the console can show the
+         *     slower series instead of a stale line when the DaemonSet is not deployed.
+         */
+        get: operations["session_usage_live_api_v1_sessions__session_id__usage_live_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/sessions/{session_id}/usage/timeseries": {
         parameters: {
             query?: never;
@@ -3235,6 +3260,30 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/internal/metrics/session-samples": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Ingest Session Samples
+         * @description Accept one node's batch of session samples.
+         *
+         *     The agent knows a session only by its CR name (the pod label), so the ids are resolved here —
+         *     the same lower/underscore mapping the CR builder uses. An unknown name is dropped rather than
+         *     stored under a key nothing will ever read.
+         */
+        post: operations["ingest_session_samples_internal_metrics_session_samples_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/healthz": {
         parameters: {
             query?: never;
@@ -3262,6 +3311,24 @@ export interface components {
             amount: number | string;
             /** Reason */
             reason: string;
+        };
+        /** AgentReport */
+        AgentReport: {
+            /** Node */
+            node: string;
+            /** Samples */
+            samples?: components["schemas"]["AgentSample"][];
+        };
+        /** AgentSample */
+        AgentSample: {
+            /** Session */
+            session: string;
+            /** At */
+            at: number;
+            /** Cpu Cores */
+            cpu_cores: number;
+            /** Mem Bytes */
+            mem_bytes: number;
         };
         /** AllocateBody */
         AllocateBody: {
@@ -3805,6 +3872,10 @@ export interface components {
             pools: components["schemas"]["DashboardPool"][];
             allocation: components["schemas"]["DashboardAllocation"];
             compute: components["schemas"]["DashboardCompute"];
+            /** Storage */
+            storage?: {
+                [key: string]: unknown;
+            } | null;
         };
         /** DashboardVram */
         DashboardVram: {
@@ -4824,6 +4895,8 @@ export interface components {
             owner_name?: string | null;
             /** Gpu Model */
             gpu_model?: string | null;
+            /** Reason */
+            reason?: string | null;
         };
         /**
          * QueueList
@@ -5027,6 +5100,10 @@ export interface components {
             usage_summary?: {
                 [key: string]: unknown;
             } | null;
+            /** Credit Consumed */
+            credit_consumed?: number | null;
+            /** Queued Reason */
+            queued_reason?: string | null;
             /**
              * Privileged
              * @default false
@@ -9200,6 +9277,43 @@ export interface operations {
             };
         };
     };
+    session_usage_live_api_v1_sessions__session_id__usage_live_get: {
+        parameters: {
+            query?: {
+                /** @description Token fallback for clients that cannot set custom headers, such as EventSource (SSE) */
+                access_token?: string | null;
+            };
+            header?: {
+                /** @description Bearer <jwt> */
+                authorization?: string | null;
+            };
+            path: {
+                session_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": unknown;
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
     session_usage_series_self_api_v1_sessions__session_id__usage_timeseries_get: {
         parameters: {
             query?: {
@@ -12885,6 +12999,43 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["VolumeSyncResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    ingest_session_samples_internal_metrics_session_samples_post: {
+        parameters: {
+            query?: never;
+            header: {
+                authorization: string;
+            };
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["AgentReport"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        [key: string]: unknown;
+                    };
                 };
             };
             /** @description Validation Error */

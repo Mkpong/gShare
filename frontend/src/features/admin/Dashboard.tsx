@@ -5,6 +5,7 @@ import { useGpuDevices, useNodes } from '@/api/hooks/useNodes';
 import { useAuditLogs } from '@/api/hooks/useAudit';
 import { actionLabel, resultMeta, targetDisplay, changesSummary } from '@/features/admin/Audit';
 import { HelpTip } from '@/components/HelpTip';
+import { DotPager } from '@/components/DotPager';
 import { PageHeader } from '@/components/PageHeader';
 import { useTranslation } from 'react-i18next';
 import { Select } from '@/components/Select';
@@ -14,7 +15,6 @@ import { formatVram } from '@/lib/format';
 import { ErrorState } from '@/components/EmptyState';
 import { Figure } from '@/components/Figure';
 import { Meter } from '@/components/Meter';
-import { CaretLeft, CaretRight } from '@/components/icons';
 import { Timestamp } from '@/components/Timestamp';
 import type { ReactNode } from 'react';
 
@@ -58,41 +58,6 @@ function shortModel(model: string): string {
 /** How many cards one page of the rack view shows. */
 const DEVICE_PAGE = 6;
 
-/**
- * The rack view's pager: a dot per page between two arrows, and nothing at all while everything
- * fits on one page. Deliberately not the table pager — this is a handful of cards, so page numbers
- * and row counts would be more furniture than the thing they navigate.
- */
-function DevicePager({ page, pages, onPage }: { page: number; pages: number; onPage: (n: number) => void }) {
-  const { t } = useTranslation();
-  if (pages <= 1) return null;
-  const arrow = 'w-6 h-6 grid place-items-center rounded-ctl text-muted transition-colors duration-150 ' +
-    'hover:text-text hover:bg-surface-2 disabled:opacity-35 disabled:hover:bg-transparent disabled:hover:text-muted';
-  return (
-    // Dots are 6px of ink, so the row around them is kept tight and pulled into the card's own
-    // bottom padding — otherwise the control reads as a third row of the grid.
-    <div className="mt-2 -mb-2 flex items-center justify-center gap-1.5">
-      <button type="button" className={arrow} aria-label={t('common.previous')} disabled={page === 0} onClick={() => onPage(page - 1)}>
-        <CaretLeft size={14} weight="bold" aria-hidden="true" />
-      </button>
-      {Array.from({ length: pages }, (_, i) => (
-        <button
-          key={i}
-          type="button"
-          aria-label={t('admin.dashboard.devicePage', { page: i + 1 })}
-          aria-current={i === page ? 'true' : undefined}
-          onClick={() => onPage(i)}
-          className={`h-1.5 rounded-full transition-all duration-150 ${
-            i === page ? 'w-4 bg-primary' : 'w-1.5 bg-border hover:bg-border-strong'
-          }`}
-        />
-      ))}
-      <button type="button" className={arrow} aria-label={t('common.next')} disabled={page >= pages - 1} onClick={() => onPage(page + 1)}>
-        <CaretRight size={14} weight="bold" aria-hidden="true" />
-      </button>
-    </div>
-  );
-}
 
 /**
  * Why a card cannot take work, or null when it can. The card's own health, its node's state and a
@@ -284,7 +249,7 @@ export function AdminDashboard() {
                       );
                     })}
                   </div>
-                  <DevicePager page={page} pages={devPages} onPage={setDevPage} />
+                  <DotPager page={page} pages={devPages} onPage={setDevPage} />
                 </>
               )}
           </section>

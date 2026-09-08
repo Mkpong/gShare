@@ -1,0 +1,115 @@
+{{- if .Values.agent.enabled }}
+# gshare-agent — one pod per node, sampling each session's cgroup counters once a second.
+#
+# It exists because cAdvisor aggregates on its own ~10s cycle, which puts a floor under how fresh a
+# scraped reading can be. The agent reads the same kernel files cAdvisor reads, on the node itself,
+# and pushes to the control plane. Prometheus remains the record and the only source for GPU and
+# host series; this is the live view.
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: gshare-agent
+  namespace: {{ .Values.global.namespaces.infra }}
+  labels:
+    {{- include "gshare.labels" . | nindent 4 }}
+---
+# Read-only, and only pods: the agent needs to know which session pods the kubelet put on its node.
+apiVersion: rbac.authorization.k8s.io/v1
+kind: Role
+metadata:
+  name: gshare-agent
+  namespace: {{ .Values.global.namespaces.sessions }}
+  labels:
+    {{- include "gshare.labels" . | nindent 4 }}
+rules:
+  - apiGroups: [""]
+    resources: ["pods"]
+    verbs: ["get", "list", "watch"]
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: RoleBinding
+metadata:
+  name: gshare-agent
+  namespace: {{ .Values.global.namespaces.sessions }}
+  labels:
+    {{- include "gshare.labels" . | nindent 4 }}
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: Role
+  name: gshare-agent
+subjects:
+  - kind: ServiceAccount
+    name: gshare-agent
+    namespace: {{ .Values.global.namespaces.infra }}
+---
+apiVersion: apps/v1
+kind: DaemonSet
+metadata:
+  name: gshare-agent
+  namespace: {{ .Values.global.namespaces.infra }}
+  labels:
+    {{- include "gshare.labels" . | nindent 4 }}
+    app.kubernetes.io/component: agent
+spec:
+  selector:
+    matchLabels:
+      {{- include "gshare.selectorLabels" (dict "component" "gshare-agent") | nindent 6 }}
+  template:
+    metadata:
+      labels:
+        {{- include "gshare.labels" . | nindent 8 }}
+        {{- include "gshare.selectorLabels" (dict "component" "gshare-agent") | nindent 8 }}
+    spec:
+      serviceAccountName: gshare-agent
+      # Session pods run on every worker; a control-plane taint must not keep the agent off a node
+      # that carries sessions.
+      tolerations:
+        - operator: Exists
+      {{- with .Values.agent.nodeSelector }}
+      nodeSelector:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      securityContext:
+        runAsNonRoot: true
+        runAsUser: 65532
+        seccompProfile: { type: RuntimeDefault }
+      containers:
+        - name: agent
+          image: {{ .Values.images.agent.repository }}:{{ .Values.images.agent.tag | default .Chart.AppVersion }}
+          imagePullPolicy: {{ .Values.images.agent.pullPolicy | default "IfNotPresent" }}
+          # No privileges of any kind: cgroup v2 files are world-readable, so a read-only bind of
+          # the host hierarchy is all the agent needs.
+          securityContext:
+            allowPrivilegeEscalation: false
+            readOnlyRootFilesystem: true
+            capabilities: { drop: ["ALL"] }
+          env:
+            - name: NODE_NAME
+              valueFrom: { fieldRef: { fieldPath: spec.nodeName } }
+            - name: GSHARE_API_URL
+              value: {{ .Values.agent.apiUrl | default (printf "http://gshare-api.%s.svc:8080" .Values.global.namespaces.system) | quote }}
+            - name: GSHARE_SESSION_NAMESPACE
+              value: {{ .Values.global.namespaces.sessions | quote }}
+            - name: GSHARE_SAMPLE_INTERVAL_MS
+              value: {{ .Values.agent.intervalMs | default 1000 | quote }}
+            - name: INTERNAL_JWT_TOKEN_FILE
+              value: /var/run/gshare/internal-jwt
+          volumeMounts:
+            - name: cgroup
+              mountPath: /sys/fs/cgroup
+              readOnly: true
+            - name: internal-jwt
+              mountPath: /var/run/gshare
+              readOnly: true
+          resources:
+            {{- toYaml .Values.agent.resources | nindent 12 }}
+      volumes:
+        - name: cgroup
+          hostPath:
+            path: /sys/fs/cgroup
+            type: Directory
+        - name: internal-jwt
+          secret:
+            secretName: {{ .Values.operator.internalJwtSecret }}
+            optional: true
+{{- end }}

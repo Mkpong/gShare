@@ -11,6 +11,7 @@ from app.internal import (
     imagebuild_status_router,
     inventory_router,
     jwks_router,
+    metrics_router,
     status_router,
     volumes_router,
 )
@@ -23,3 +24,4 @@ internal_router.include_router(audit_router.router)
 internal_router.include_router(inventory_router.router)
 internal_router.include_router(jwks_router.router)
 internal_router.include_router(volumes_router.router)
+internal_router.include_router(metrics_router.router)

@@ -19,7 +19,7 @@ from app.auth.rbac import Principal
 from app.core.errors import DomainError, NotFound
 from app.core.redis import get_redis
 from app.db.base import get_db
-from app.db.models import Offering, QueueEntry, Session, User
+from app.db.models import Offering, QueueEntry, Session, SessionEvent, User
 from app.domain import queue_ranking
 from app.domain.audit_service import AuditService
 from app.domain.credit_engine import CreditEngine
@@ -48,7 +48,12 @@ async def _ranked(db: AsyncSession) -> list[tuple[QueueEntry, float]]:
 
 
 async def _decorate(db: AsyncSession, views: list[dict]) -> list[dict]:
-    """Attach the human context (session name, owner, GPU model) the raw entry lacks."""
+    """Attach the human context (session name, owner, GPU model, why it is still waiting).
+
+    The reason is the crux: without it the queue screen shows a position and nothing else, and a
+    head-of-line entry that no node can satisfy is indistinguishable from one that is simply next
+    in line. The scheduler records its refusal on the session's ``queued`` event; the newest one
+    is the current answer."""
     sids = [v["session_id"] for v in views]
     if not sids:
         return views
@@ -64,6 +69,18 @@ async def _decorate(db: AsyncSession, views: list[dict]) -> list[dict]:
     for v in views:
         sn, un, gm = meta.get(v["session_id"], (None, None, None))
         v["session_name"], v["owner_name"], v["gpu_model"] = sn, un, gm
+
+    ev_rows = (
+        await db.execute(
+            select(SessionEvent.session_id, SessionEvent.reason)
+            .where(SessionEvent.session_id.in_(sids), SessionEvent.kind == "queued",
+                   SessionEvent.reason.is_not(None))
+            .order_by(SessionEvent.created_at.asc())
+        )
+    ).all()
+    reasons = {sid: reason for sid, reason in ev_rows}   # newest wins
+    for v in views:
+        v["reason"] = reasons.get(v["session_id"])
     return views
 
 

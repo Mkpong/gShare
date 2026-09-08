@@ -271,10 +271,21 @@ export function AdminMonitor() {
     () => sessionRows.slice((table.page - 1) * MONITOR_PAGE, table.page * MONITOR_PAGE),
     [sessionRows, table.page],
   );
+  // A selection splits in two, because the two acts are different. Live sessions get force-
+  // terminated: someone's work is cut off. Errored ones are already dead — pod and CR gone, credit
+  // settled — and what is left is filing the row and reclaiming any residue, which is the same
+  // "cleanup" the per-row button does. Rows already terminated are inert and belong to neither.
   const selectedLive = useMemo(
     () => sessionRows.filter((s) => selected.has(s.id) && !['terminated', 'error'].includes(s.status)),
     [sessionRows, selected],
   );
+  const selectedStale = useMemo(
+    () => sessionRows.filter((s) => selected.has(s.id) && s.status === 'error'),
+    [sessionRows, selected],
+  );
+  // Every errored row currently in view, so "clean up what is broken" is one click and not a
+  // hunt down a 61-row list.
+  const cleanable = useMemo(() => sessionRows.filter((s) => s.status === 'error'), [sessionRows]);
 
   const terminateSelected = async () => {
     const ok = await confirm({
@@ -289,6 +300,25 @@ export function AdminMonitor() {
     if (!ok) return;
     bulkTerm.mutate(selectedLive.map((s) => s.id), {
       onSuccess: () => { pushToast('success', t('admin.monitor.bulkTerminated', { count: selectedLive.length })); setSelected(new Set()); },
+      onError: (e) => pushToast('error', humanizeError(asApiError(e))),
+    });
+  };
+
+  const cleanupSelected = async () => {
+    const ok = await confirm({
+      title: t('admin.monitor.confirmCleanupTitle', { count: selectedStale.length }),
+      body: t('admin.monitor.confirmCleanupBody'),
+      consequences: selectedStale.slice(0, 6).map((s) => `${s.name ?? s.id} - ${s.owner_name ?? s.owner_user_id ?? ''}`),
+      confirmLabel: t('admin.monitor.cleanup'),
+    });
+    if (!ok) return;
+    // Same endpoint as a single cleanup: it settles what is left and files the row, and reports
+    // per target, so one stubborn row cannot make the rest fail.
+    bulkTerm.mutate(selectedStale.map((s) => s.id), {
+      onSuccess: () => {
+        pushToast('success', t('admin.monitor.bulkCleaned', { count: selectedStale.length }));
+        setSelected(new Set());
+      },
       onError: (e) => pushToast('error', humanizeError(asApiError(e))),
     });
   };
@@ -403,6 +433,23 @@ export function AdminMonitor() {
           {selectedLive.length > 0 && (
             <button type="button" className="gs-btn gs-btn-sm gs-btn-danger" disabled={bulkTerm.isPending} onClick={terminateSelected}>
               {t('admin.monitor.terminateSelected', { count: selectedLive.length })}
+            </button>
+          )}
+          {selectedStale.length > 0 && (
+            <button type="button" className="gs-btn gs-btn-sm" disabled={bulkTerm.isPending} onClick={cleanupSelected}>
+              {t('admin.monitor.cleanupSelected', { count: selectedStale.length })}
+            </button>
+          )}
+          {selectedStale.length === 0 && cleanable.length > 1 && (
+            // Nothing errored is selected yet: offer the whole set rather than making someone tick
+            // boxes one by one.
+            <button
+              type="button"
+              className="gs-btn gs-btn-sm"
+              title={t('admin.monitor.cleanupHint')}
+              onClick={() => setSelected(new Set(cleanable.map((s) => s.id)))}
+            >
+              {t('admin.monitor.selectErrored', { count: cleanable.length })}
             </button>
           )}
           <Select data-url-state className="gs-input w-auto" value={org} aria-label={t('admin.monitor.allOrgs')} onChange={(e) => { filters.set('org', e.target.value); if (group) filters.set('group', ''); }}>

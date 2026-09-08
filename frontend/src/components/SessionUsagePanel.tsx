@@ -64,6 +64,9 @@ function MetricBlock({ label, reading, pct, unit, points, chart = true, finished
             height={190}
             seriesLabel={() => (typeof label === 'string' ? label : '')}
             timeOnly
+            /* Every metric here is a reading against the session's own limit, so the question is
+               "how much of my allowance", not "what shape is the noise". */
+            zeroAnchored
           />
         ) : (
           <div className="h-[190px] grid place-items-center text-2xs text-muted">-</div>
@@ -74,7 +77,7 @@ function MetricBlock({ label, reading, pct, unit, points, chart = true, finished
   );
 }
 
-export function SessionUsagePanel({ limits, usage, series, range, onRange, charts = true, finished = false, summary }: {
+export function SessionUsagePanel({ limits, usage, series, range, onRange, charts = true, finished = false, summary, live }: {
   limits: UsageLimits;
   usage?: UsageNow;
   series?: UsageSeries;
@@ -86,6 +89,9 @@ export function SessionUsagePanel({ limits, usage, series, range, onRange, chart
   finished?: boolean;
   /** Permanent average/peak figures, shown once the session has ended. */
   summary?: UsageSummary | null;
+  /** One-second samples from the node agent. When present they replace the CPU and memory series:
+   *  same measurement, an order of magnitude fresher. GPU keeps coming from the slower path. */
+  live?: { at: number; cpu_cores: number; mem_bytes: number }[] | null;
 }) {
   const { t } = useTranslation();
   const fmtAvgMax = (v: { avg: number | null; max: number | null } | undefined, f: (n: number) => string) =>
@@ -96,6 +102,11 @@ export function SessionUsagePanel({ limits, usage, series, range, onRange, chart
   const pctOf = (val: number | null | undefined, limit: number | null | undefined) =>
     val != null && limit ? Math.min(100, (val / limit) * 100) : null;
   const m = series?.metrics;
+  // The agent's samples are the same two metrics at one-second resolution, so they simply take
+  // over the CPU and memory lines when the DaemonSet is reporting.
+  const liveCpu: [number, number | null][] = (live ?? []).map((s) => [s.at, s.cpu_cores]);
+  const liveMem: [number, number | null][] = (live ?? []).map((s) => [s.at, s.mem_bytes / 1048576]);
+  const hasLive = (live?.length ?? 0) > 1;
   const timeBase = m?.cpu_cores.points ?? [];
   const zeroFilled = (pts?: [number, number | null][]): [number, number | null][] => {
     if (pts && pts.length > 0) return pts.map(([t, v]) => [t, v ?? 0]);
@@ -108,19 +119,29 @@ export function SessionUsagePanel({ limits, usage, series, range, onRange, chart
     for (let i = pts.length - 1; i >= 0; i -= 1) if (pts[i][1] != null) return pts[i][1];
     return null;
   };
-  const cpuNow = usage?.cpu_cores ?? lastOf(m?.cpu_cores.points) ?? 0;
-  const memGib = usage?.mem_bytes != null ? usage.mem_bytes / 2 ** 30
-    : (() => { const v = lastOf(m?.mem_mib.points); return v != null ? v / 1024 : 0; })();
+  const cpuNow = hasLive ? (lastOf(liveCpu) ?? 0) : (usage?.cpu_cores ?? lastOf(m?.cpu_cores.points) ?? 0);
+  const memGib = hasLive
+    ? (lastOf(liveMem) ?? 0) / 1024
+    : usage?.mem_bytes != null ? usage.mem_bytes / 2 ** 30
+      : (() => { const v = lastOf(m?.mem_mib.points); return v != null ? v / 1024 : 0; })();
   const vramGib = usage?.vram_bytes != null ? usage.vram_bytes / 2 ** 30
     : (lastOf(m?.vram_mib.points) ?? 0) / 1024;
   const corePct = usage?.gpu_core_pct ?? lastOf(m?.gpu_core_pct.points) ?? 0;
   return (
     <>
       <div className="flex items-center justify-between gap-3 mb-4 flex-wrap">
-        <h2 className="font-bold">{finished ? t('session.usageTitleFinished') : t('admin.monitor.usageTitle')}</h2>
-        {charts && finished && (
-          <span className="gs-tag">{t('session.usageWholeRun')}</span>
-        )}
+        {/* The badge qualifies the heading — "usage, sampled every second" — so it travels with it.
+            Left to the flex row it sat marooned between the title and the range picker, reading as
+            a third control rather than as part of the title. */}
+        <div className="flex items-center gap-2 min-w-0">
+          <h2 className="font-bold">{finished ? t('session.usageTitleFinished') : t('admin.monitor.usageTitle')}</h2>
+          {charts && finished && (
+            <span className="gs-tag">{t('session.usageWholeRun')}</span>
+          )}
+          {hasLive && !finished && (
+            <span className="gs-tag text-free" title={t('session.usageLiveHint')}>{t('session.usageLive')}</span>
+          )}
+        </div>
         {charts && !finished && (
         <div className="flex gap-1" role="group" aria-label={t('admin.monitoring.range')}>
           {USAGE_RANGES.map((r) => (
@@ -140,7 +161,7 @@ export function SessionUsagePanel({ limits, usage, series, range, onRange, chart
           reading={limits.cpu != null ? `${cpuNow.toFixed(2)} / ${limits.cpu} vCPU` : dash}
           pct={pctOf(cpuNow, limits.cpu)}
           unit="cores"
-          points={m?.cpu_cores.points ?? []}
+          points={hasLive ? liveCpu : (m?.cpu_cores.points ?? [])}
         />
         <MetricBlock
           chart={charts}
@@ -149,7 +170,7 @@ export function SessionUsagePanel({ limits, usage, series, range, onRange, chart
           reading={limits.mem_gb != null ? `${memGib.toFixed(1)} / ${limits.mem_gb} GiB` : dash}
           pct={pctOf(memGib, limits.mem_gb)}
           unit="mib"
-          points={m?.mem_mib.points ?? []}
+          points={hasLive ? liveMem : (m?.mem_mib.points ?? [])}
         />
         {limits.isGpu && limits.gpu_cores != null && (
           <MetricBlock
@@ -194,7 +215,11 @@ export function SessionUsagePanel({ limits, usage, series, range, onRange, chart
           )}
         </dl>
       )}
-      {!finished && <p className="text-2xs text-muted mt-3">{t('admin.monitor.usageHint')}</p>}
+      {!finished && (
+        <p className="text-2xs text-muted mt-3">
+          {hasLive ? t('session.usageHintLive') : t('admin.monitor.usageHint')}
+        </p>
+      )}
     </>
   );
 }

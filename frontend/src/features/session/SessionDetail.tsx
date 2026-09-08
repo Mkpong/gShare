@@ -2,7 +2,8 @@ import { useEffect, useState } from 'react';
 import { Link, useNavigate, useParams } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
 import { useQueryClient } from '@tanstack/react-query';
-import { useSession, sessionKeys, useSessionTimeline, useStopSession, useStartSession, useRestartSession, useTerminateSession, useOwnSessionUsage, useOwnSessionUsageSeries } from '@/api/hooks/useSessions';
+import { useSession, sessionKeys, useSessionTimeline, useStopSession, useStartSession, useRestartSession, useTerminateSession, useOwnSessionUsage,
+  useOwnSessionUsageLive, useOwnSessionUsageSeries } from '@/api/hooks/useSessions';
 import { SessionUsagePanel, type UsageRange, type UsageSeries, type UsageSummary } from '@/components/SessionUsagePanel';
 import { subscribeSessionEvents } from '@/lib/sse';
 import { formatCredit, formatDuration, formatVram, hoursElapsed, sessionStatusLabel, shortImageRef } from '@/lib/format';
@@ -372,11 +373,14 @@ function OwnUsagePanel({ session, running, finished, range, onRange }: {
   // History for the owner too: what the session used, over the picked window while it runs and
   // over its whole run once it has ended.
   const { data: series } = useOwnSessionUsageSeries(session.id, range, !finished);
+  // The per-node agent, when it is deployed: one-second CPU and memory for a running session.
+  const { data: liveUsage } = useOwnSessionUsageLive(session.id, running);
   return (
     <SessionUsagePanel
       series={series as UsageSeries | undefined}
       finished={finished}
       summary={session.usage_summary}
+      live={liveUsage?.live ? liveUsage.samples : null}
       limits={{
         isGpu: session.resource_class === 'gpu',
         cpu: session.cpu, mem_gb: session.mem_gb,

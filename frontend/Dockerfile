@@ -21,6 +21,10 @@ FROM deps AS build
 RUN npx vite build
 
 FROM nginx:1.31-alpine AS runtime
+# Patch the base's OS packages at build time. The published nginx tags are rebuilt on their own
+# schedule, so even a freshly pulled one carries alpine packages with fixed CVEs still open —
+# openssl, libxml2, libpng and musl among them. This costs one layer and clears all of them.
+RUN apk upgrade --no-cache
 COPY nginx.conf /etc/nginx/conf.d/default.conf
 COPY --from=build /app/dist /usr/share/nginx/html
 # Optional session /proxy/ relay for Compose: an include directory plus an entrypoint hook that
