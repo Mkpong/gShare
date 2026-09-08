@@ -3,7 +3,7 @@
 # and runtime serves the bundle from nginx. runtime is the default target.
 #   Tests: docker build --target test -t gshare-frontend-test . && docker run --rm gshare-frontend-test
 #          node_modules and vitest output stay inside the container and never reach the host.
-FROM node:20-alpine AS deps
+FROM node:26-alpine AS deps
 WORKDIR /app
 COPY package*.json ./
 RUN npm ci
