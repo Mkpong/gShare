@@ -64,6 +64,9 @@ function MetricBlock({ label, reading, pct, unit, points, chart = true, finished
             height={190}
             seriesLabel={() => (typeof label === 'string' ? label : '')}
             timeOnly
+            /* Every metric here is a reading against the session's own limit, so the question is
+               "how much of my allowance", not "what shape is the noise". */
+            zeroAnchored
           />
         ) : (
           <div className="h-[190px] grid place-items-center text-2xs text-muted">-</div>
@@ -127,13 +130,18 @@ export function SessionUsagePanel({ limits, usage, series, range, onRange, chart
   return (
     <>
       <div className="flex items-center justify-between gap-3 mb-4 flex-wrap">
-        <h2 className="font-bold">{finished ? t('session.usageTitleFinished') : t('admin.monitor.usageTitle')}</h2>
-        {charts && finished && (
-          <span className="gs-tag">{t('session.usageWholeRun')}</span>
-        )}
-        {hasLive && !finished && (
-          <span className="gs-tag text-free" title={t('session.usageLiveHint')}>{t('session.usageLive')}</span>
-        )}
+        {/* The badge qualifies the heading — "usage, sampled every second" — so it travels with it.
+            Left to the flex row it sat marooned between the title and the range picker, reading as
+            a third control rather than as part of the title. */}
+        <div className="flex items-center gap-2 min-w-0">
+          <h2 className="font-bold">{finished ? t('session.usageTitleFinished') : t('admin.monitor.usageTitle')}</h2>
+          {charts && finished && (
+            <span className="gs-tag">{t('session.usageWholeRun')}</span>
+          )}
+          {hasLive && !finished && (
+            <span className="gs-tag text-free" title={t('session.usageLiveHint')}>{t('session.usageLive')}</span>
+          )}
+        </div>
         {charts && !finished && (
         <div className="flex gap-1" role="group" aria-label={t('admin.monitoring.range')}>
           {USAGE_RANGES.map((r) => (

@@ -1,6 +1,10 @@
 import { useEffect, useMemo, useRef } from 'react';
 import uPlot from 'uplot';
 import 'uplot/dist/uPlot.min.css';
+import { formatAxis, formatValue, zeroAnchoredRange } from './timeSeriesAxis';
+
+// Re-exported so call sites keep importing the chart's helpers from the chart itself.
+export { formatAxis, formatValue } from './timeSeriesAxis';
 
 export interface Series {
   labels: Record<string, string | undefined>;
@@ -19,44 +23,6 @@ export function colorForIndex(i: number): string {
   return CHART_COLORS[i % CHART_COLORS.length];
 }
 
-/**
- * Axis labels: the precision follows the tick spacing, so a memory line that moves within one
- * mebibyte does not print the same rounded figure on every gridline ("122 MiB" × 4).
- */
-export function formatAxis(vals: number[], unit: string): string[] {
-  const step = vals.length > 1 ? Math.abs(vals[1] - vals[0]) : 1;
-  const dec = (s: number) => (s >= 1 ? 0 : s >= 0.1 ? 1 : 2);
-  return vals.map((v) => {
-    switch (unit) {
-      case 'mib':
-        return v >= 1024 || (vals[vals.length - 1] ?? 0) >= 1024
-          ? `${(v / 1024).toFixed(dec(step / 1024) || 1)} GiB`
-          : `${v.toFixed(dec(step))} MiB`;
-      case 'cores': return v.toFixed(Math.max(1, dec(step)));
-      case 'percent': return `${v.toFixed(dec(step))}%`;
-      default: return formatValue(v, unit);
-    }
-  });
-}
-
-export function formatValue(v: number | null | undefined, unit: string): string {
-  if (v == null || Number.isNaN(v)) return '-';
-  switch (unit) {
-    case 'percent': return `${v.toFixed(v < 10 ? 1 : 0)}%`;
-    case 'cores': return `${v.toFixed(v < 10 ? 2 : 1)}`;
-    case 'mib': return v >= 1024 ? `${(v / 1024).toFixed(1)} GiB` : `${v.toFixed(0)} MiB`;
-    case 'celsius': return `${v.toFixed(0)}°C`;
-    case 'watt': return `${v.toFixed(0)} W`;
-    case 'mhz': return `${v.toFixed(0)} MHz`;
-    case 'bytes_per_sec': {
-      const u = ['B/s', 'KiB/s', 'MiB/s', 'GiB/s'];
-      let n = v, i = 0;
-      while (n >= 1024 && i < u.length - 1) { n /= 1024; i += 1; }
-      return `${n.toFixed(n < 10 ? 1 : 0)} ${u[i]}`;
-    }
-    default: return v.toFixed(0);
-  }
-}
 
 const timeLabel = (ts: number) =>
   new Date(ts * 1000).toLocaleString(undefined, {
@@ -128,7 +94,7 @@ function tooltipPlugin(
 
 /** A time-series panel. uPlot draws on canvas, so a 7-day range stays smooth; this component owns
  *  sizing, theming and the hover readout. The legend lives on the page, once, not per panel. */
-export function TimeSeriesChart({ series, unit, height = 180, seriesLabel, colorOf, timeOnly = false, hideXAxis = false }: {
+export function TimeSeriesChart({ series, unit, height = 180, seriesLabel, colorOf, timeOnly = false, hideXAxis = false, zeroAnchored = false }: {
   series: Series[];
   unit: string;
   height?: number;
@@ -139,6 +105,10 @@ export function TimeSeriesChart({ series, unit, height = 180, seriesLabel, color
   timeOnly?: boolean;
   /** Sparkline mode: no x-axis at all — the hover readout still carries the exact time. */
   hideXAxis?: boolean;
+  /** Draw a flat line as flat: start the y axis at zero and keep a minimum span, instead of
+   *  fitting it to the data. For readings against a known limit — a session's CPU, memory, VRAM —
+   *  where "how much of my allowance" matters more than the shape of the noise. */
+  zeroAnchored?: boolean;
 }) {
   const hostRef = useRef<HTMLDivElement>(null);
   const plotRef = useRef<uPlot | null>(null);
@@ -177,7 +147,12 @@ export function TimeSeriesChart({ series, unit, height = 180, seriesLabel, color
       padding: [8, 8, 6, 0],   // bottom>0: the lowest gridline/label was shaved off
       legend: { show: false },
       cursor: { y: false, points: { size: 5 } },
-      scales: { x: { time: true } },
+      scales: {
+        x: { time: true },
+        ...(zeroAnchored
+          ? { y: { range: (_u: uPlot, _min: number, max: number) => zeroAnchoredRange(max, unit) } }
+          : {}),
+      },
       plugins: [tooltipPlugin(unit, labels, colors)],
       axes: [
         {
@@ -215,7 +190,7 @@ export function TimeSeriesChart({ series, unit, height = 180, seriesLabel, color
     // Rebuild when the series set changes (labels/colours are baked into the plugin); plain data
     // updates go through setData below so the cursor is not dropped.
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [labels.join('|'), colors.join('|'), unit, height, timeOnly, hideXAxis]);
+  }, [labels.join('|'), colors.join('|'), unit, height, timeOnly, hideXAxis, zeroAnchored]);
 
   useEffect(() => {
     plotRef.current?.setData(data);

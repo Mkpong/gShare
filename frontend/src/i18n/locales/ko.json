@@ -1410,7 +1410,8 @@
     "fromDate": "시작",
     "toDate": "종료",
     "groupBy": "집계 기준",
-    "cluster": "클러스터"
+    "cluster": "클러스터",
+    "pageN": "{{page}}쪽"
   },
   "confirm": {
     "typeToConfirm": "확인하려면 {{text}} 을(를) 입력하세요"
@@ -1506,7 +1507,8 @@
     "storageProvisioned": "할당한 용량",
     "storageEmpty": "아직 만든 볼륨이 없습니다.",
     "storageMore": "외 {{count}}개",
-    "recentUnbilled": "미청구"
+    "recentUnbilled": "미청구",
+    "storageVolumes": "볼륨 {{count}}개"
   },
   "enum": {
     "accessMode": {

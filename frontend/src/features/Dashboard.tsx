@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useMemo, useState } from 'react';
 import { Link } from 'react-router-dom';
 import { PageHeader } from '@/components/PageHeader';
 import { CopyButton } from '@/components/CopyButton';
@@ -13,6 +13,7 @@ import { ArrowRight, Database, GraphicsCard, Plus } from '@/components/icons';
 import { Figure } from '@/components/Figure';
 import { HelpTip } from '@/components/HelpTip';
 import { Meter } from '@/components/Meter';
+import { DotPager } from '@/components/DotPager';
 import { Dialog } from '@/components/Dialog';
 import { NewVolumeForm } from '@/features/volume/VolumePage';
 import { QuotaRequestForm } from '@/features/account/QuotaRequestPage';
@@ -23,6 +24,9 @@ interface DashboardPool {
   kind: 'shared' | 'dedicated';
   tier: 'group' | 'org' | 'shared';
 }
+
+/** How many GPU models one page of the availability grid shows — the fleet rack view's size. */
+const REGION_PAGE = 6;
 
 const pct = (used?: number | null, total?: number | null) =>
   total && total > 0 ? Math.min(100, Math.round(((used ?? 0) / total) * 100)) : 0;
@@ -80,6 +84,11 @@ function QuotaRow({ label, used, limit, unit, variant }: {
   );
 }
 
+/** Drop the vendor prefix every card shares; what distinguishes them is what follows it. */
+function shortModel(model: string): string {
+  return model.replace(/^NVIDIA\s+(GeForce\s+)?/, '');
+}
+
 /** A finished session's average/peak readings, kept on the row after Prometheus forgets them. */
 type UsageSummary = { vram_mib?: { avg: number; max: number }; gpu_core_pct?: { avg: number; max: number } };
 
@@ -95,6 +104,7 @@ export function Dashboard() {
   const { data: sessions } = useSessions();
   const { data: queued } = useQueue();
   const { data: volumes } = useVolumes();
+  const [regionPage, setRegionPage] = useState(0);
 
   const credit = s?.credit ?? { available: null, balance: null, reserved: null };
   const running = s?.sessions?.running ?? 0;
@@ -124,7 +134,12 @@ export function Dashboard() {
   // showed neither the ceiling nor the volumes counting against it.
   const storage = (s as { storage?: { volumes: number; provisioned_gb: number; used_gb: number; limit_gb: number | null } } | undefined)?.storage;
   const myVolumes = ((volumes ?? []) as Vol[]).slice(0, 4);
-  const regions = s?.regions ?? [];
+  const regions = useMemo(() => s?.regions ?? [], [s]);
+  // A long fleet would otherwise run the availability panel down the page; three to a row, six to
+  // a page, and the pager only appears once there is a second page.
+  const regionPages = Math.max(1, Math.ceil(regions.length / REGION_PAGE));
+  const rPage = Math.min(regionPage, regionPages - 1);
+  const pagedRegions = regions.slice(rPage * REGION_PAGE, rPage * REGION_PAGE + REGION_PAGE);
   // Node pools the caller may be placed on, in preference order (group-granted, org-granted,
   // shared). Typed locally until the generated schema carries the field.
   const pools = ((s as { pools?: DashboardPool[] } | undefined)?.pools ?? []);
@@ -281,22 +296,25 @@ export function Dashboard() {
         ) : (
           /* One card per model with a single traffic-light reading. Exact VRAM and idle-card
              counts are operator detail; to a user they read as "the GPU is being watched". */
-          <ul className="mt-3 grid grid-cols-[repeat(auto-fit,minmax(320px,1fr))] gap-3">
-            {regions.map((r) => {
+          <>
+          <ul className="mt-3 grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-3 gap-2.5">
+            {pagedRegions.map((r) => {
               const level = congestion(r.free_mb, r.total_mb);
               // Per-card VRAM is a SPEC (helps pick a model), not live state — card counts and
               // exact free GB stay hidden by design.
               const cardGb = r.total > 0 ? Math.round((r.total_mb ?? 0) / r.total / 1024) : 0;
               return (
-                <li key={r.model} className="gs-card p-4 flex items-center gap-3">
+                <li key={r.model} className="gs-card p-3.5 flex items-center gap-2.5">
                   <GraphicsCard size={17} className="shrink-0 text-muted" aria-hidden="true" />
-                  <span className="min-w-0 flex-1 truncate font-medium text-sm" title={r.model}>{r.model}</span>
+                  <span className="min-w-0 flex-1 truncate font-medium text-sm" title={r.model}>{shortModel(r.model)}</span>
                   {cardGb > 0 && <span className="gs-tag shrink-0 gs-num">{cardGb} GB</span>}
                   <StatusPill kind={level} label={t(`dashboard.congestion.${level}`)} />
                 </li>
               );
             })}
           </ul>
+          <DotPager page={rPage} pages={regionPages} onPage={setRegionPage} />
+          </>
         )}
       </section>
 
@@ -409,17 +427,30 @@ export function Dashboard() {
               <ArrowRight size={13} aria-hidden="true" />
             </Link>
           </div>
-          {/* The ceiling first: volumes are provisioned against a quota separate from the session
-              scratch disk, and a full allowance was previously invisible until creation failed. */}
+          {/* The allowance, as a figure rather than a row. Drawn the same way as a volume it read
+              as one — a volume named "Provisioned" sitting above the real ones. Volumes are
+              provisioned against a quota separate from the session scratch disk, and a full
+              allowance was invisible until creation failed, so the total has to stay. */}
           <div className="mt-4">
-            <QuotaRow
-              label={t('dashboard.storageProvisioned')}
-              used={storage?.provisioned_gb ?? 0}
-              limit={storage?.limit_gb ?? null}
-              unit="GB"
-              variant="primary"
-            />
+            <div className="gs-quota-band">{t('dashboard.storageProvisioned')}</div>
+            <div className="mt-2.5 flex items-baseline justify-between gap-3">
+              <span className="gs-num text-2xl font-bold leading-none">
+                {storage?.provisioned_gb ?? 0}
+                <span className="text-muted text-sm font-medium">
+                  {storage?.limit_gb ? ` / ${storage.limit_gb}` : ''} GB
+                </span>
+              </span>
+              <span className="text-2xs text-muted font-medium">
+                {storage?.limit_gb
+                  ? `${pct(storage.provisioned_gb, storage.limit_gb)}%`
+                  : t('dashboard.noLimit')}
+              </span>
+            </div>
+            {storage?.limit_gb ? (
+              <Meter value={pct(storage.provisioned_gb, storage.limit_gb)} className="mt-2" />
+            ) : null}
           </div>
+
           {myVolumes.length === 0 ? (
             <p className="text-muted text-sm flex-1 flex items-center justify-center py-6">
               {t('dashboard.storageEmpty')}{' '}
@@ -428,27 +459,41 @@ export function Dashboard() {
               </button>
             </p>
           ) : (
-            <ul className="mt-4 flex flex-col gap-3">
-              {myVolumes.map((v) => (
-                <li key={v.id}>
-                  <div className="flex items-baseline justify-between gap-3">
-                    <span className="text-xs font-semibold truncate">
-                      {v.name || t(`volume.type.${v.type}`, { defaultValue: v.type ?? '' })}
-                    </span>
-                    <span className="gs-num text-xs text-muted whitespace-nowrap">
-                      {v.used_gb ?? 0} / {v.quota_gb ?? 0} GB
-                    </span>
-                  </div>
-                  {/* Per volume: how full it is, which is what decides whether to grow it. */}
-                  <Meter value={pct(v.used_gb, v.quota_gb)} className="mt-1.5" />
-                </li>
-              ))}
-              {storage != null && storage.volumes > myVolumes.length && (
-                <li className="text-2xs text-muted">
-                  {t('dashboard.storageMore', { count: storage.volumes - myVolumes.length })}
-                </li>
-              )}
-            </ul>
+            <>
+              {/* A labelled band opens the list, so what follows is unmistakably the volumes
+                  themselves and not more totals. */}
+              <div className="gs-quota-band mt-5">
+                {t('dashboard.storageVolumes', { count: storage?.volumes ?? myVolumes.length })}
+              </div>
+              <ul className="mt-3 flex flex-col gap-3">
+                {myVolumes.map((v) => (
+                  <li key={v.id}>
+                    <div className="flex items-baseline justify-between gap-2">
+                      <span className="text-xs font-semibold truncate min-w-0">
+                        {v.name || t(`volume.type.${v.type}`, { defaultValue: v.type ?? '' })}
+                      </span>
+                      {/* The type says what the volume is for; without it a named volume gave no
+                          clue whether it was a workspace, a dataset or scratch. */}
+                      {v.type && (
+                        <span className="gs-tag shrink-0">
+                          {t(`volume.type.${v.type}`, { defaultValue: v.type })}
+                        </span>
+                      )}
+                      <span className="gs-num text-xs text-muted whitespace-nowrap ml-auto">
+                        {v.used_gb ?? 0} / {v.quota_gb ?? 0} GB
+                      </span>
+                    </div>
+                    {/* Per volume: how full it is, which is what decides whether to grow it. */}
+                    <Meter value={pct(v.used_gb, v.quota_gb)} className="mt-1.5" />
+                  </li>
+                ))}
+                {storage != null && storage.volumes > myVolumes.length && (
+                  <li className="text-2xs text-muted">
+                    {t('dashboard.storageMore', { count: storage.volumes - myVolumes.length })}
+                  </li>
+                )}
+              </ul>
+            </>
           )}
         </section>
       </div>
