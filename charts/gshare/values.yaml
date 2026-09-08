@@ -37,28 +37,32 @@ controlPlane:
   nodeSelector: {}
 
 # ── Images ── (repository is joined with global.imageRegistry; see _helpers.tpl)
+# Tags track `latest` until a release is cut. Only `latest` is published today — the version
+# tags come from pushing a `v*` git tag, which fires the publish workflow — so pinning a version
+# here would point every install at an image that does not exist. Set these to the release
+# version at the same time as that tag.
 images:
   # api/worker run the same backend image (gshare-backend) with different commands.
   api:
     repository: gshare-backend
-    tag: "0.1.0"
+    tag: "latest"
     pullPolicy: IfNotPresent
   worker:
     repository: gshare-backend
-    tag: "0.1.0"
+    tag: "latest"
     pullPolicy: IfNotPresent
   operator:
     repository: gshare-operator
-    tag: "0.1.0"
+    tag: "latest"
     pullPolicy: IfNotPresent
   frontend:
     repository: gshare-frontend
-    tag: "0.1.0"
+    tag: "latest"
     pullPolicy: IfNotPresent
   # Per-node metrics agent (see the `agent` section below).
   agent:
     repository: docker.io/boanlab/gshare-agent
-    tag: ""
+    tag: "latest"
     pullPolicy: IfNotPresent
 
 # ── gshare-api (Python control plane: ID-issuing authority, JWKS publisher) ──
