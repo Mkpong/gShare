@@ -62,6 +62,13 @@ async def _assert_policy_perm(
             raise Forbidden(f"not permitted: {action}")
         return
     if scope == "user" and db is not None:
+        # An administrator writing a policy for THEMSELVES is self-service escalation: the user
+        # scope outranks group, org and global, so it silently lifts every ceiling above it.
+        # Raising your own limits needs someone above you — that is what the request flow is for.
+        if scope_id == principal.user_id:
+            raise Forbidden(
+                "not permitted: cannot write your own user-scoped policy; request a change instead"
+            )
         # group_admin+ over any group the target user is a member of.
         target_groups = (
             await db.scalars(
@@ -552,7 +559,9 @@ async def create_policy(
 
     # The ResourcePolicy model has dedicated columns for the GPU-session limits and a JSONB
     # `limits` blob; CPU-session limits + the quota limits live in the blob.
-    limits = dict(body.limits or {})
+    # Only the documented keys are stored. PATCH already filtered; create did not, so any key
+    # could be planted on a fresh policy and carried forever.
+    limits = {k: v for k, v in (body.limits or {}).items() if k in _PUBLIC_LIMIT_KEYS}
     limits["cpu_session_max_concurrent"] = body.cpu_session_max_concurrent
     limits["cpu_session_max_runtime_min"] = body.cpu_session_max_runtime_min
     limits["cpu_session_idle_timeout_sec"] = body.cpu_session_idle_timeout_sec

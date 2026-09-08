@@ -82,7 +82,15 @@ class AuditService:
         # the actor's memberships.
         org_id = detail.pop("org_id", None)
         group_id = detail.pop("group_id", None)
-        if org_id is None and group_id is None:
+        # A target's own tenant, when the caller knows it, wins over the actor's. Stamping every
+        # row with the ACTOR's organization meant a cross-tenant action was filed under the
+        # attacker's organization and was invisible to the tenant it was done to.
+        target_org_id = detail.pop("target_org_id", None)
+        target_group_id = detail.pop("target_group_id", None)
+        if target_org_id is not None or target_group_id is not None:
+            org_id = target_org_id if target_org_id is not None else org_id
+            group_id = target_group_id if target_group_id is not None else group_id
+        elif org_id is None and group_id is None:
             group_id, org_id = await self._scope_for_actor(actor)
         await self._append(
             actor=actor,

@@ -260,6 +260,13 @@ class StatusSync:
             sess.node_hostname = ev.node_name
         if sess.started_at is None:
             sess.started_at = now
+        if sess.status in ("terminated", "error"):
+            # A settled session must not come back. Its hold was released and its settle key is
+            # spent, so a resurrected row would bill against no reservation and never settle
+            # again. A late `running` for a finished session is a stale report, not a transition.
+            log.info("ignoring running report for finished session=%s status=%s",
+                     sess.id, sess.status)
+            return
         if sess.status != "running":
             # preparing/pending -> running (allowed by the lifecycle SM).
             sess.status = "running"
@@ -284,6 +291,7 @@ class StatusSync:
     # ── terminated: end allocation + settle ──
     async def _on_terminated(self, sess: Session, ev: OperatorStatusEvent) -> None:
         now = self._event_ts(ev)
+        prior_status = sess.status
         was_terminal = sess.status in ("terminated", "error")
         await self._release_allocation(sess, now)
         if sess.status not in ("terminated", "error"):
@@ -300,7 +308,12 @@ class StatusSync:
         await self.db.flush()
         # Finalize remaining consume + release/refund the hold (idempotent settle:{ses}).
         if sess.billing_wallet_id and sess.credit_per_hour_snapshot:
-            await self.credit.settle(sess, f"settle:{sess.id}")
+            # A session that was PAUSED was already trued up by stop(); recomputing owed from
+            # started_at would bill the whole paused interval, in which nothing ran. Only a run
+            # that was actually running gets a final consume.
+            await self.credit.settle(
+                sess, f"settle:{sess.id}", final_consume=(prior_status == "running")
+            )
         await publish_session_event(sess.id, {"phase": "terminated", "status": sess.status})
         if not was_terminal:
             record_session_event(self.db, sess.id, "terminated",
@@ -331,6 +344,7 @@ class StatusSync:
     # ── error: session error + refund hold ──
     async def _on_error(self, sess: Session, ev: OperatorStatusEvent, *, reason: str | None = None) -> None:
         now = self._event_ts(ev)
+        prior_status = sess.status
         was_terminal = sess.status in ("terminated", "error")
         await self._release_allocation(sess, now)
         if sess.status not in ("terminated", "error"):
@@ -342,7 +356,12 @@ class StatusSync:
         await self.db.flush()
         # Settle releases any remaining hold (release/refund) idempotently — money only moves here.
         if sess.billing_wallet_id and sess.credit_per_hour_snapshot:
-            await self.credit.settle(sess, f"settle:{sess.id}")
+            # A session that was PAUSED was already trued up by stop(); recomputing owed from
+            # started_at would bill the whole paused interval, in which nothing ran. Only a run
+            # that was actually running gets a final consume.
+            await self.credit.settle(
+                sess, f"settle:{sess.id}", final_consume=(prior_status == "running")
+            )
         if not was_terminal:
             record_session_event(self.db, sess.id, "error",
                                  reason=sess.status_reason, message=getattr(ev, "message", None))

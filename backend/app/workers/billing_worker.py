@@ -32,10 +32,16 @@ async def _warn_low_balance(db, session: Session, now: datetime) -> None:
         wallet = await db.get(CreditWallet, session.billing_wallet_id)
         if wallet is None:
             return
-        available = wallet.balance - wallet.reserved
+        # The session's own untouched reservation is credit it may still spend, so it counts
+        # toward "how long can this keep running" just as it does in the exhaustion test.
+        available = await CreditEngine(db).available_for(wallet, session)
         threshold = session.credit_per_hour_snapshot * 2
         if available <= 0 or available > threshold:
             return
+        # Reading the wallet above opened a transaction; `db.begin()` on top of it raised
+        # InvalidRequestError, which the except below swallowed — so this warning never fired
+        # once. Close the implicit read transaction before opening the write one.
+        await db.commit()
         marker = f"lowbal:{wallet.id}:{now.date().isoformat()}"
         if not await get_redis().set(marker, "1", nx=True, ex=2 * 24 * 3600):
             return  # already warned today

@@ -18,6 +18,7 @@ from app.core.logging import get_logger
 from app.core.redis import get_redis
 from app.db.base import get_sessionmaker
 from app.db.models import Allocation, CreditWallet, GpuDevice, GpuNode, Session
+from app.domain.credit_engine import CreditEngine
 from app.domain.notification_service import NotificationService
 from app.domain.session_service import GRACE_PERIOD_SEC, SessionService
 
@@ -89,7 +90,7 @@ async def run() -> None:
             # Re-check the balance: a top-up during grace clears the marker and the session runs on.
             if sess.billing_wallet_id:
                 w = await db.get(CreditWallet, sess.billing_wallet_id)
-                if w is not None and (w.balance - w.reserved) > _ZERO:
+                if w is not None and await CreditEngine(db).available_for(w, sess) > _ZERO:
                     await redis.delete(key)
                     log.info("grace cleared (topped up, solvent) session=%s", sid)
                     continue
@@ -123,7 +124,7 @@ async def run() -> None:
             solvent = True
             if sess.billing_wallet_id:
                 w = await db.get(CreditWallet, sess.billing_wallet_id)
-                solvent = w is not None and (w.balance - w.reserved) > _ZERO
+                solvent = w is not None and await CreditEngine(db).available_for(w, sess) > _ZERO
             if solvent:
                 try:
                     await SessionService(db).start(sid)  # lossless reclaim under yield, or a cold resume once demoted

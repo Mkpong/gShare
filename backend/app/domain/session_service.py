@@ -111,11 +111,16 @@ class SessionService:
             if sess.credit_per_hour_snapshot and sess.billing_wallet_id:
                 from decimal import Decimal as _Dec
 
+                from app.domain.credit_engine import CreditEngine as _CE
                 from app.domain.credit_engine import _occupancy as _occ
                 from app.domain.credit_engine import _round2 as _r2
 
                 w = await self.db.get(CreditWallet, sess.billing_wallet_id)
-                avail = (w.balance - w.reserved) if w is not None else _Dec("0")
+                # The session's own untouched reservation counts toward its own solvency; the
+                # bare wallet figure refuses a resume that the reservation already paid for.
+                avail = (
+                    await _CE(self.db).available_for(w, sess) if w is not None else _Dec("0")
+                )
                 # One minute of billing: the smallest unit the billing worker charges, so a
                 # session that cannot cover it would be paused again before doing any work.
                 need = _r2(_Dec(sess.credit_per_hour_snapshot) * _occ(sess) / _Dec("60"))

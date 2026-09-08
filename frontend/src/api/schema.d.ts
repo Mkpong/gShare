@@ -1267,7 +1267,7 @@ export interface paths {
          *
          *     estimated_credit_per_hour = offering.credit_per_hour * occupancy;
          *     occupancy = max(gpu_mem_mb/device_total_mem_mb, gpu_cores/100);
-         *     hold_amount = estimated_credit_per_hour * (expected_runtime_min/60), default 2h horizon.
+         *     hold_amount = estimated_credit_per_hour — admission reserves one hour up front.
          *     CPU (free) sessions are always 0.
          */
         post: operations["preview_cost_api_v1_sessions_preview_cost_post"];
@@ -5280,6 +5280,11 @@ export interface components {
             email?: string | null;
             /** Password */
             password?: string | null;
+            /**
+             * Force Password Reset
+             * @default false
+             */
+            force_password_reset: boolean;
         };
         /** ValidationError */
         ValidationError: {

@@ -188,7 +188,7 @@ async def preview_cost(
 
     estimated_credit_per_hour = offering.credit_per_hour * occupancy;
     occupancy = max(gpu_mem_mb/device_total_mem_mb, gpu_cores/100);
-    hold_amount = estimated_credit_per_hour * (expected_runtime_min/60), default 2h horizon.
+    hold_amount = estimated_credit_per_hour — admission reserves one hour up front.
     CPU (free) sessions are always 0.
     """
     principal.require(action="session.create", group_id=body.group_id)
@@ -226,8 +226,9 @@ async def preview_cost(
     # as the full card, 1.0.
     occ = 1.0 if body.mode == "exclusive" else _occupancy(body.gpu_mem_mb, body.gpu_cores, total_mem_mb)
     per_hour = round_credit(Decimal(offering.credit_per_hour) * Decimal(str(occ)))   # whole credits
-    # SessionCreate has no expected_runtime_min field; use a 2h default reservation horizon.
-    hold = round_credit(per_hour * Decimal("2"))
+    # The hold admission actually takes is ONE hour (scheduler._estimate). Quoting a two-hour
+    # horizon here told the user to fund twice what the wizard would reserve.
+    hold = per_hour
     return PreviewCostResponse(
         estimated_credit_per_hour=float(per_hour),
         occupancy=occ,

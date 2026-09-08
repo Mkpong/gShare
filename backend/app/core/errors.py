@@ -25,6 +25,7 @@ from typing import Any
 from fastapi import FastAPI, Request
 from fastapi.exceptions import RequestValidationError
 from fastapi.responses import JSONResponse
+from sqlalchemy.exc import DataError, DBAPIError
 from starlette.exceptions import HTTPException as StarletteHTTPException
 
 from app.core.logging import get_logger
@@ -177,6 +178,23 @@ def register_exception_handlers(app: FastAPI) -> None:
             headers=dict(exc.headers) if getattr(exc, "headers", None) else None,
             content={"error": {
                 "code": code, "message": message, "details": None,
+                "request_id": getattr(req.state, "request_id", None),
+                "timestamp": _utcnow_iso(),
+            }},
+        )
+
+    # Values the database refuses to store — a NUL byte in text, a number wider than the column —
+    # are bad input, not server faults. Without this they surfaced as 500s that told the caller
+    # nothing and filled the log with tracebacks for what a 422 says plainly.
+    @app.exception_handler(DBAPIError)
+    async def _dbapi(req: Request, exc: DBAPIError):  # noqa: ANN202
+        if not isinstance(exc, DataError):
+            raise exc
+        return JSONResponse(
+            status_code=422,
+            content={"error": {
+                "code": "validation_failed", "message": "validation failed",
+                "details": {"reason": "value out of range or contains characters that cannot be stored"},
                 "request_id": getattr(req.state, "request_id", None),
                 "timestamp": _utcnow_iso(),
             }},

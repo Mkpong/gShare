@@ -754,8 +754,15 @@ class SchedulerService:
                 async with self.db.begin():
                     await self.handoff.apply_desired(sess, req)
             except Exception:
-                # Keep the queue entry (still present) and release the reservation for retry.
+                # Release the GPU slice AND the credit hold. _release_reservation flips the row to
+                # error, after which the ticker drops the queue entry as stale — so "keep it for
+                # retry" was not true, and the hold it left behind was never released by anyone.
+                # The create path already refunds here; promotion has to do the same.
                 await self._release_reservation(sess.id)
+                try:
+                    await self._refund_stranded_hold(sess.id)
+                except Exception:  # noqa: BLE001 - never mask the original failure
+                    log.exception("stranded hold refund failed session=%s", sess.id)
                 raise
             async with self.db.begin():
                 entry = (
@@ -1330,7 +1337,12 @@ class SchedulerService:
         # it as 1.0, the full card.
         occupancy = max(mem_ratio, core_ratio) or 1.0
         # Hourly cost = rate x occupancy, rounded to whole credits. The hold covers one hour.
+        # A priced session must reserve something: rounding a small slice down to zero let a
+        # session onto a GPU against an empty wallet, where it ran until the grace timer caught it
+        # and could be recreated immediately. Any non-zero rate holds at least one credit.
         hold = round_credit(cph * Decimal(str(occupancy)))
+        if hold <= Decimal("0") and cph > Decimal("0"):
+            hold = Decimal("1")
         return _Estimate(credit_per_hour=cph, occupancy=occupancy, hold_amount=hold)
 
     async def _scope_chain(self, req: SessionCreate) -> list[tuple[str, str]]:
