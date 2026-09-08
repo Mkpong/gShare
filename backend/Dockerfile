@@ -29,7 +29,13 @@ CMD ["pytest", "-m", "not realgpu", "--cov=app", "--cov-report=term-missing"]
 
 # ── runtime: production dependencies only; the default build target ──
 FROM base AS runtime
-RUN pip install --upgrade pip && pip install .
+# Install the application, then take the installer out of the runtime image. Nothing here imports
+# pip, setuptools or pkg_resources — uvicorn just needs the app and its dependencies — and leaving
+# them behind is what put two fixed CVEs in the published image: setuptools pulled in as a build
+# dependency, and the msgpack copy vendored inside pip itself.
+RUN pip install --upgrade pip && pip install . \
+    && python -m pip uninstall -y setuptools wheel 2>/dev/null || true \
+    && python -m pip uninstall -y pip 2>/dev/null || true
 
 EXPOSE 8000
 
