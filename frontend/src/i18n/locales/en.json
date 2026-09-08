@@ -846,7 +846,8 @@
       "title": "Nodes",
       "uncordon": "Uncordon",
       "uncordonedToast": "{{name}} uncordoned.",
-      "allClusters": "All clusters"
+      "allClusters": "All clusters",
+      "mixedModeHint": "This node holds cards in more than one mode."
     },
     "orgs": {
       "add": "Organization",
@@ -1585,7 +1586,8 @@
     "deviceMode": {
       "fractional": "Fractional",
       "exclusive": "Exclusive",
-      "mig": "MIG"
+      "mig": "MIG",
+      "mixed": "Mixed"
     },
     "statusReason": {
       "idle": "auto-paused: idle GPU",

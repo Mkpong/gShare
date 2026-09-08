@@ -846,7 +846,8 @@
       "title": "노드 관리",
       "uncordon": "해제",
       "uncordonedToast": "{{name}} 노드 차단을 해제했습니다.",
-      "allClusters": "전체 클러스터"
+      "allClusters": "전체 클러스터",
+      "mixedModeHint": "이 노드에 서로 다른 모드의 카드가 함께 있습니다."
     },
     "orgs": {
       "add": "조직",
@@ -1585,7 +1586,8 @@
     "deviceMode": {
       "fractional": "분할",
       "exclusive": "전용",
-      "mig": "MIG"
+      "mig": "MIG",
+      "mixed": "혼합"
     },
     "statusReason": {
       "idle": "자동 일시정지: 유휴 GPU",

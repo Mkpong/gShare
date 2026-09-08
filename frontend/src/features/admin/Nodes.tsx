@@ -340,6 +340,30 @@ function NodePoolsPanel({ isSuper }: { isSuper: boolean }) {
 
 // Per-row pool selector on the node table: the pools in the node's cluster plus "shared
 // (unassigned)". super_admin only; everyone else sees the pool name as text.
+/** The mode column: one tag per mode actually present on the node, with its card count.
+ *
+ * `gpu_mode` alone reads "mixed" for any node holding both a fractional and an exclusive card —
+ * and, having no translation, printed the English word into the Korean console. The counts the
+ * API already returns say the useful thing: which modes, and how many cards in each. */
+function NodeModeCell({ node }: { node: GpuNode }) {
+  const { t } = useTranslation();
+  const label = (m: string) => t(`enum.deviceMode.${m}`, { defaultValue: m });
+  const counts = node.mode_counts ?? {};
+  const modes = Object.keys(counts);
+  if (modes.length === 0) return <span className="text-muted">-</span>;
+  if (modes.length === 1) return <span className="gs-tag">{label(modes[0])}</span>;
+  // Deterministic order, so a node does not reshuffle its tags between refreshes.
+  return (
+    <span className="inline-flex flex-wrap gap-1" title={t('admin.nodes.mixedModeHint')}>
+      {modes.sort().map((m) => (
+        <span key={m} className="gs-tag whitespace-nowrap">
+          {label(m)} <span className="gs-num">{counts[m]}</span>
+        </span>
+      ))}
+    </span>
+  );
+}
+
 function NodePoolCell({ node, pools, canManage }: { node: GpuNode; pools: NodePool[]; canManage: boolean }) {
   const { t } = useTranslation();
   const pushToast = useUiStore((s) => s.pushToast);
@@ -489,7 +513,16 @@ export function AdminNodes() {
       sortBy: (n) => n.pool_name ?? '',
       render: (n) => <NodePoolCell node={n} pools={pools} canManage={isSuper} />,
     },
-    { key: 'gpu_mode', header: t('admin.nodes.colMode'), hideOnMobile: true, sortBy: (n) => n.gpu_mode ?? '', render: (n) => <span className="gs-tag">{t(`enum.deviceMode.${n.gpu_mode}`, { defaultValue: n.gpu_mode })}</span> },
+    {
+      key: 'gpu_mode',
+      header: t('admin.nodes.colMode'),
+      hideOnMobile: true,
+      sortBy: (n) => n.gpu_mode ?? '',
+      // A node's cards may sit in different modes. The backend collapses that to "mixed" for a
+      // single label, but it also sends the real per-mode counts — so show those instead of a
+      // word that says only "not one thing".
+      render: (n) => <NodeModeCell node={n} />,
+    },
     { key: 'device_count', header: t('admin.nodes.colGpu'), align: 'right', sortBy: (n) => n.device_count ?? 0, render: (n) => t('admin.nodes.gpuCount', { count: n.device_count }) },
     { key: 'running_sessions', header: t('admin.nodes.colRunning'), align: 'right', hideOnMobile: true, sortBy: (n) => n.running_sessions ?? 0, render: (n) => <span className="gs-num">{n.running_sessions ?? 0}</span> },
     { key: 'cpu', header: t('admin.nodes.colCpuMem'), hideOnMobile: true, sortBy: (n) => n.cpu ?? 0, render: (n) => `${n.cpu} core · ${n.mem_gb} GiB · ${n.disk_gb ?? 0} GiB` },
