@@ -144,6 +144,12 @@ class SessionRead(ORMModel):
     terminated_at: datetime | None = None
     # avg/max of cpu_cores·mem_mib·vram_mib·gpu_core_pct over the run; set when the session ends
     usage_summary: dict | None = None
+    # Credits actually charged for this session, reconstructed from the ledger. None when the
+    # session is free (CPU class) or nothing has been charged yet.
+    credit_consumed: float | None = None
+    # Why a pending session has not started: the scheduler's last no-fit reason
+    # (no_gpu_capacity | host_headroom). Only set while the session is waiting.
+    queued_reason: str | None = None
     privileged: bool = False
     created_at: datetime | None = None
     # When the status last changed — running since, errored at, paused at (admin monitor column).
@@ -191,6 +197,9 @@ class QueueEntryView(BaseModel):
     session_name: str | None = None
     owner_name: str | None = None
     gpu_model: str | None = None
+    # Why the scheduler last refused this entry (no_gpu_capacity | host_headroom). Without it a
+    # position reads as "your turn is coming" even when nothing in the cluster can satisfy it.
+    reason: str | None = None
 
 
 class QueueList(BaseModel):

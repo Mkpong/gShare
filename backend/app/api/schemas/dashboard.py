@@ -93,3 +93,5 @@ class DashboardSummary(BaseModel):
     pools: list[DashboardPool] = []
     allocation: DashboardAllocation
     compute: DashboardCompute
+    # Volumes the caller owns and the policy ceiling on what they may provision.
+    storage: dict | None = None

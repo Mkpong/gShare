@@ -54,6 +54,45 @@ subjects:
   - kind: ServiceAccount
     name: gshare-operator-token-provisioner
     namespace: {{ $ns }}
+
+{{- if .Values.agent.enabled }}
+---
+# The token job also writes into the infra namespace, where the per-node agent runs, so it needs
+# secret access there. Scoped to secrets only, in that one namespace.
+apiVersion: rbac.authorization.k8s.io/v1
+kind: Role
+metadata:
+  name: gshare-operator-token-provisioner
+  namespace: {{ .Values.global.namespaces.infra }}
+  labels:
+    {{- include "gshare.labels" . | nindent 4 }}
+  annotations:
+    "helm.sh/hook": post-install,post-upgrade
+    "helm.sh/hook-weight": "1"
+rules:
+  - apiGroups: [""]
+    resources: ["secrets"]
+    verbs: ["get", "create", "update", "patch"]
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: RoleBinding
+metadata:
+  name: gshare-operator-token-provisioner
+  namespace: {{ .Values.global.namespaces.infra }}
+  labels:
+    {{- include "gshare.labels" . | nindent 4 }}
+  annotations:
+    "helm.sh/hook": post-install,post-upgrade
+    "helm.sh/hook-weight": "1"
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: Role
+  name: gshare-operator-token-provisioner
+subjects:
+  - kind: ServiceAccount
+    name: gshare-operator-token-provisioner
+    namespace: {{ .Values.global.namespaces.system }}
+{{- end }}
 ---
 # ── The issuing script, run from the api image: sign with app.auth.internal_jwt, then upsert the
 #    Secret through the Kubernetes API. ──
@@ -76,6 +115,10 @@ data:
     cluster_id = os.environ.get("CLUSTER_ID", "local")
     ttl = int(os.environ.get("TOKEN_TTL_SEC", "604800"))
     name = os.environ["TOKEN_SECRET_NAME"]
+    # The per-node agent runs in the infra namespace (its cgroup hostPath needs a namespace that
+    # permits it), and a Secret cannot be mounted across namespaces — so the same token is written
+    # there too, by the same job that rotates it. Empty when the agent is not deployed.
+    extra_ns = [n for n in os.environ.get("EXTRA_TOKEN_NAMESPACES", "").split(",") if n.strip()]
 
     token = sign_internal_jwt(f"operator:{cluster_id}", ttl=ttl)
 
@@ -83,23 +126,30 @@ data:
     ns = open(f"{sa}/namespace").read().strip()
     bearer = open(f"{sa}/token").read().strip()
     hdr = {"Authorization": f"Bearer {bearer}"}
-    base = f"https://kubernetes.default.svc/api/v1/namespaces/{ns}/secrets"
-    body = {
-        "apiVersion": "v1", "kind": "Secret",
-        "metadata": {"name": name, "namespace": ns},
-        "type": "Opaque",
-        "data": {"internal-jwt": base64.b64encode(token.encode()).decode()},
-    }
-    with httpx.Client(verify=f"{sa}/ca.crt", timeout=15) as c:
-        r = c.get(f"{base}/{name}", headers=hdr)
+    encoded = base64.b64encode(token.encode()).decode()
+
+    def upsert(client, target_ns):
+        base = f"https://kubernetes.default.svc/api/v1/namespaces/{target_ns}/secrets"
+        body = {
+            "apiVersion": "v1", "kind": "Secret",
+            "metadata": {"name": name, "namespace": target_ns},
+            "type": "Opaque",
+            "data": {"internal-jwt": encoded},
+        }
+        r = client.get(f"{base}/{name}", headers=hdr)
         if r.status_code == 200:
-            resp = c.put(f"{base}/{name}", headers=hdr, json=body)
+            resp = client.put(f"{base}/{name}", headers=hdr, json=body)
         elif r.status_code == 404:
-            resp = c.post(base, headers=hdr, json=body)
+            resp = client.post(base, headers=hdr, json=body)
         else:
             r.raise_for_status()
+            return
         resp.raise_for_status()
-    print(f"[operator-token] upsert {ns}/{name} ttl={ttl}s sub=operator:{cluster_id}", flush=True)
+        print(f"[operator-token] upsert {target_ns}/{name} ttl={ttl}s sub=operator:{cluster_id}", flush=True)
+
+    with httpx.Client(verify=f"{sa}/ca.crt", timeout=15) as c:
+        for target in [ns, *extra_ns]:
+            upsert(c, target)
 ---
 # ── Issue once, right after install or upgrade (post-install and post-upgrade hook) ──
 apiVersion: batch/v1
@@ -138,6 +188,9 @@ spec:
             - { name: CLUSTER_ID, value: {{ .Values.operator.clusterId | quote }} }
             - { name: TOKEN_TTL_SEC, value: {{ .Values.operator.internalJwtTokenTtlSec | quote }} }
             - { name: TOKEN_SECRET_NAME, value: {{ .Values.operator.internalJwtSecret | quote }} }
+{{- if .Values.agent.enabled }}
+            - { name: EXTRA_TOKEN_NAMESPACES, value: {{ .Values.global.namespaces.infra | quote }} }
+{{- end }}
             # The signing key, from the same secret the api uses; sign_internal_jwt reads it from
             # settings.
             - name: GSHARE_INTERNAL_JWT_PRIVATE_KEY
@@ -190,6 +243,9 @@ spec:
                 - { name: CLUSTER_ID, value: {{ .Values.operator.clusterId | quote }} }
                 - { name: TOKEN_TTL_SEC, value: {{ .Values.operator.internalJwtTokenTtlSec | quote }} }
                 - { name: TOKEN_SECRET_NAME, value: {{ .Values.operator.internalJwtSecret | quote }} }
+{{- if .Values.agent.enabled }}
+                - { name: EXTRA_TOKEN_NAMESPACES, value: {{ .Values.global.namespaces.infra | quote }} }
+{{- end }}
                 - name: GSHARE_INTERNAL_JWT_PRIVATE_KEY
                   valueFrom: { secretKeyRef: { name: gshare-jwt-signing, key: private.pem } }
                 - name: GSHARE_INTERNAL_JWT_KID

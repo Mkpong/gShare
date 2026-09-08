@@ -42,6 +42,7 @@ from app.core.metrics import SSE_STREAMS
 from app.core.redis import get_redis
 from app.db.base import get_db, get_sessionmaker
 from app.db.models import (
+    CreditTransaction,
     GpuDevice,
     GpuNode,
     Image,
@@ -51,6 +52,7 @@ from app.db.models import (
     Project,
     Session,
     SessionCheckpoint,
+    SessionEvent,
     User,
 )
 from app.domain.audit_service import AuditService
@@ -98,6 +100,8 @@ def _session_read(
     image_name: str | None = None,
     image_ref: str | None = None,
     gpu_alias: str | None = None,
+    credit_consumed: float | None = None,
+    queued_reason: str | None = None,
 ) -> SessionRead:
     """Project a Session row to SessionRead, computing occupancy from the snapshot/device."""
     occ: float | None = None
@@ -136,6 +140,8 @@ def _session_read(
         started_at=sess.started_at,
         terminated_at=sess.terminated_at,
         usage_summary=sess.usage_summary,
+        credit_consumed=credit_consumed,
+        queued_reason=queued_reason,
         privileged=bool(getattr(sess, "privileged", False)),
         created_at=sess.created_at,
         status_changed_at=sess.status_changed_at,
@@ -331,6 +337,33 @@ async def list_sessions(
             select(Image.id, Image.name, Image.registry).where(Image.id.in_(img_ids))
         )).all()
     } if img_ids else {}
+    # What each session cost, summed from the ledger in one pass. `consume` rows are negative, so
+    # the total is negated back to a positive charge. Reconstructing from the ledger rather than
+    # storing a column keeps the figure honest: it is the money that actually moved.
+    sids = [s.id for s in rows]
+    consumed: dict[str, float] = {}
+    if sids:
+        crows = (await db.execute(
+            select(CreditTransaction.ref, func.sum(CreditTransaction.amount))
+            .where(CreditTransaction.type == "consume", CreditTransaction.ref.in_(sids))
+            .group_by(CreditTransaction.ref)
+        )).all()
+        consumed = {ref: float(-total) for ref, total in crows if ref}
+
+    # Why a waiting session is waiting. The scheduler records it on the `queued` event; without it
+    # a pending session is a silent row, which is exactly how "there is capacity but nothing
+    # starts" happens.
+    waiting = [s.id for s in rows if s.status == "pending"]
+    queued_reason: dict[str, str] = {}
+    if waiting:
+        qrows = (await db.execute(
+            select(SessionEvent.session_id, SessionEvent.reason)
+            .where(SessionEvent.session_id.in_(waiting), SessionEvent.kind == "queued",
+                   SessionEvent.reason.is_not(None))
+            .order_by(SessionEvent.created_at.asc())
+        )).all()
+        queued_reason = {sid: reason for sid, reason in qrows}   # last one wins
+
     # WHERE each session runs: the bound GPU's node wins; a CPU session falls back to the
     # operator-reported hostname, which is matched back to the inventory for the deep link.
     uuids = {s.bound_gpu_uuid for s in rows if s.bound_gpu_uuid}
@@ -398,6 +431,8 @@ async def list_sessions(
             image_name=(images.get(s.image_id) or (None, None))[0],
             image_ref=(images.get(s.image_id) or (None, None))[1],
             node_hostname=host, node_id=nid,
+            credit_consumed=consumed.get(s.id),
+            queued_reason=queued_reason.get(s.id),
         )
 
     return {
@@ -778,6 +813,31 @@ async def session_usage_self(
     from app.api.monitoring_router import session_usage_payload  # lazy: avoid an import cycle
 
     return await session_usage_payload(session_id)
+
+
+@router.get("/sessions/{session_id}/usage/live")
+async def session_usage_live(
+    session_id: str,
+    principal: Principal = Depends(get_current_principal),
+    db: AsyncSession = Depends(get_db),
+):
+    """The last few minutes of one-second samples from the node agent (owner·admin).
+
+    This is the live view. It is deliberately separate from the Prometheus-backed series: that one
+    is the record and covers GPU and history, this one answers "is it running yet" without waiting
+    for a scrape. `live` says whether an agent is actually reporting, so the console can show the
+    slower series instead of a stale line when the DaemonSet is not deployed.
+    """
+    sess = await _load_session(db, session_id)
+    _require_access(principal, sess)
+    from app.internal.metrics_router import agent_seen_recently, live_samples
+
+    samples = await live_samples(session_id)
+    return {
+        "live": agent_seen_recently(samples),
+        "interval_ms": 1000,
+        "samples": samples,
+    }
 
 
 @router.get("/sessions/{session_id}/usage/timeseries")

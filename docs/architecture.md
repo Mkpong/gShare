@@ -117,3 +117,20 @@ preemptive lending (lossless hand-off and resume), and hierarchical limit manage
 | `gshare-system` | Control plane: api, worker, operator, Postgres, Redis, ingress |
 | `gshare-sessions` | Tenant session pods, under `restricted` Pod Security Admission |
 | `gshare-infra` | Privileged DaemonSets: node-problem-detector, Spegel, image pre-puller |
+
+## Per-node metrics agent (optional)
+
+`gshare-agent` is a DaemonSet that reads each session's cgroup v2 counters directly on the node —
+`cpu.stat` and `memory.current`, the same files cAdvisor reads — once a second, and posts batches to
+the control plane over the internal JWT. The samples live in Redis as a five-minute ring per session
+and are served by `GET /sessions/{id}/usage/live`; the session page uses them for the CPU and memory
+lines when the DaemonSet is reporting and falls back to the Prometheus series when it is not.
+
+It exists for one reason: cAdvisor aggregates on its own ~10 s housekeeping cycle, so no scrape
+interval makes a scraped reading fresher than that. Measured on a two-vCPU load, the agent shows the
+change in about a second where the metrics pipeline takes ten to thirty.
+
+The agent is off by default, runs in the infra namespace (its read-only `/sys/fs/cgroup` bind needs a
+namespace that permits hostPath), holds no privileges, and reads only pods on its own node. Nothing
+depends on it: Prometheus remains the record, the only source of GPU and host series, and the source
+of the permanent per-session summary written at termination.

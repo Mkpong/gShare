@@ -55,6 +55,11 @@ images:
     repository: gshare-frontend
     tag: "0.1.0"
     pullPolicy: IfNotPresent
+  # Per-node metrics agent (see the `agent` section below).
+  agent:
+    repository: docker.io/boanlab/gshare-agent
+    tag: ""
+    pullPolicy: IfNotPresent
 
 # ── gshare-api (Python control plane: ID-issuing authority, JWKS publisher) ──
 api:
@@ -189,6 +194,20 @@ frontend:
     limits: { cpu: "200m", memory: 128Mi }
 
 # ── Bootstrap super_admin (ensured on startup; password in the gshare-bootstrap-admin secret) ──
+# ── Per-node metrics agent ──
+# One pod per node sampling each session's cgroup counters, for a one-second live view on the
+# session page. Off by default: the Prometheus path already covers history, GPU and host metrics,
+# and this only earns its keep where people watch a job start.
+agent:
+  enabled: false
+  intervalMs: 1000
+  # Defaults to the in-cluster API service.
+  apiUrl: ""
+  nodeSelector: {}
+  resources:
+    requests: { cpu: 10m, memory: 32Mi }
+    limits: { cpu: 100m, memory: 96Mi }
+
 bootstrapAdmin:
   email: admin@example.com
   # Quoted: an unquoted 12345678 is a YAML number, and the template base64-encodes this value.

@@ -176,3 +176,26 @@ export function useOwnSessionUsageSeries(id: string | undefined, range: string, 
     },
   });
 }
+
+export interface LiveUsage {
+  live: boolean;
+  interval_ms: number;
+  samples: { at: number; cpu_cores: number; mem_bytes: number }[];
+}
+
+/**
+ * One-second samples from the per-node agent. `live` is false when no agent is reporting for this
+ * session — the panel then stays on the Prometheus series rather than drawing a stale line.
+ */
+export function useOwnSessionUsageLive(id: string | undefined, enabled = true) {
+  return useQuery({
+    queryKey: ['session', id ?? '', 'usage-live'],
+    enabled: !!id && enabled,
+    refetchInterval: enabled ? 1000 : false,
+    queryFn: async () => {
+      const { data } = await usageRaw.GET('/api/v1/sessions/{session_id}/usage/live',
+        { params: { path: { session_id: id as string } } });
+      return data as LiveUsage;
+    },
+  });
+}

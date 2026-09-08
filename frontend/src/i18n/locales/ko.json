@@ -723,7 +723,12 @@
       "allGroups": "전체 부서",
       "allClasses": "전체 자원 종류",
       "allModels": "전체 GPU 모델",
-      "allClusters": "전체 클러스터"
+      "allClusters": "전체 클러스터",
+      "cleanupSelected": "선택 {{count}}건 정리",
+      "selectErrored": "오류 {{count}}건 선택",
+      "confirmCleanupTitle": "세션 {{count}}건을 정리할까요?",
+      "confirmCleanupBody": "이미 중단된 세션들입니다. 남은 예약과 리소스를 회수하고 종료로 기록합니다. 오류 사유는 그대로 보존됩니다.",
+      "bulkCleaned": "{{count}}건을 정리했습니다."
     },
     "nodes": {
       "availGpus": "가용 GPU",
@@ -1489,7 +1494,19 @@
     "bandSessions": "세션",
     "bandGpu": "GPU",
     "bandHost": "호스트 자원",
-    "gpuCores": "GPU 코어"
+    "gpuCores": "GPU 코어",
+    "queuedTitle": "대기 중인 세션",
+    "queuedWaiting": "{{duration}} 대기",
+    "queuedReasonHint": "스케줄러가 아직 이 세션을 시작하지 못한 이유입니다.",
+    "recentTitle": "최근 세션",
+    "recentEmpty": "아직 종료된 세션이 없습니다.",
+    "recentFree": "무료",
+    "recentPeak": "최고 GPU {{pct}}%",
+    "storageTitle": "스토리지",
+    "storageProvisioned": "할당한 용량",
+    "storageEmpty": "아직 만든 볼륨이 없습니다.",
+    "storageMore": "외 {{count}}개",
+    "recentUnbilled": "미청구"
   },
   "enum": {
     "accessMode": {
@@ -1757,7 +1774,9 @@
     "title": "대기열",
     "colEta": "예상 대기",
     "etaValue": "약 {{minutes}}분",
-    "etaHint": "최근 대기열 처리 속도와 현재 순번으로 계산한 추정치입니다. 실제 시간은 달라질 수 있습니다."
+    "etaHint": "최근 대기열 처리 속도와 현재 순번으로 계산한 추정치입니다. 실제 시간은 달라질 수 있습니다.",
+    "colReason": "대기 사유",
+    "reasonHint": "스케줄러가 아직 이 세션을 시작하지 못한 이유입니다."
   },
   "session": {
     "actionDone": "{{action}} 완료",
@@ -1855,7 +1874,10 @@
     "usageAvgMax": "{{avg}} · {{max}}",
     "usageTitleFinished": "세션 사용량",
     "privileged": "권한",
-    "privilegedValue": "root"
+    "privilegedValue": "root",
+    "usageLive": "실시간 1초",
+    "usageLiveHint": "노드 에이전트가 1초마다 직접 측정한 값입니다. GPU 지표는 기존 수집 경로를 사용합니다.",
+    "usageHintLive": "CPU·메모리는 노드 에이전트가 1초마다 직접 측정 · VRAM·GPU 코어는 기존 수집 경로(수 초 지연)이며 CUDA 컨텍스트가 있을 때만 측정됩니다."
   },
   "table": {
     "clearFilters": "필터 지우기",

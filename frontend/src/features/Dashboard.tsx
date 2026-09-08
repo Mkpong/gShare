@@ -4,8 +4,10 @@ import { PageHeader } from '@/components/PageHeader';
 import { CopyButton } from '@/components/CopyButton';
 import { useTranslation } from 'react-i18next';
 import { useSessions } from '@/api/hooks/useSessions';
+import { useQueue } from '@/api/hooks/useQueue';
+import { useVolumes } from '@/api/hooks/useVolumes';
 import { useDashboardSummary } from '@/api/hooks/useDashboard';
-import { formatCredit, runwayLabel, sessionBurnPerHour, sessionStatusLabel } from '@/lib/format';
+import { formatCredit, formatDateTime, formatDuration, runwayLabel, sessionBurnPerHour, sessionStatusLabel } from '@/lib/format';
 import { StatusPill } from '@/components/StatusPill';
 import { ArrowRight, Database, GraphicsCard, Plus } from '@/components/icons';
 import { Figure } from '@/components/Figure';
@@ -78,6 +80,12 @@ function QuotaRow({ label, used, limit, unit, variant }: {
   );
 }
 
+/** A finished session's average/peak readings, kept on the row after Prometheus forgets them. */
+type UsageSummary = { vram_mib?: { avg: number; max: number }; gpu_core_pct?: { avg: number; max: number } };
+
+/** One of the caller's volumes, as the storage list returns it. */
+type Vol = { id: string; name?: string | null; type?: string; quota_gb?: number; used_gb?: number };
+
 // The user dashboard: a summary of the caller's resources, credits, and GPU availability.
 export function Dashboard() {
   const { t } = useTranslation();
@@ -85,6 +93,8 @@ export function Dashboard() {
   const [newVolOpen, setNewVolOpen] = useState(false);
   const [quotaOpen, setQuotaOpen] = useState(false);
   const { data: sessions } = useSessions();
+  const { data: queued } = useQueue();
+  const { data: volumes } = useVolumes();
 
   const credit = s?.credit ?? { available: null, balance: null, reserved: null };
   const running = s?.sessions?.running ?? 0;
@@ -103,6 +113,17 @@ export function Dashboard() {
   // disagree; the foot answers the question the number raises ("how long do I have left?").
   const burn = sessionBurnPerHour(sessions);
   const runwayHours = burn > 0 && credit.available != null ? credit.available / burn : null;
+  // Finished sessions, newest first: what a run actually cost and how hard it worked the card.
+  // The active list above answers "what is going on now"; this answers "was the last one worth it",
+  // which is the question a user has to reopen the session detail to answer today.
+  const recent = (sessions ?? [])
+    .filter((x) => x.status === 'terminated' || x.status === 'error')
+    .sort((a, b) => (b.terminated_at ?? '').localeCompare(a.terminated_at ?? ''))
+    .slice(0, 5);
+  // Volumes are a separate allowance from the sessions' scratch disk, and until now the dashboard
+  // showed neither the ceiling nor the volumes counting against it.
+  const storage = (s as { storage?: { volumes: number; provisioned_gb: number; used_gb: number; limit_gb: number | null } } | undefined)?.storage;
+  const myVolumes = ((volumes ?? []) as Vol[]).slice(0, 4);
   const regions = s?.regions ?? [];
   // Node pools the caller may be placed on, in preference order (group-granted, org-granted,
   // shared). Typed locally until the generated schema carries the field.
@@ -171,7 +192,10 @@ export function Dashboard() {
           <h2 className="gs-h2 inline-flex items-center gap-1.5">{t('dashboard.quota')}<HelpTip text={t('dashboard.computeSubtitle')} /></h2>
           <button type="button" className="text-primary text-xs font-semibold hover:underline" onClick={() => setQuotaOpen(true)}>{t('quota.requestLink')}</button>
         </div>
-        <div className="mt-4 grid md:grid-cols-3 gap-x-10 gap-y-6">
+        {/* Three columns only once each is wide enough to hold a label and its reading. At the
+            md breakpoint the sidebar leaves about 500px, which split three ways truncated every
+            label to a letter or two ("활…", "메"), so the bands are stacked until lg. */}
+        <div className="mt-4 grid lg:grid-cols-3 gap-x-10 gap-y-6">
           <div className="flex flex-col gap-3.5">
             <div className="gs-quota-band">{t('dashboard.bandSessions')}</div>
             <QuotaRow label={t('dashboard.instances')} used={active} limit={instLimit} unit={t('dashboard.instanceUnit')} variant="warn" />
@@ -193,6 +217,50 @@ export function Dashboard() {
         </div>
       </section>
 
+      {/* Only rendered when something is actually waiting. A queue panel that is empty most of the
+          time is a permanent blank rectangle; when it appears, it is the answer to "why has my
+          session not started", which until now was only in the session timeline. */}
+      {(queued ?? []).length > 0 && (
+        <section className="gs-panel p-5 mt-5">
+          <div className="flex items-center justify-between gap-3">
+            <h2 className="gs-h2">{t('dashboard.queuedTitle')}</h2>
+            <Link to="/queue" className="text-primary text-xs font-semibold inline-flex items-center gap-1 hover:underline">
+              {t('dashboard.viewAll')}
+              <ArrowRight size={13} aria-hidden="true" />
+            </Link>
+          </div>
+          <ul className="mt-3 flex flex-col gap-2">
+            {(queued ?? []).map((q) => (
+              <li key={q.id} className="gs-card p-3.5 flex items-center gap-3 flex-wrap">
+                {/* The position is the one number that changes while waiting, so it leads. */}
+                <span className="gs-num text-lg font-semibold shrink-0" title={t('queue.positionHint')}>#{q.position}</span>
+                <span className="min-w-0 flex-1">
+                  <Link to={`/sessions/${q.session_id}`} className="font-semibold text-primary hover:underline">
+                    {q.session_name || q.session_id}
+                  </Link>
+                  {q.gpu_model && <span className="text-muted text-xs ml-2">{q.gpu_model}</span>}
+                </span>
+                {q.reason && (
+                  /* The scheduler's own refusal, in the user's words. "Waiting" plus a position
+                     reads as "nearly there" even when nothing in the cluster can satisfy it. */
+                  <span className="gs-tag shrink-0" title={t('dashboard.queuedReasonHint')}>
+                    {t(`enum.statusReason.${q.reason}`, { defaultValue: q.reason })}
+                  </span>
+                )}
+                <span className="gs-num text-xs text-muted shrink-0">
+                  {t('dashboard.queuedWaiting', { duration: formatDuration(q.enqueued_at) })}
+                </span>
+                {q.eta_minutes != null && (
+                  <span className="gs-num text-xs text-muted shrink-0" title={t('queue.etaHint')}>
+                    {t('queue.etaValue', { minutes: q.eta_minutes })}
+                  </span>
+                )}
+              </li>
+            ))}
+          </ul>
+        </section>
+      )}
+
       {/* What is free to run on right now: one card per GPU model, in a row under the quota. */}
       <section className="gs-panel p-5 mt-5">
         <div className="flex items-center justify-between gap-3 flex-wrap">
@@ -213,7 +281,7 @@ export function Dashboard() {
         ) : (
           /* One card per model with a single traffic-light reading. Exact VRAM and idle-card
              counts are operator detail; to a user they read as "the GPU is being watched". */
-          <ul className="mt-3 grid grid-cols-[repeat(auto-fill,minmax(320px,1fr))] gap-3">
+          <ul className="mt-3 grid grid-cols-[repeat(auto-fit,minmax(320px,1fr))] gap-3">
             {regions.map((r) => {
               const level = congestion(r.free_mb, r.total_mb);
               // Per-card VRAM is a SPEC (helps pick a model), not live state — card counts and
@@ -248,7 +316,10 @@ export function Dashboard() {
             <Link to="/sessions/new" className="text-primary font-semibold hover:underline">{t('dashboard.startOne')}</Link>
           </p>
         ) : (
-          <table data-preview className="w-full text-sm mt-2" aria-label={t('dashboard.mySessions')}>
+          <table data-preview className="w-full table-fixed text-sm mt-2" aria-label={t('dashboard.mySessions')}>
+            <colgroup>
+              <col className="w-[14%]" /><col className="w-[34%]" /><col className="w-[32%]" /><col className="w-[20%]" />
+            </colgroup>
             <thead className="text-muted text-xs text-left">
               <tr>
                 <th className="py-2 font-semibold">{t('dashboard.colStatus')}</th>
@@ -282,6 +353,105 @@ export function Dashboard() {
           </table>
         )}
       </section>
+
+      {/* The foot: what recent runs cost, and what the caller's storage allowance looks like. Two
+          columns because they are two unrelated questions, each too small to earn a full row. */}
+      <div className="grid lg:grid-cols-2 gap-5 mt-5">
+        <section className="gs-panel p-5 flex flex-col">
+          <div className="flex items-center justify-between gap-3">
+            <h2 className="gs-h2">{t('dashboard.recentTitle')}</h2>
+            <Link to="/sessions" className="text-primary text-xs font-semibold inline-flex items-center gap-1 hover:underline">
+              {t('dashboard.viewAll')}
+              <ArrowRight size={13} aria-hidden="true" />
+            </Link>
+          </div>
+          {recent.length === 0 ? (
+            <p className="text-muted text-sm flex-1 flex items-center justify-center py-6">{t('dashboard.recentEmpty')}</p>
+          ) : (
+            <ul className="mt-3 flex flex-col divide-y divide-border">
+              {recent.map((x) => {
+                const u = (x as { usage_summary?: UsageSummary | null }).usage_summary ?? undefined;
+                const peak = u?.gpu_core_pct?.max;
+                const cost = (x as { credit_consumed?: number | null }).credit_consumed;
+                return (
+                  <li key={x.id} className="py-2.5 flex items-baseline gap-3">
+                    <span className="min-w-0 flex-1">
+                      <Link to={`/sessions/${x.id}`} className="font-semibold text-primary hover:underline text-sm">
+                        {x.name || x.id}
+                      </Link>
+                      <span className="block text-2xs text-muted mt-0.5">
+                        {formatDateTime(x.terminated_at)}
+                        {/* Peak GPU utilisation is the honest verdict on a run: a session that
+                            held a card at 4% cost the same as one that saturated it. */}
+                        {peak != null && ` · ${t('dashboard.recentPeak', { pct: Math.round(peak) })}`}
+                      </span>
+                    </span>
+                    <span className="gs-num text-xs text-muted shrink-0 whitespace-nowrap">
+                      {formatDuration(x.started_at, x.terminated_at ? new Date(x.terminated_at).getTime() : undefined)}
+                    </span>
+                    <span className="gs-num text-sm font-semibold shrink-0 whitespace-nowrap w-20 text-right">
+                      {cost != null ? `${formatCredit(cost)} C`
+                        : x.resource_class === 'cpu' ? t('dashboard.recentFree')
+                        : <span className="text-muted font-medium">{t('dashboard.recentUnbilled')}</span>}
+                    </span>
+                  </li>
+                );
+              })}
+            </ul>
+          )}
+        </section>
+
+        <section className="gs-panel p-5 flex flex-col">
+          <div className="flex items-center justify-between gap-3">
+            <h2 className="gs-h2">{t('dashboard.storageTitle')}</h2>
+            <Link to="/volumes" className="text-primary text-xs font-semibold inline-flex items-center gap-1 hover:underline">
+              {t('dashboard.viewAll')}
+              <ArrowRight size={13} aria-hidden="true" />
+            </Link>
+          </div>
+          {/* The ceiling first: volumes are provisioned against a quota separate from the session
+              scratch disk, and a full allowance was previously invisible until creation failed. */}
+          <div className="mt-4">
+            <QuotaRow
+              label={t('dashboard.storageProvisioned')}
+              used={storage?.provisioned_gb ?? 0}
+              limit={storage?.limit_gb ?? null}
+              unit="GB"
+              variant="primary"
+            />
+          </div>
+          {myVolumes.length === 0 ? (
+            <p className="text-muted text-sm flex-1 flex items-center justify-center py-6">
+              {t('dashboard.storageEmpty')}{' '}
+              <button type="button" className="text-primary font-semibold hover:underline ml-1" onClick={() => setNewVolOpen(true)}>
+                {t('volume.new')}
+              </button>
+            </p>
+          ) : (
+            <ul className="mt-4 flex flex-col gap-3">
+              {myVolumes.map((v) => (
+                <li key={v.id}>
+                  <div className="flex items-baseline justify-between gap-3">
+                    <span className="text-xs font-semibold truncate">
+                      {v.name || t(`volume.type.${v.type}`, { defaultValue: v.type ?? '' })}
+                    </span>
+                    <span className="gs-num text-xs text-muted whitespace-nowrap">
+                      {v.used_gb ?? 0} / {v.quota_gb ?? 0} GB
+                    </span>
+                  </div>
+                  {/* Per volume: how full it is, which is what decides whether to grow it. */}
+                  <Meter value={pct(v.used_gb, v.quota_gb)} className="mt-1.5" />
+                </li>
+              ))}
+              {storage != null && storage.volumes > myVolumes.length && (
+                <li className="text-2xs text-muted">
+                  {t('dashboard.storageMore', { count: storage.volumes - myVolumes.length })}
+                </li>
+              )}
+            </ul>
+          )}
+        </section>
+      </div>
     </div>
   );
 }

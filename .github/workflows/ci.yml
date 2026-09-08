@@ -69,6 +69,27 @@ jobs:
         working-directory: operator
         run: go build ./...
 
+  agent:
+    name: agent (go)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-go@v7
+        with:
+          go-version-file: agent/go.mod
+          cache-dependency-path: agent/go.sum
+      - name: Lint
+        working-directory: agent
+        run: |
+          test -z "$(gofmt -l .)" || { gofmt -l .; echo "::error::gofmt"; exit 1; }
+          go vet ./...
+      - name: Test
+        working-directory: agent
+        run: go test ./...
+      - name: Build
+        working-directory: agent
+        run: go build ./...
+
   frontend:
     name: frontend (node)
     runs-on: ubuntu-latest
@@ -135,6 +156,8 @@ jobs:
             context: backend
           - name: operator
             context: operator
+          - name: agent
+            context: agent
           - name: frontend
             context: frontend
     steps:

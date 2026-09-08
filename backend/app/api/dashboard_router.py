@@ -13,7 +13,15 @@ from app.api.deps import get_current_principal
 from app.api.schemas.dashboard import DashboardSummary
 from app.auth.rbac import Principal
 from app.db.base import get_db
-from app.db.models import CreditWallet, GpuDevice, GpuNode, Membership, Project, Session
+from app.db.models import (
+    CreditWallet,
+    GpuDevice,
+    GpuNode,
+    Membership,
+    Project,
+    Session,
+    StorageVolume,
+)
 from app.domain.node_pools import resolve_pool_access
 from app.domain.policy import resolve_effective_policy
 
@@ -223,6 +231,30 @@ async def dashboard_summary(
         "disk_gb": {"used": int(comp[2]), "limit": _lim("storage_gb")},
     }
 
+    # Storage the caller owns: their personal volumes, what those volumes hold, and the policy
+    # ceiling on the total they may provision. The `compute.disk_gb` figure above is the sessions'
+    # scratch disk — a different thing that was reading as if it covered volumes too.
+    vol_rows = (
+        await db.execute(
+            select(
+                func.count(),
+                func.coalesce(func.sum(StorageVolume.quota_gb), 0),
+                func.coalesce(func.sum(StorageVolume.used_gb), 0),
+            ).where(
+                StorageVolume.scope == "user",
+                StorageVolume.scope_id == principal.user_id,
+                StorageVolume.deleted_at.is_(None),
+            )
+        )
+    ).one()
+    storage = {
+        "volumes": int(vol_rows[0] or 0),
+        "provisioned_gb": int(vol_rows[1] or 0),
+        "used_gb": int(vol_rows[2] or 0),
+        # 0 means the policy sets no ceiling.
+        "limit_gb": _lim("volume_gb"),
+    }
+
     return {
         "credit": credit,
         "sessions": {"running": running, "active": active},
@@ -240,4 +272,5 @@ async def dashboard_summary(
             "gpu_cores": {"used": int(comp[4]), "limit": _lim("gpu_cores")},
         },
         "compute": compute,
+        "storage": storage,
     }

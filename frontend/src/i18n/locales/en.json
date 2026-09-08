@@ -723,7 +723,12 @@
       "allGroups": "All departments",
       "allClasses": "All resource types",
       "allModels": "All GPU models",
-      "allClusters": "All clusters"
+      "allClusters": "All clusters",
+      "cleanupSelected": "Clean up {{count}}",
+      "selectErrored": "Select {{count}} errored",
+      "confirmCleanupTitle": "Clean up {{count}} sessions?",
+      "confirmCleanupBody": "These sessions already stopped. Cleaning up reclaims the remaining reservation and resources and files them as terminated. Their error reasons are kept.",
+      "bulkCleaned": "Cleaned up {{count}} sessions."
     },
     "nodes": {
       "availGpus": "Available GPUs",
@@ -1489,7 +1494,19 @@
     "bandSessions": "Sessions",
     "bandGpu": "GPU",
     "bandHost": "Host resources",
-    "gpuCores": "GPU cores"
+    "gpuCores": "GPU cores",
+    "queuedTitle": "Waiting to start",
+    "queuedWaiting": "waiting {{duration}}",
+    "queuedReasonHint": "Why the scheduler has not been able to start this session yet.",
+    "recentTitle": "Recent sessions",
+    "recentEmpty": "No sessions have finished yet.",
+    "recentFree": "Free",
+    "recentPeak": "peak GPU {{pct}}%",
+    "storageTitle": "Storage",
+    "storageProvisioned": "Provisioned",
+    "storageEmpty": "You have no volumes yet.",
+    "storageMore": "and {{count}} more",
+    "recentUnbilled": "not billed"
   },
   "enum": {
     "accessMode": {
@@ -1757,7 +1774,9 @@
     "title": "Queue",
     "colEta": "Est. wait",
     "etaValue": "~{{minutes}} min",
-    "etaHint": "Estimate from recent queue waits at your position. Actual time varies with what others release."
+    "etaHint": "Estimate from recent queue waits at your position. Actual time varies with what others release.",
+    "colReason": "Reason",
+    "reasonHint": "Why the scheduler has not been able to start this session yet."
   },
   "session": {
     "actionDone": "{{action}} done",
@@ -1855,7 +1874,10 @@
     "usageAvgMax": "{{avg}} · {{max}}",
     "usageTitleFinished": "Session usage",
     "privileged": "Privileges",
-    "privilegedValue": "root"
+    "privilegedValue": "root",
+    "usageLive": "Live · 1s",
+    "usageLiveHint": "Sampled once a second by the node agent. GPU figures still come from the metrics pipeline.",
+    "usageHintLive": "CPU and memory are sampled once a second on the node; VRAM and GPU cores come from the metrics pipeline (a few seconds behind) and only register while a CUDA context is active."
   },
   "table": {
     "clearFilters": "Clear filters",
