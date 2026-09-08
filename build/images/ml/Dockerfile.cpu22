@@ -1,0 +1,39 @@
+# Session image on Ubuntu 22.04: code-server, JupyterLab, ttyd, and a data-science stack.
+#
+# Ships no CUDA toolkit. It is still a valid choice for a GPU session — the container runtime
+# injects the driver, nvidia-smi and libcuda at start — so a user who wants a specific CUDA or
+# PyTorch build installs it themselves on top of a clean OS. 22.04 exists alongside 24.04 because
+# some vendor toolchains still pin to jammy.
+#
+# It honours the same connection contract as session-base — the same ports, paths, and entrypoint —
+# and runs as non-root (uid 1000), which satisfies restricted Pod Security.
+# Catalogue entry: name="Ubuntu 22.04", tag=ml-ubuntu22.04
+# Build context: build/images, so session-base/entrypoint.sh can be shared.
+FROM codercom/code-server:4.135.0 AS cs
+
+FROM ubuntu:22.04
+ARG TTYD_VERSION=1.7.7
+
+# Copy in code-server, which bundles its own Node.
+COPY --from=cs /usr/lib/code-server /usr/lib/code-server
+COPY --from=cs /usr/bin/code-server /usr/bin/code-server
+
+# jammy has no default uid-1000 user, so `coder` is created directly.
+RUN apt-get update && apt-get install -y --no-install-recommends \
+      python3-pip python3-venv iproute2 tini ca-certificates wget git && \
+    rm -rf /var/lib/apt/lists/* && \
+    useradd -m -u 1000 -s /bin/bash coder
+# 22.04's Python is not externally managed (PEP 668 landed in 24.04), so no --break-system-packages.
+RUN pip3 install --no-cache-dir \
+      jupyterlab notebook numpy pandas matplotlib scikit-learn scipy
+RUN wget -qO /usr/local/bin/ttyd \
+      "https://github.com/tsl0922/ttyd/releases/download/${TTYD_VERSION}/ttyd.x86_64" && \
+    chmod +x /usr/local/bin/ttyd
+
+COPY session-base/entrypoint.sh /usr/local/bin/gshare-session
+RUN chmod +x /usr/local/bin/gshare-session
+
+USER 1000
+ENV HOME=/home/coder
+EXPOSE 8080 8888 7681
+ENTRYPOINT ["tini", "--", "/usr/local/bin/gshare-session"]

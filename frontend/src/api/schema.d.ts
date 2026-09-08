@@ -4011,6 +4011,8 @@ export interface components {
             supported_gpus?: string[];
             /** Cuda Version */
             cuda_version?: string | null;
+            /** Gpu Ready */
+            gpu_ready?: boolean | null;
         };
         /** ImageImport */
         ImageImport: {
@@ -4034,6 +4036,8 @@ export interface components {
             supported_gpus?: string[];
             /** Cuda Version */
             cuda_version?: string | null;
+            /** Gpu Ready */
+            gpu_ready?: boolean | null;
         };
         /**
          * ImageList
@@ -4068,6 +4072,11 @@ export interface components {
             /** Cuda Version */
             cuda_version?: string | null;
             /**
+             * Gpu Ready
+             * @default false
+             */
+            gpu_ready: boolean;
+            /**
              * Public
              * @default true
              */
@@ -4091,6 +4100,8 @@ export interface components {
             cuda_version?: string | null;
             /** Supported Gpus */
             supported_gpus?: string[] | null;
+            /** Gpu Ready */
+            gpu_ready?: boolean | null;
         };
         /**
          * MeMembership

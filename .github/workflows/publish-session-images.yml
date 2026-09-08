@@ -31,6 +31,7 @@ jobs:
       matrix:
         include:
           - { tag: ml-ubuntu24.04,              dockerfile: build/images/ml/Dockerfile.cpu }
+          - { tag: ml-ubuntu22.04,              dockerfile: build/images/ml/Dockerfile.cpu22 }
           - { tag: ml-cuda12.4-cudnn9,          dockerfile: build/images/ml/Dockerfile.ml-gpu }
           - { tag: pytorch2.6-cuda12.4-cudnn9,  dockerfile: build/images/ml/Dockerfile.pytorch-gpu }
           - { tag: tensorflow2.18-cuda12.5-cudnn9, dockerfile: build/images/ml/Dockerfile.tensorflow-gpu }

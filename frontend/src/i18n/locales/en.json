@@ -2253,7 +2253,9 @@
     "privilegedHint": "The container runs as root so you can install system packages (apt). Granted to you by the resource policy.",
     "cluster": "Cluster",
     "clusterAuto": "Automatic (the scheduler picks)",
-    "clusterHint": "Preset from the cluster chosen in the top bar. Automatic places the session where capacity is free."
+    "clusterHint": "Preset from the cluster chosen in the top bar. Automatic places the session where capacity is free.",
+    "bareBaseTag": "No CUDA toolkit",
+    "bareBaseHint": "The GPU driver is provided, but this image ships no CUDA toolkit or framework. Install what you need inside the session."
   },
   "notif": {
     "cluster_health": {
