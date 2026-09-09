@@ -72,7 +72,7 @@ function unavailableReason(status?: string | null, nodeStatus?: string | null, m
 }
 
 /** One GPU card: VRAM fill, free cores, mode — the rack view. */
-function DeviceTile({ model, alias, index, freeMemMb, totalMemMb, freeCores, mode, status, nodeStatus, modeState }: {
+function DeviceTile({ model, alias, index, freeMemMb, totalMemMb, freeCores, mode, status, nodeStatus, modeState, cluster }: {
   model: string;
   alias?: string | null;
   index: number;
@@ -83,6 +83,9 @@ function DeviceTile({ model, alias, index, freeMemMb, totalMemMb, freeCores, mod
   status?: string | null;
   nodeStatus?: string | null;
   modeState?: string | null;
+  /** Which cluster the card belongs to. Shown only while looking at every cluster at once, where
+   *  a card without an alias reads as "RTX 4090 #2" and says nothing about where it lives. */
+  cluster?: string | null;
 }) {
   const { t } = useTranslation();
   const usedPct = totalMemMb > 0 ? ((totalMemMb - freeMemMb) / totalMemMb) * 100 : 0;
@@ -103,7 +106,10 @@ function DeviceTile({ model, alias, index, freeMemMb, totalMemMb, freeCores, mod
       </div>
       <Meter value={out ? 100 : usedPct} variant={variant} />
       <div className="flex items-center justify-between gap-2 mt-1.5 text-2xs gs-num text-muted">
-        <span>{formatVram(totalMemMb - freeMemMb)} / {formatVram(totalMemMb)}</span>
+        <span className="flex items-center gap-1.5 min-w-0">
+          <span>{formatVram(totalMemMb - freeMemMb)} / {formatVram(totalMemMb)}</span>
+          {cluster && <span className="gs-tag shrink-0 truncate max-w-[9rem]" title={cluster}>{cluster}</span>}
+        </span>
         {/* No headroom is reported for a card that cannot be placed on — the figure would be a lie. */}
         <span>{out ? t('admin.dashboard.deviceUnavailable') : `${t('admin.dashboard.deviceFreeShort')} ${freeCores}%`}</span>
       </div>
@@ -243,6 +249,13 @@ export function AdminDashboard() {
                           totalMemMb={total}
                           freeCores={Math.max(0, 100 - (d.used_cores ?? 0))}
                           mode={d.mode ?? '-'}
+                          cluster={
+                            // Only when no single cluster is selected — otherwise the tag repeats
+                            // what the panel heading already says.
+                            clusterInfo.multi && !gridCluster
+                              ? clusterInfo.name(nodeCluster[(d as { node_id?: string | null }).node_id ?? ''])
+                              : null
+                          }
                         />
                       );
                     })}
