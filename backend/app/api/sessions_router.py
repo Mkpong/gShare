@@ -42,6 +42,9 @@ from app.core.metrics import SSE_STREAMS
 from app.core.redis import get_redis
 from app.db.base import get_db, get_sessionmaker
 from app.db.models import (
+    Cluster as ClusterModel,
+)
+from app.db.models import (
     CreditTransaction,
     GpuDevice,
     GpuNode,
@@ -775,7 +778,16 @@ async def session_connections(
     # the console domain. The custom resource name is RFC 1123 (lower-cased, '_' to '-'), the same
     # transformation the operator applies to its custom resource and Ingress names.
     cr_name = session_id.lower().replace("_", "-")
-    host_base = f"{_settings.SESSION_URL_SCHEME}://{_settings.SESSION_DOMAIN}/proxy/{cr_name}"
+    # The hostname follows the CLUSTER the session runs on. Each cluster terminates its own
+    # ingress, and the operator creates the /proxy/{cr} Ingress there — so advertising every
+    # session under one global domain sent users to a cluster that has no such route. The global
+    # setting remains the fallback, which is what a single-cluster install uses.
+    session_host = _settings.SESSION_DOMAIN
+    if sess.cluster_id:
+        cluster = await db.get(ClusterModel, sess.cluster_id)
+        if cluster is not None and cluster.session_domain:
+            session_host = cluster.session_domain
+    host_base = f"{_settings.SESSION_URL_SCHEME}://{session_host}/proxy/{cr_name}"
     kinds = {
         # code-server lives at the /code subpath, with the ingress stripping the prefix. The
         # trailing slash is required so relative assets such as ./_static resolve against

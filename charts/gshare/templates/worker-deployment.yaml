@@ -47,6 +47,10 @@ spec:
             # The app reads only GSHARE_-prefixed env (pydantic env_prefix).
             - name: GSHARE_DATABASE_URL
               valueFrom: { secretKeyRef: { name: {{ .Values.postgres.credentialsSecret }}, key: uri } }
+            # The worker drives sessions on every registered cluster, so it needs the same key the
+            # api uses to read a remote cluster's stored kubeconfig.
+            - name: GSHARE_CLUSTER_CREDENTIAL_KEY
+              valueFrom: { secretKeyRef: { name: gshare-cluster-credential, key: key } }
             {{- with .Values.worker.gracePeriodSec }}
             # Credit-exhaustion grace window (sec) — graceful pause/yield past this. (gpu-yield-lending)
             - name: GSHARE_GRACE_PERIOD_SEC

@@ -11,6 +11,7 @@ in **fractional** or **exclusive** mode — and accounts for what they use in **
 | A user who wants to run sessions | [User manual](user-manual.md) |
 | An administrator managing organizations and resources | [Administrator manual](admin-manual.md) |
 | An operator deploying to a GPU cluster | [Getting started](getting-started.md) → [Cluster setup](cluster-setup.md) → [Connecting a cluster](cluster-connect.md) |
+| An operator adding a SECOND GPU cluster | [Multi-cluster](multi-cluster.md) |
 | A developer contributing code | [Contributing guide](../CONTRIBUTING.md) → the component READMEs → [design notes](paper/) |
 | A developer adding or changing a console screen | [Console UX standards](console-ux.md) → [the persona audit](../test/e2e/ux/README.md) |
 
@@ -40,6 +41,8 @@ in **fractional** or **exclusive** mode — and accounts for what they use in **
 - [Cluster setup](cluster-setup.md) — building the prerequisite GPU Kubernetes cluster
   from scratch with kubeadm and HAMi.
 - [Connecting a cluster](cluster-connect.md) — registering a cluster with the control
+- [Multi-cluster](multi-cluster.md) — attaching further GPU clusters to one control
+  plane: prerequisites, `hack/attach-cluster.sh`, verification and token rotation
   plane and attaching its operator.
 
 ### Developing and design

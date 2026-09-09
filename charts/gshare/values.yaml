@@ -272,6 +272,20 @@ ingress:
   enabled: true
   className: nginx
   annotations: {}
+  # The internal plane (/internal, /.well-known) is cluster-internal by default, which is correct
+  # for a single-cluster install. A REMOTE cluster's operator has to reach it to report session
+  # status and inventory, so a multi-cluster control plane must enable this.
+  #
+  # The routes behind it already require the RS256 internal JWT; sourceRange narrows who may even
+  # attempt them. Set it to the networks your data-plane clusters live on.
+  internalPlane:
+    enabled: false
+    # Defaults to global.domains.console. Give it its own hostname to keep the internal plane off
+    # the console's name entirely.
+    host: ""
+    # CIDR list, e.g. "10.10.0.0/24". Empty means any source may reach it.
+    sourceRange: ""
+    annotations: {}
 
 # ── ServiceAccount names (RBAC) ──
 serviceAccounts:

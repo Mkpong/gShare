@@ -8,7 +8,6 @@ import { HelpTip } from '@/components/HelpTip';
 import { DotPager } from '@/components/DotPager';
 import { PageHeader } from '@/components/PageHeader';
 import { useTranslation } from 'react-i18next';
-import { Select } from '@/components/Select';
 import { useActiveCluster } from '@/api/hooks/useClusters';
 import { useAuthStore } from '@/auth/authStore';
 import { formatVram } from '@/lib/format';
@@ -123,10 +122,12 @@ export function AdminDashboard() {
   // node-pool access, which hid pool-granted cards from the admin's own grid.
   // gpu-devices is super_admin-only; an org/group admin never renders the grid, so skip the 403.
   const { data: fleetDevices = [] } = useGpuDevices(undefined, { enabled: isSuper });
-  // Multi-cluster: the grid can be narrowed to one cluster (cards → node → cluster). The KPI
-  // figures above stay fleet-wide; per-cluster totals are on the cluster management page.
+  // Multi-cluster: the grid follows the cluster chosen in the top bar (cards → node → cluster).
+  // It used to carry a second selector of its own, which meant two controls for one decision and
+  // let the panel disagree with the rest of the console. The KPI figures above stay fleet-wide;
+  // per-cluster totals are on the cluster management page.
   const clusterInfo = useActiveCluster();
-  const [gridCluster, setGridCluster] = useState('');
+  const gridCluster = clusterInfo.id ?? '';
   const { data: nodeRows = [] } = useNodes({}, { enabled: isSuper && clusterInfo.multi });
   const nodeCluster = useMemo(() => {
     const m: Record<string, string> = {};
@@ -215,15 +216,12 @@ export function AdminDashboard() {
                   {t('admin.dashboard.deviceGridLink')}
                 </Link>
               </div>
-              <p className="gs-sub mt-1">{t('admin.dashboard.deviceGridSub')}</p>
-              {clusterInfo.multi && (
-                <div className="mt-3">
-                  <Select className="gs-input w-auto text-sm" value={gridCluster} aria-label={t('admin.dashboard.allClusters')} onChange={(e) => setGridCluster(e.target.value)}>
-                    <option value="">{t('admin.dashboard.allClusters')}</option>
-                    {[...new Set(Object.values(nodeCluster))].map((c) => <option key={c} value={c}>{clusterInfo.name(c)}</option>)}
-                  </Select>
-                </div>
-              )}
+              <p className="gs-sub mt-1">
+                {t('admin.dashboard.deviceGridSub')}
+                {gridCluster && (
+                  <span className="gs-tag ml-2 align-middle">{clusterInfo.name(gridCluster)}</span>
+                )}
+              </p>
               {gridDevices.length === 0 ? (
                 <p className="text-muted text-sm mt-4">{t('admin.dashboard.unpackedDevices')}</p>
               ) : (

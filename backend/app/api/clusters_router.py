@@ -29,6 +29,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.api.deps import Pagination, get_current_principal
 from app.api.schemas.cluster import ClusterList
 from app.auth.rbac import Principal
+from app.cluster.credentials import decrypt_kubeconfig, encrypt_kubeconfig
 from app.core import ids
 from app.core.errors import DomainError, NotFound
 from app.db.base import get_db
@@ -62,11 +63,16 @@ class ClusterRegister(BaseModel):
     name: str = Field(min_length=1, max_length=80)
     role: str
     kubeconfig_b64: str
+    # Hostname sessions on this cluster are reached at. Each cluster terminates its own ingress,
+    # so this has to be set for any cluster other than the one the control plane runs on.
+    session_domain: str | None = None
 
 
 class ClusterPatch(BaseModel):
     name: str | None = Field(default=None, min_length=1, max_length=80)
     role: str | None = None
+    # '' clears it, falling back to the global session domain.
+    session_domain: str | None = None
 
 
 # ── K8s probe port (validation + inventory). Injectable for tests/offline. ──
@@ -223,6 +229,7 @@ async def _serialize_cluster(c: Cluster, db: AsyncSession) -> dict[str, Any]:
         "role": c.role,
         "api_server": c.api_server,
         "runtime": c.runtime,
+        "session_domain": c.session_domain,
         "status": c.status,
         "kubeconfig_secret_ref": c.kubeconfig_secret_ref,
         "node_count": int(node_count),
@@ -326,8 +333,11 @@ async def register_cluster(
         raise _Conflict("cluster api_server already registered", {"api_server": api_server})
 
     cluster_id = ids.new("cluster")
-    # kubeconfig is stored as a secret REFERENCE only — never plaintext.
+    # The reference still names where a projected file would live, for deployments that mount one.
     secret_ref = f"secret://gshare/cluster-creds/{cluster_id}"
+    # And the credential itself is kept, encrypted — otherwise the cluster we just proved we can
+    # reach becomes unreachable the moment this request returns.
+    kubeconfig_encrypted = encrypt_kubeconfig(kubeconfig_yaml)
     cluster = Cluster(
         id=cluster_id,
         name=body.name,
@@ -336,6 +346,8 @@ async def register_cluster(
         runtime=probe.runtime or "unknown",
         status=probe.derive_status(),
         kubeconfig_secret_ref=secret_ref,
+        kubeconfig_encrypted=kubeconfig_encrypted,
+        session_domain=(body.session_domain or "").strip() or None,
     )
     db.add(cluster)
     try:
@@ -445,6 +457,11 @@ async def update_cluster(
             raise _Conflict("cluster name already registered", {"name": body.name})
         changes["name"] = {"from": cluster.name, "to": body.name}
         cluster.name = body.name
+    if body.session_domain is not None:
+        new_domain = body.session_domain.strip() or None
+        if new_domain != cluster.session_domain:
+            changes["session_domain"] = {"from": cluster.session_domain, "to": new_domain}
+            cluster.session_domain = new_domain
 
     if changes:
         try:
@@ -538,7 +555,10 @@ async def connection_test(
     cluster = await _load_cluster(cluster_id, db)
 
     # Resolve kubeconfig from the secret ref (mounted by external-secrets); None -> in-cluster SA.
-    kubeconfig_yaml = await _read_cluster_secret(cluster.kubeconfig_secret_ref)
+    # The stored credential first; a projected file still wins for deployments that mount one.
+    kubeconfig_yaml = await _read_cluster_secret(cluster.kubeconfig_secret_ref) or decrypt_kubeconfig(
+        cluster.kubeconfig_encrypted
+    )
     probe = await _probe.probe(kubeconfig_yaml)
     new_status = probe.derive_status()
 

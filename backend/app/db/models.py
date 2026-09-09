@@ -327,8 +327,18 @@ class Cluster(Base, TimestampMixin, SoftDeleteMixin):
     api_server: Mapped[str] = mapped_column(String)
     runtime: Mapped[str] = mapped_column(String)
     status: Mapped[str] = mapped_column(String, default="pending")
-    # Secret reference only — never store plaintext kubeconfig.
+    # Where the credential lives when it is projected as a file (external-secrets, host mount).
     kubeconfig_secret_ref: Mapped[str] = mapped_column(String)
+    # The hostname sessions on THIS cluster are reached at. Each cluster terminates its own
+    # ingress, so a session's URL has to follow the cluster it actually runs on; a single global
+    # domain sent every user to cluster one, where the session's ingress does not exist. Empty
+    # falls back to the global GSHARE_SESSION_DOMAIN, which is right for a single-cluster install.
+    session_domain: Mapped[str | None] = mapped_column(String, default=None)
+    # The credential itself, encrypted at rest (see app.cluster.credentials). Registration used to
+    # discard the uploaded kubeconfig and keep only the reference above, which left every remote
+    # cluster unusable until someone placed the file by hand. Null for the local cluster, which
+    # authenticates with its own in-cluster service account.
+    kubeconfig_encrypted: Mapped[str | None] = mapped_column(Text, default=None)
     __table_args__ = (
         Index(
             "uq_cluster_name_active",

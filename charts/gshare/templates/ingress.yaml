@@ -37,3 +37,53 @@ spec:
                 name: frontend
                 port: { number: 80 }
 {{- end }}
+
+{{- if .Values.ingress.internalPlane.enabled }}
+---
+# Internal-plane ingress: the ONLY route by which a remote cluster's operator reaches the control
+# plane. It carries the status callbacks, the inventory reports and the session forward-auth.
+#
+# The console ingress above deliberately routes /api and / only, which keeps /internal unreachable
+# from outside — correct for a single-cluster install, and the reason a remote operator had nowhere
+# to report to. Enabling this opens exactly those paths, and only those.
+#
+# Every route behind it already requires the RS256 internal JWT (audience gshare-internal), so this
+# is not an unauthenticated surface; `sourceRange` narrows it further to the networks your clusters
+# actually live on, which is what you want on anything but a private lab LAN.
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: gshare-internal
+  namespace: {{ .Values.global.namespaces.system }}
+  labels:
+    {{- include "gshare.labels" . | nindent 4 }}
+  annotations:
+    nginx.ingress.kubernetes.io/proxy-read-timeout: "3600"
+    nginx.ingress.kubernetes.io/proxy-buffering: "off"
+    {{- with .Values.ingress.internalPlane.sourceRange }}
+    nginx.ingress.kubernetes.io/whitelist-source-range: {{ . | quote }}
+    {{- end }}
+    {{- with .Values.ingress.internalPlane.annotations }}
+    {{- toYaml . | nindent 4 }}
+    {{- end }}
+spec:
+  ingressClassName: {{ .Values.ingress.className }}
+  rules:
+    - host: {{ (.Values.ingress.internalPlane.host | default .Values.global.domains.console) | quote }}
+      http:
+        paths:
+          # Operator callbacks: session status, inventory, health events, volume sync.
+          - path: /internal
+            pathType: Prefix
+            backend:
+              service:
+                name: api
+                port: { number: 80 }
+          # The JWKS the internal JWT is verified against.
+          - path: /.well-known
+            pathType: Prefix
+            backend:
+              service:
+                name: api
+                port: { number: 80 }
+{{- end }}

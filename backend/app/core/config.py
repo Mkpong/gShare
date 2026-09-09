@@ -56,6 +56,10 @@ class Settings(BaseSettings):
     # external-secrets projects them here; on Compose and bare metal, mount them directly at
     # <dir>/<cluster_id>/kubeconfig.
     CLUSTER_KUBECONFIG_DIR: str = "/var/run/secrets/gshare/clusters"
+    # Symmetric key protecting stored remote-cluster kubeconfigs. Any non-empty string works; it
+    # is hashed into the key Fernet needs. Empty disables remote-cluster registration rather than
+    # storing a credential in the clear.
+    CLUSTER_CREDENTIAL_KEY: str = ""
 
     # ── Credit / billing knobs ──
     CONNECTION_TOKEN_TTL_SEC: int = 300      # one-time cnx_ token TTL

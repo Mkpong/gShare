@@ -1,5 +1,9 @@
 # Connecting a cluster
 
+> **Attaching a SECOND cluster?** Use [multi-cluster.md](multi-cluster.md) and
+> `hack/attach-cluster.sh`. This document covers the concepts and the single-cluster
+> and Compose topologies; that one is the operator's runbook for a bare GPU cluster.
+
 > 📚 [Documentation home](./README.md)
 
 Where [`cluster-setup.md`](./cluster-setup.md) **builds** a GPU cluster, this page

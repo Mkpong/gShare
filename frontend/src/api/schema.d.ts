@@ -3688,6 +3688,8 @@ export interface components {
             name?: string | null;
             /** Role */
             role?: string | null;
+            /** Session Domain */
+            session_domain?: string | null;
         };
         /**
          * ClusterRead
@@ -3721,6 +3723,8 @@ export interface components {
             role: string;
             /** Kubeconfig B64 */
             kubeconfig_b64: string;
+            /** Session Domain */
+            session_domain?: string | null;
         };
         /**
          * ClusterResource
