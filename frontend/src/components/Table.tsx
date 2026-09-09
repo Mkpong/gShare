@@ -19,6 +19,9 @@ export interface Column<T> {
   cellClassName?: string;
   /** Hidden below `md`. */
   hideOnMobile?: boolean;
+  /** Keep this cell on one line and ellipsise it when the column is narrow. For a value the user
+   *  scans rather than reads in full — an id, a long path, a joined spec string. */
+  truncate?: boolean;
 }
 
 interface TableProps<T> {
@@ -92,7 +95,10 @@ export function Table<T>({
 
   return (
     <div className="overflow-x-auto -mx-1 px-1">
-      <table className="w-full border-collapse" aria-labelledby={caption ? captionId : undefined} aria-busy={isLoading || undefined}>
+      {/* Below this width the wrapper scrolls instead of squeezing every column thinner. A
+          `w-full` table with ten columns crushes them until headers and readings break apart,
+          which is worse than a horizontal scrollbar the user can see and use. */}
+      <table className="w-full min-w-[52rem] border-collapse" aria-labelledby={caption ? captionId : undefined} aria-busy={isLoading || undefined}>
         {caption && <caption id={captionId} className="gs-sr-only">{caption}</caption>}
         <thead>
           <tr>
@@ -120,6 +126,10 @@ export function Table<T>({
                   className={[
                     'text-xs text-muted font-semibold px-3 py-2.5 border-b border-border',
                     'sticky top-0 bg-surface z-10',
+                    // A header must never break mid-word. "클러스터" wrapping to "클러스"/"터" is
+                    // the narrow-screen failure this prevents: the row keeps one line and the
+                    // label ellipsises, with the full text on hover and for assistive tech.
+                    'whitespace-nowrap',
                     (c.headerAlign ?? c.align) === 'right' ? 'text-right' : (c.headerAlign ?? c.align) === 'center' ? 'text-center' : 'text-left',
                     c.hideOnMobile ? 'hidden md:table-cell' : '',
                     c.headerClassName ?? '',
@@ -129,17 +139,18 @@ export function Table<T>({
                     <button
                       type="button"
                       onClick={() => onSort(c.key)}
-                      className="inline-flex items-center gap-1 font-semibold hover:text-text"
-                      title={t('table.sortBy', { column: c.header })}
+                      className="inline-flex items-center gap-1 font-semibold hover:text-text max-w-full"
+                      title={c.header}
+                      aria-label={t('table.sortBy', { column: c.header })}
                     >
-                      {c.header}
+                      <span className="truncate">{c.header}</span>
                       <span aria-hidden="true" className={active ? 'text-primary' : 'opacity-45'}>
                         {active
                           ? (dir === 'asc' ? <CaretUp size={11} weight="bold" /> : <CaretDown size={11} weight="bold" />)
                           : <CaretUpDown size={11} />}
                       </span>
                     </button>
-                  ) : c.header}
+                  ) : <span className="truncate inline-block max-w-full align-bottom" title={c.header}>{c.header}</span>}
                 </th>
               );
             })}
@@ -185,6 +196,7 @@ export function Table<T>({
                         `px-3 ${dense ? 'py-1.5' : 'py-3'} border-b border-border group-last:border-b-0 text-sm`,
                         c.align === 'right' ? 'text-right tabular-nums' : c.align === 'center' ? 'text-center tabular-nums' : '',
                         c.hideOnMobile ? 'hidden md:table-cell' : '',
+                        c.truncate ? 'truncate max-w-[1px]' : '',
                         c.cellClassName ?? '',
                       ].join(' ')}
                     >
