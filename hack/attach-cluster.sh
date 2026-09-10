@@ -279,12 +279,20 @@ EOF
   done
   helm repo add democratic-csi https://democratic-csi.github.io/charts/ >/dev/null 2>&1 || true
   helm repo update democratic-csi >/dev/null 2>&1 || true
+  # Ask the driver to publish its own capacity. gShare reads the resulting CSIStorageCapacity
+  # objects through the operator, which is the only way it can learn the pool's real size — a
+  # storage node's root disk is a different number entirely. Best effort: a driver that does not
+  # implement GetCapacity, or publishes no topology, simply produces nothing and the pool keeps
+  # the capacity an administrator states on it.
   KUBECONFIG="$KUBECONFIG_FILE" helm upgrade -i gshare-storage democratic-csi/democratic-csi \
     --version "$CSI_VERSION" -n gshare-storage --create-namespace -f "$STORAGE_VALUES" \
+    --set csiDriver.storageCapacity=true \
     --wait --timeout 5m >/dev/null
   r kubectl get storageclass "$STORAGE_CLASS" >/dev/null 2>&1 \
     || die "StorageClass $STORAGE_CLASS did not appear — check storageClasses[].name in $STORAGE_VALUES"
   log "StorageClass $STORAGE_CLASS ready; the operator provisions volume PVCs from it"
+  log "register this pool in the console (인프라 → 스토리지) so its capacity is counted:"
+  log "  cluster $NAME, storage class $STORAGE_CLASS, and who may share it"
 else
   step "8/9  shared volume pool — skipped (no --storage-values; sessions here cannot mount volumes)"
 fi

@@ -66,6 +66,12 @@ rules:
   - apiGroups: [""]
     resources: ["nodes/proxy"]              # kubelet /stats/summary: per-PVC used bytes for the volume ledger
     verbs: ["get"]
+  - apiGroups: ["storage.k8s.io"]
+    # What the CSI driver says the volume-backing pool holds. The control plane can only see a
+    # node's root disk, which is not the pool; the driver's own GetCapacity answer arrives here as
+    # CSIStorageCapacity objects and rides along on the volume-sync tick.
+    resources: ["csistoragecapacities", "storageclasses"]
+    verbs: ["get", "list", "watch"]
   - apiGroups: ["batch"]
     resources: ["jobs"]                     # lossless pause: the privileged agent Job (checkpoint and restore)
     verbs: ["get", "list", "watch", "create", "delete"]

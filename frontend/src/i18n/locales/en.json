@@ -524,7 +524,15 @@
       "storageNone": "No storage server is attached.",
       "allClusters": "All clusters",
       "deviceUnavailable": "Unavailable",
-      "devicePage": "Page {{page}}"
+      "devicePage": "Page {{page}}",
+      "storageShareAll": "shared",
+      "storageCapacityUnknown": "not measured",
+      "storageSource": {
+        "csi": "measured by the CSI driver",
+        "manual": "stated by an administrator",
+        "node_disk": "the storage node's system disk, not the pool",
+        "unknown": "no measurement"
+      }
     },
     "groups": {
       "add": "Group",

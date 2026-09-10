@@ -158,14 +158,40 @@ helm -n gshare-storage get values gshare-storage > csi-values.yaml && chmod 600 
 The values file carries the storage box's SSH key. Keep it out of the repository and delete it
 when the attach is done.
 
+### Registering a pool
+
+A pool is a registered object, not something inferred from node roles. Register it in the console
+(or `POST /api/v1/storage/pools`) with:
+
+- **cluster** — the one its storage server sits in;
+- **storage class** — the class that provisions from it, the same name the operator is given as
+  `--volume-storage-class`;
+- **sharing** — `all` for every cluster in the fleet (one NFS box exported to all of them, the
+  usual shape), or `selected` plus the clusters allowed to place volumes on it.
+
 **Several storage servers are not one pool.** A volume lives on exactly one — the StorageClass its
-PVC names decides where, and gShare chooses nothing. So a second storage server is only reachable
-through a second CSI driver and StorageClass, and because the operator takes one
-`--volume-storage-class` per cluster, the split can only be per cluster (and a volume then cannot
-move between them; see the limits below). The capacity gate and the dashboard both treat the
-*largest* server as the bound, never the sum. When the real pool is bigger than any node's root
-disk — a ZFS pool across several disks, which is what the operator sees — state it once with
-`STORAGE_POOL_CAPACITY_GB` on the control plane; both readings follow that figure.
+PVC names decides where, and gShare chooses nothing. The capacity gate and the dashboard therefore
+take the *largest* pool a placement could use as the bound, never the sum: adding two 2 TB servers
+into 4 TB licensed volumes neither of them could hold.
+
+### Where the capacity number comes from
+
+In order, and each reading says which it used:
+
+1. **`csi`** — the driver's own `GetCapacity`, published by the external-provisioner as
+   `CSIStorageCapacity` objects and read by the operator on its volume-sync tick. This is the
+   only automatic source; nothing else can see past the node's root disk.
+2. **`manual`** — the figure stated on the pool (`manual_capacity_gb`). The control-plane-wide
+   `STORAGE_POOL_CAPACITY_GB` still works as a fleet default for a single-pool install.
+3. **`node_disk`** — the storage node's system drive. A stand-in, labelled as one: on a ZFS box it
+   is a different disk from the pool and can be off by hundreds of gigabytes either way.
+
+`attach-cluster.sh` sets `csiDriver.storageCapacity=true` so a driver that supports capacity
+starts publishing. Not every driver does, and the provisioner also needs
+`--enable-capacity`, `--capacity-for-immediate-binding=true` (our StorageClasses bind immediately)
+and a driver that reports node topology — without topology the objects are created and removed
+again on every refresh. When nothing is published the pool simply keeps its stated capacity, and
+the dashboard says `manual` rather than pretending to have measured anything.
 
 Prerequisites on the attached cluster — the script checks both and stops with the fix if missing:
 

@@ -325,11 +325,12 @@ export function AdminDashboard() {
               {(() => {
                 // The tile stays put whether or not this cluster has storage: an empty slot in the
                 // fleet-pressure row reads as a rendering bug, while a stated "none attached" is a fact.
-                type StorageNode = {
-                  id: string; hostname?: string | null;
-                  cluster_name?: string | null; status?: string | null; disk_gb?: number | null;
+                type StoragePool = {
+                  id: string; name?: string | null; hostname?: string | null;
+                  cluster_name?: string | null; share_scope?: string | null;
+                  capacity_gb?: number | null; capacity_source?: string | null;
                 };
-                const st = (m as { storage?: { disk_gb: { used: number; total: number; source?: string }; node_count: number; shared?: boolean; nodes?: StorageNode[] } | null }).storage;
+                const st = (m as { storage?: { disk_gb: { used: number; total: number; source?: string }; node_count: number; shared?: boolean; pools?: StoragePool[] } | null }).storage;
                 return (
                   <section className="gs-panel p-5">
                     <h2 className="gs-h2">{t('admin.dashboard.storageTitle')}</h2>
@@ -339,23 +340,27 @@ export function AdminDashboard() {
                           {t(st.shared ? 'admin.dashboard.storageSubShared' : 'admin.dashboard.storageSubShort', { count: st.node_count })}
                           <HelpTip text={t(st.disk_gb.source === 'pool' ? 'admin.dashboard.storageSub' : 'admin.dashboard.storageSubNodeDisk', { count: st.node_count })} />
                         </p>
-                        {/* Which machines hold the pool, each tagged with the cluster it sits in —
-                            the same reading the GPU tiles give. A count alone said how many
-                            without saying which, and on a shared pool that is the first thing an
+                        {/* Each registered pool, tagged with the cluster its server sits in — the
+                            same reading the GPU tiles give. A count alone said how many without
+                            saying which, and on a shared pool that is the first thing an
                             administrator needs before touching one. */}
                         <ul className="mt-2">
-                          {(st.nodes ?? []).map((n) => (
-                            <li key={n.id} className="gs-hair flex items-center gap-2 py-1.5 text-xs min-w-0">
-                              <span className="font-semibold truncate" title={n.hostname ?? undefined}>
-                                {n.hostname ?? n.id}
+                          {(st.pools ?? []).map((p) => (
+                            <li key={p.id} className="gs-hair flex items-center gap-2 py-1.5 text-xs min-w-0">
+                              <span className="font-semibold truncate" title={p.hostname ?? undefined}>
+                                {p.name ?? p.hostname ?? p.id}
                               </span>
-                              {n.cluster_name && (
-                                <span className="gs-tag shrink-0 truncate max-w-[8rem]" title={n.cluster_name}>
-                                  {n.cluster_name}
+                              {p.cluster_name && (
+                                <span className="gs-tag shrink-0 truncate max-w-[8rem]" title={p.cluster_name}>
+                                  {p.cluster_name}
                                 </span>
                               )}
-                              <span className="gs-num text-muted ml-auto shrink-0">
-                                {n.disk_gb ? `${n.disk_gb} GB` : '-'}
+                              {p.share_scope === 'all' && (
+                                <span className="gs-tag shrink-0">{t('admin.dashboard.storageShareAll')}</span>
+                              )}
+                              <span className="gs-num text-muted ml-auto shrink-0"
+                                    title={t(`admin.dashboard.storageSource.${p.capacity_source ?? 'unknown'}`, { defaultValue: '' })}>
+                                {p.capacity_gb ? `${p.capacity_gb} GB` : t('admin.dashboard.storageCapacityUnknown')}
                               </span>
                             </li>
                           ))}

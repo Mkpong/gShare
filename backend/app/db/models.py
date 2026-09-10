@@ -17,6 +17,7 @@ from datetime import UTC, datetime
 from decimal import Decimal
 
 from sqlalchemy import (
+    BigInteger,
     Boolean,
     CheckConstraint,
     DateTime,
@@ -386,6 +387,56 @@ class NodePool(Base, TimestampMixin):
     description: Mapped[str | None] = mapped_column(String, default=None)
     kind: Mapped[str] = mapped_column(String, default="dedicated")       # shared|dedicated
     __table_args__ = (UniqueConstraint("cluster_id", "name", name="uq_node_pool_cluster_name"),)
+
+
+class StoragePool(Base, TimestampMixin, SoftDeleteMixin):
+    """A volume-backing pool: one storage server, seen through one StorageClass.
+
+    A volume lives on exactly one pool — the StorageClass its PVC names decides where, and gShare
+    chooses nothing — so pools are never summed into one big number. The pool belongs to the
+    cluster its server sits in; `share_scope` says who else may place volumes on it: "all" for
+    every cluster (the usual shape, one NFS box exported to the whole fleet), or "selected" for
+    the clusters listed in StoragePoolShare.
+
+    Capacity is measured, not typed in: the operator reads the CSI driver's own answer
+    (CSIStorageCapacity, published by the external-provisioner) and reports it here. A site whose
+    driver does not publish capacity falls back to `manual_capacity_gb`, and failing that to the
+    storage node's root disk — which is not the pool and is labelled as such.
+    """
+    __tablename__ = "storage_pool"
+    id: Mapped[str] = mapped_column(String, primary_key=True)            # stp_ULID
+    name: Mapped[str] = mapped_column(String)
+    # The cluster the storage server belongs to. Volumes may still be placed from elsewhere; see
+    # share_scope.
+    cluster_id: Mapped[str] = mapped_column(ForeignKey("cluster.id"), index=True)
+    # The server itself, when it is a node of that cluster (it usually is). Kept as a plain
+    # hostname too, so a pool survives the node being re-registered.
+    node_id: Mapped[str | None] = mapped_column(ForeignKey("gpu_node.id"), default=None, index=True)
+    node_hostname: Mapped[str | None] = mapped_column(String, default=None)
+    # The StorageClass that provisions from this pool. This is the join key for the capacity the
+    # operator reports, and what the operator is configured with (--volume-storage-class).
+    storage_class: Mapped[str] = mapped_column(String)
+    share_scope: Mapped[str] = mapped_column(String, default="all")      # all|selected
+    # Measured capacity, newest report wins. Bytes, because that is what CSI speaks.
+    capacity_bytes: Mapped[int | None] = mapped_column(BigInteger, default=None)
+    capacity_source: Mapped[str | None] = mapped_column(String, default=None)   # csi|manual|node_disk
+    capacity_reported_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), default=None)
+    # The administrator's figure, used when the driver publishes nothing.
+    manual_capacity_gb: Mapped[int | None] = mapped_column(Integer, default=None)
+    __table_args__ = (
+        UniqueConstraint("cluster_id", "storage_class", name="uq_storage_pool_cluster_class"),
+    )
+
+
+class StoragePoolShare(Base, TimestampMixin):
+    """One cluster allowed to place volumes on a pool whose share_scope is "selected"."""
+    __tablename__ = "storage_pool_share"
+    id: Mapped[str] = mapped_column(String, primary_key=True)            # sps_ULID
+    pool_id: Mapped[str] = mapped_column(ForeignKey("storage_pool.id"), index=True)
+    cluster_id: Mapped[str] = mapped_column(ForeignKey("cluster.id"), index=True)
+    __table_args__ = (
+        UniqueConstraint("pool_id", "cluster_id", name="uq_storage_pool_share"),
+    )
 
 
 class NodePoolGrant(Base, TimestampMixin):

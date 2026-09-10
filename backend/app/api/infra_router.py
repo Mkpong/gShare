@@ -56,6 +56,7 @@ from app.db.models import (
 )
 from app.domain.audit_service import AuditService
 from app.domain.node_pools import assert_may_grant
+from app.domain.storage_pools import pool_bound_gb, pool_capacity_gb, usable_pools
 
 
 class _Conflict(DomainError):
@@ -1342,51 +1343,45 @@ async def metrics_cluster(
         "mem_gb": {"used": int(comp[1]), "total": sum(n.mem or 0 for n in placeable)},
         "disk_gb": {"used": int(comp[2]), "total": sum(n.disk or 0 for n in placeable)},
     }
-    # The storage server, separately: its disk backs volumes (ZFS pool), so "used" is the
-    # provisioned volume quota — the same allocation basis the volume-creation gate checks.
-    # The pool is shared across clusters by design (volumes carry no cluster of their own, and each
-    # cluster mounts the same backend through its own CSI), so under a cluster filter it is still
-    # read fleet-wide and flagged as shared rather than reported missing.
-    if cluster_id:
-        storage_nodes = list(
-            (await db.execute(select(GpuNode).where(GpuNode.role == "storage"))).scalars().all()
-        )
-    else:
-        storage_nodes = [n for n in nodes if n.role == "storage"]
+    # The registered volume-backing pools, separately from host compute. "used" is the provisioned
+    # volume quota — the same allocation basis the volume-creation gate checks — and the capacity
+    # is what the CSI driver reported, never a sum across pools: a volume lives on exactly one.
+    pools = await usable_pools(db, cluster_id)
     vol_alloc = int(await db.scalar(
         select(func.coalesce(func.sum(StorageVolume.quota_gb), 0)).where(StorageVolume.deleted_at.is_(None))
     ) or 0)
-    # Which machines actually hold the pool, and where they sit. "노드 1대" answered how many
-    # without answering which — and on a shared pool the cluster a server belongs to is the part
-    # an administrator needs before touching it.
-    storage_cluster_names = dict(
+    pool_cluster_names = dict(
         (await db.execute(select(Cluster.id, Cluster.name))).all()
-    ) if storage_nodes else {}
+    ) if pools else {}
+    bound_gb, bound_source = await pool_bound_gb(db, cluster_id)
     storage = {
-        # The pool that actually backs volumes is not something the operator can see (it reports
-        # the node's root disk); an administrator states it once in the chart, otherwise the panel
-        # falls back to the storage nodes' disk and says so. Several servers are not one pool — a
-        # volume lands on whichever one its StorageClass points at — so the largest is the bound,
-        # never the sum. Same rule as the volume-creation gate, which reads the same setting.
         "disk_gb": {
             "used": vol_alloc,
-            "total": settings.STORAGE_POOL_CAPACITY_GB or max((n.disk or 0 for n in storage_nodes), default=0),
-            "source": "pool" if settings.STORAGE_POOL_CAPACITY_GB else "node_disk",
+            "total": bound_gb or 0,
+            # csi: measured by the driver. manual: an administrator's figure. node_disk: the
+            # storage node's system drive, which is not the pool — said out loud so a stand-in
+            # never reads as a measurement.
+            "source": bound_source or "unknown",
         },
-        "node_count": len(storage_nodes),
-        "shared": bool(cluster_id),
-        "nodes": [
+        "node_count": len(pools),
+        # A pool serving more than the cluster in view: the figure is not this cluster's own.
+        "shared": any(p.cluster_id != cluster_id for p in pools) if cluster_id else False,
+        "pools": [
             {
-                "id": n.id,
-                "hostname": n.hostname,
-                "cluster_id": n.cluster_id,
-                "cluster_name": storage_cluster_names.get(n.cluster_id) if n.cluster_id else None,
-                "status": n.status,
-                "disk_gb": n.disk,
+                "id": p.id,
+                "name": p.name,
+                "hostname": p.node_hostname,
+                "cluster_id": p.cluster_id,
+                "cluster_name": pool_cluster_names.get(p.cluster_id),
+                "storage_class": p.storage_class,
+                "share_scope": p.share_scope,
+                "capacity_gb": pool_capacity_gb(p)[0],
+                "capacity_source": pool_capacity_gb(p)[1],
+                "capacity_reported_at": p.capacity_reported_at,
             }
-            for n in sorted(storage_nodes, key=lambda n: n.hostname or "")
+            for p in pools
         ],
-    } if storage_nodes else None
+    } if (pools or bound_gb) else None
 
     # ALLOCATION based, deliberately: this dashboard answers "how much of the fleet is handed out",
     # the same basis as vram_load_pct beside it. Measured utilisation (DCGM) is a different question

@@ -16,7 +16,6 @@ from app.api.deps import Pagination, get_current_principal
 from app.api.schemas.volume import PermissionBody, VolumeCreate, VolumePatch, VolumeRead
 from app.auth.rbac import Principal, rbac_allows
 from app.core import ids
-from app.core.config import settings
 from app.core.errors import (
     AlreadyExists,
     DomainError,
@@ -29,7 +28,6 @@ from app.core.errors import (
 )
 from app.db.base import get_db
 from app.db.models import (
-    GpuNode,
     Project,
     Session,
     StorageFolder,
@@ -40,6 +38,7 @@ from app.db.models import (
     VolumeSnapshot,
 )
 from app.domain.audit_service import AuditService
+from app.domain.storage_pools import pool_bound_gb
 
 router = APIRouter(prefix="/storage/volumes", tags=["volumes"])
 
@@ -137,16 +136,14 @@ async def _physical_storage(db: AsyncSession) -> tuple[int | None, int]:
 
     A volume lives on ONE pool: the StorageClass its PVC names decides where, and gShare picks
     nothing. So several storage servers are not one big pool, and adding their disks up licensed
-    volumes no single server could hold. Without an explicit `STORAGE_POOL_CAPACITY_GB` the
-    largest single server is the honest bound; with it, the administrator's figure wins — the same
-    source the dashboard reads, so the gate and the panel cannot disagree.
+    volumes no single server could hold — the bound is the largest pool a placement could use.
+    The figure comes from `app.domain.storage_pools`, the same resolution the dashboard reads, so
+    the gate and the panel cannot disagree: the CSI driver's measurement first, the administrator's
+    configured capacity next, the storage node's root disk last.
+
+    Volumes carry no cluster of their own, so the bound here is fleet-wide.
     """
-    if settings.STORAGE_POOL_CAPACITY_GB:
-        cap: int | None = settings.STORAGE_POOL_CAPACITY_GB
-    else:
-        cap = await db.scalar(
-            select(func.coalesce(func.max(GpuNode.disk), 0)).where(GpuNode.role == "storage")
-        )
+    cap, _source = await pool_bound_gb(db)
     if not cap:
         return None, 0
     allocated = int(await db.scalar(

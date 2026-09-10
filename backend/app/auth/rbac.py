@@ -96,6 +96,9 @@ _ACTION_MATRIX: dict[str, tuple] = {
     "cluster.create": ("super_admin",),
     "cluster.update": ("super_admin",),
     "cluster.delete": ("super_admin",),
+    # Storage pools — registering where volumes live is fleet configuration, like clusters.
+    "storage_pool.read": ("super_admin",),
+    "storage_pool.write": ("super_admin",),
     "node.read": ("super_admin",),
     "node.create": ("super_admin",),
     "node.cordon": ("super_admin",),

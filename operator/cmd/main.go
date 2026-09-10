@@ -338,11 +338,13 @@ func main() {
 			os.Exit(1)
 		}
 		if err := mgr.Add(&volumes.Syncer{
-			Client:    mgr.GetClient(),
-			SoT:       sotClient,
-			Namespace: sessionNamespace,
-			Interval:  volumeSyncInterval,
-			Stats:     volumes.KubeletStats(clientset),
+			Client:       mgr.GetClient(),
+			SoT:          sotClient,
+			Namespace:    sessionNamespace,
+			Interval:     volumeSyncInterval,
+			Stats:        volumes.KubeletStats(clientset),
+			StorageClass: volumeStorageClass,
+			Reader:       mgr.GetAPIReader(),
 		}); err != nil {
 			setupLog.Error(err, "unable to add volume syncer")
 			os.Exit(1)

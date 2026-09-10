@@ -16,6 +16,7 @@ import (
 	"time"
 
 	corev1 "k8s.io/api/core/v1"
+	storagev1 "k8s.io/api/storage/v1"
 	"k8s.io/apimachinery/pkg/api/resource"
 	"k8s.io/client-go/kubernetes"
 	"sigs.k8s.io/controller-runtime/pkg/client"
@@ -52,6 +53,15 @@ type Syncer struct {
 	Interval  time.Duration
 	// Stats may be nil, in which case usage is not reported (quota growth and reclaim still work).
 	Stats StatsFetcher
+	// StorageClass this cluster provisions session volumes from (--volume-storage-class). Empty
+	// means the cluster default, and then no pool capacity is reported: without a name there is
+	// nothing to match the CSIStorageCapacity objects against.
+	StorageClass string
+	// Direct (uncached) reader for the capacity objects. The manager's client reads through its
+	// cache, which would spin up and keep an informer in sync for objects this loop looks at once
+	// every few minutes — and a cache that cannot start blocks the whole tick. Nil disables the
+	// capacity report.
+	Reader client.Reader
 }
 
 func (s *Syncer) NeedLeaderElection() bool { return true }
@@ -129,7 +139,12 @@ func (s *Syncer) Tick(ctx context.Context) error {
 			nodes[p.Spec.NodeName] = struct{}{}
 		}
 	}
-	if len(pvcs.Items) == 0 && (s.Stats == nil || len(diskPods) == 0) {
+	// The pool's capacity is worth reporting on its own: a cluster with no session volumes right
+	// now is exactly when an administrator is looking at how much room there is. Measured before
+	// the early return below, which used to skip the whole tick — and with it the capacity — the
+	// moment there was nothing else to say.
+	pools := s.poolCapacity(ctx)
+	if len(pvcs.Items) == 0 && (s.Stats == nil || len(diskPods) == 0) && len(pools) == 0 {
 		return nil
 	}
 
@@ -185,12 +200,12 @@ func (s *Syncer) Tick(ctx context.Context) error {
 	}
 	sort.Slice(sessions, func(i, j int) bool { return sessions[i].Name < sessions[j].Name })
 
-	res, err := s.SoT.SyncVolumes(ctx, observed, sessions)
+	res, err := s.SoT.SyncVolumes(ctx, observed, sessions, pools)
 	if err != nil {
 		return fmt.Errorf("report volumes: %w", err)
 	}
 	logger.Info("volume sync", "claims", len(observed), "mounted", len(mounted), "nodesQueried", len(nodes),
-		"withUsage", len(usage), "sessions", len(sessions), "directives", len(res.Volumes))
+		"withUsage", len(usage), "sessions", len(sessions), "pools", len(pools), "directives", len(res.Volumes))
 	if res.Orphans > 0 {
 		logger.Info("PVCs without a ledger row; left untouched", "count", res.Orphans)
 	}
@@ -299,4 +314,45 @@ func usageFromSummary(raw []byte, ns string) map[string]int64 {
 		}
 	}
 	return out
+}
+
+// poolCapacity reads what the CSI driver says the backing pool holds. Read straight from the API
+// server: these objects are few, change rarely, and are looked at once per tick.
+//
+// The control plane can see a node's root disk and nothing else, and that disk is not the pool —
+// on a ZFS box it is the machine's system drive, off by hundreds of gigabytes in either
+// direction. The driver knows the real figure and Kubernetes has a place for it: the
+// external-provisioner calls GetCapacity and publishes CSIStorageCapacity per StorageClass and
+// topology segment. Those objects are read here and forwarded on the sync tick.
+//
+// One number per StorageClass: the segments of a shared pool all report the same backing store,
+// so the largest is taken rather than a sum, which would multiply one pool by the number of
+// nodes that can reach it. A driver that publishes nothing simply yields nothing — the control
+// plane then falls back to the administrator's figure and says which it used.
+func (s *Syncer) poolCapacity(ctx context.Context) []sot.PoolCapacity {
+	if s.StorageClass == "" || s.Reader == nil {
+		return nil
+	}
+	var list storagev1.CSIStorageCapacityList
+	if err := s.Reader.List(ctx, &list); err != nil {
+		// Not fatal, and not worth a stack trace every tick: an older cluster or a driver
+		// without capacity tracking simply has no such objects, and RBAC may not grant them.
+		log.FromContext(ctx).V(1).Info("CSIStorageCapacity unavailable; pool capacity not reported",
+			"err", err.Error())
+		return nil
+	}
+	var best int64
+	for i := range list.Items {
+		c := &list.Items[i]
+		if c.StorageClassName != s.StorageClass || c.Capacity == nil {
+			continue
+		}
+		if v := c.Capacity.Value(); v > best {
+			best = v
+		}
+	}
+	if best <= 0 {
+		return nil
+	}
+	return []sot.PoolCapacity{{StorageClass: s.StorageClass, CapacityBytes: best}}
 }

@@ -524,7 +524,15 @@
       "storageNone": "연결된 스토리지 서버가 없습니다.",
       "allClusters": "전체 클러스터",
       "deviceUnavailable": "배치 불가",
-      "devicePage": "{{page}}쪽"
+      "devicePage": "{{page}}쪽",
+      "storageShareAll": "공용",
+      "storageCapacityUnknown": "미측정",
+      "storageSource": {
+        "csi": "CSI 드라이버가 측정한 값",
+        "manual": "관리자가 지정한 값",
+        "node_disk": "스토리지 노드의 시스템 디스크 (풀 용량 아님)",
+        "unknown": "측정값 없음"
+      }
     },
     "groups": {
       "add": "부서",
