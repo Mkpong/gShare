@@ -9,7 +9,7 @@ therefore lives on the NODE (label gshare.io/criu=ready), not in the agent image
 privileged namespace (default gshare-infra) — session pods stay PSA restricted.
 
 Restore is unsupported: it requires kubelet/CRI checkpoint-restore (the restore must land in a
-kubelet-created sandbox netns); see docs/paper/lossless-pause.md. The type satisfies
+kubelet-created sandbox netns); see build/images/lossless-agent/agent.sh. The type satisfies
 controller.Checkpointer structurally (no import cycle).
 */
 package checkpoint
@@ -84,7 +84,7 @@ func (c *JobCheckpointer) Checkpoint(ctx context.Context, s *gsharev1.GShareSess
 
 // Yield performs in-place GPU yield: the agent evicts VRAM (cuda-checkpoint) on the Pod's node while
 // the Pod/process stay ALIVE, freeing the physical card. The caller does NOT delete the Pod. Resume
-// toggles VRAM back into the same process (lossless). (docs/paper/manuscript, §Design)
+// toggles VRAM back into the same process (lossless).
 func (c *JobCheckpointer) Yield(ctx context.Context, s *gsharev1.GShareSession, pod *corev1.Pod) error {
 	if s.Status.BoundGpuUuid == "" {
 		return fmt.Errorf("no bound GPU uuid on status; yield needs an exclusive bound GPU")
@@ -136,7 +136,7 @@ func containerID(pod *corev1.Pod, name string) string {
 
 // Restore is intentionally unimplemented: criu restore must run inside a kubelet-owned sandbox netns,
 // so operator/CLI-level restore is structurally impossible — only kubelet/CRI checkpoint-restore can
-// realize it (docs/paper/lossless-pause.md). Until then resume is cold; progress is preserved by
+// realize it. Until then resume is cold; progress is preserved by
 // app-level checkpointing.
 
 func (c *JobCheckpointer) runJob(ctx context.Context, sessionName, nodeName, kind string, args []string) error {

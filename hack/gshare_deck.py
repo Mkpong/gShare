@@ -9,7 +9,7 @@ from pptx.dml.color import RGBColor
 from pptx.enum.text import PP_ALIGN, MSO_ANCHOR
 from pptx.enum.shapes import MSO_SHAPE
 
-SHOT = "/home/jn/gShare/docs/screenshots"  # 콘솔 데모 스크린샷
+SHOT = os.environ.get("SHOT_DIR", "test/e2e/ux/out")  # 콘솔 캡처 (test/e2e/ux/screenshots.js 출력)
 
 # Palette, matching the landing page in docs/gshare.html.
 BG    = RGBColor(0x0B,0x10,0x20)

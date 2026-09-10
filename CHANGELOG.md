@@ -28,7 +28,7 @@ images and the Helm chart are versioned together with the repository tag.
   `POST /sessions/bulk-terminate`.
 - Undo for reversible actions: toasts carry an action (`pushToast(kind, message, { label, run })`),
   used for restoring volume access and administrator roles.
-- `test/e2e/ux/screenshots.js`, which regenerates `docs/screenshots` from a seeded stack.
+- `test/e2e/ux/screenshots.js`, which captures every console screen from a seeded stack.
 
 ### Changed
 

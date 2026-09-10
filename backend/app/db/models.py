@@ -487,7 +487,7 @@ class GpuDevice(Base, TimestampMixin):
     # In-place GPU yield lending state: "" (normal), "yielded" (the owner yielded, so the physical
     # card is free and lendable), or "lent" (a preemptible spot session is using it). used_* always
     # reflects resident occupancy; borrows are not counted.
-    # (docs/paper/manuscript, §Design)
+    #
     lend_state: Mapped[str] = mapped_column(String, default="", server_default=text("''"))
     __table_args__ = (
         # Final overcommit defense.
@@ -551,7 +551,7 @@ class Session(Base, TimestampMixin, SoftDeleteMixin):
     # In-place GPU yield: "cold" (the default, deletes the pod) or "yield" (keeps the pod and evicts
     # VRAM, so the resume is lossless). Under yield, stop keeps the allocation because the live pod
     # still holds the card, and start skips readmission — the operator just toggles VRAM back.
-    # (See docs/paper/manuscript, §Design.)
+    #
     pause_mode: Mapped[str] = mapped_column(String, default="cold", server_default=text("'cold'"))
     # Privileged session: the container runs as root with a relaxed security context (policy-gated
     # at admission via limits.allow_privileged). Passed through as spec.privileged.
@@ -562,7 +562,7 @@ class Session(Base, TimestampMixin, SoftDeleteMixin):
     # Scheduling priority; higher wins. Active preemption: when no capacity is free, a request can
     # make a lower-priority yieldable session yield and borrow its card. Reclaim respects priority
     # too, so a lower-priority victim cannot preempt a higher-priority spot session back.
-    # (See docs/paper/manuscript, §Design.)
+    #
     priority: Mapped[int] = mapped_column(Integer, default=0, server_default=text("0"))
     # status: pending|preparing|running|paused|terminating|terminated|error
     status: Mapped[str] = mapped_column(String, default="pending", index=True)
@@ -597,7 +597,7 @@ class Allocation(Base, TimestampMixin):
     status: Mapped[str] = mapped_column(String, default="reserved")      # reserved|bound|released
     # "resident" is a normal allocation and counts towards device.used_*. "spot" is a preemptible
     # session borrowing a yielded card: the physical card is free, so it is excluded from used_*,
-    # from drift reconciliation, and from capacity sums. (See docs/paper/manuscript, §Design.)
+    # from drift reconciliation, and from capacity sums.
     kind: Mapped[str] = mapped_column(String, default="resident", server_default=text("'resident'"))
     started_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), default=None)
     ended_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), default=None)

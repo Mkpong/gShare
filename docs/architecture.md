@@ -107,8 +107,7 @@ CPU-only sessions are free and skip the budget, hold, VRAM, queue, and GPU steps
 
 On top of a partitioning mechanism (HAMi), GShare combines occupancy-aware placement and
 billing, automatic reclamation of idle GPUs through pause, in-place GPU yield with
-preemptive lending (lossless hand-off and resume), and hierarchical limit management. The
-[design notes](paper/) cover the reasoning and the measurements.
+preemptive lending (lossless hand-off and resume), and hierarchical limit management.
 
 ## Namespaces
 

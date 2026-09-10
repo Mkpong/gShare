@@ -70,7 +70,7 @@ class SessionCreate(BaseModel):
     billing_wallet_id: str | None = None              # NULL allowed for cpu (free)
     # Spot (preemptible) session: with no normal capacity free, it is admitted by borrowing a card a
     # resident yielded, and is reclaimed when that resident returns. Exclusive only.
-    # (See docs/paper/manuscript, §Design.)
+    #
     preemptible: bool = False
     # Privileged session: root inside the container (apt, system packages). Admitted only when the
     # effective resource policy grants allow_privileged; otherwise 403 privileged_not_allowed.

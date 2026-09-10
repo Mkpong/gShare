@@ -153,7 +153,7 @@ class StatusSync:
                         # lendable (lend_state=yielded). The idle-yield reservation marker is armed
                         # so host RAM cannot be held indefinitely: past the TTL, grace_enforcer
                         # demotes to durable. This has nothing to do with credits and never resumes
-                        # automatically. (docs/paper/manuscript, §Design)
+                        # automatically.
                         dev = await self._resolve_device(sess, ev)
                         if dev is not None:
                             dev.lend_state = "yielded"

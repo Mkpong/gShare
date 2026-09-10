@@ -64,7 +64,7 @@ type SessionReconciler struct {
 	VolumeStorageClass string
 }
 
-// Checkpointer drives a privileged node agent (gshare-infra). See docs/paper/lossless-pause.md.
+// Checkpointer drives a privileged node agent (gshare-infra); see build/images/lossless-agent/.
 type Checkpointer interface {
 	// Checkpoint dumps GPU/process state; returns a storage ref recorded on status.checkpointRef.
 	Checkpoint(ctx context.Context, s *gsharev1.GShareSession, pod *corev1.Pod) (ref string, err error)
@@ -134,7 +134,7 @@ func (r *SessionReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ct
 			// "yield" (backend cold-demoted on reservation-TTL expiry) releases the host-RAM hold and
 			// goes cold; subsequent resume is cold. Done atomically here (single reconcile) — the
 			// backend only sets the desired spec, so there is no resume/pause CR-patch race.
-			// (docs/paper/manuscript, §Design)
+			//
 			if s.Status.YieldState == "Yielded" && s.Spec.PauseMode != "yield" {
 				var live corev1.Pod
 				podErr := r.Get(ctx, podKey(&s), &live)
@@ -176,7 +176,7 @@ func (r *SessionReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ct
 
 		// YIELD mode: keep the Pod alive, evict VRAM in place (physical card freed, lossless resume).
 		// No checkpoint/delete; device-plugin allocation stays with the live Pod. Falls back to cold
-		// pause if yield fails. (docs/paper/manuscript, §Design)
+		// pause if yield fails.
 		if err == nil && s.Spec.PauseMode == "yield" && r.Checkpointer != nil {
 			if yerr := r.Checkpointer.Yield(ctx, &s, &live); yerr != nil {
 				logger.Error(yerr, "in-place yield failed; falling back to cold pause", "session", s.Name)
@@ -237,7 +237,7 @@ func (r *SessionReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ct
 
 	// Resume from in-place yield: the Pod stayed alive; toggle VRAM back into the live process
 	// (lossless, no Pod recreate). Idempotent — the agent no-ops if no yield state remains.
-	// (docs/paper/manuscript, §Design)
+	//
 	if s.Status.YieldState == "Yielded" && r.Checkpointer != nil {
 		var live corev1.Pod
 		if err := r.Get(ctx, podKey(&s), &live); err != nil {
@@ -387,7 +387,7 @@ func (r *SessionReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ct
 	if phase != s.Status.Phase {
 		s.Status.Phase = phase
 		s.Status.BoundGpuUuid = gpu
-		// Resume recreates the Pod cold (restore is unsupported; see lossless-pause.md), so the prior
+		// Resume recreates the Pod cold (restore is unsupported), so the prior
 		// checkpoint is stale. GC its node-local artifacts before clearing the ref. Best-effort.
 		if s.Status.CheckpointRef != "" && r.Checkpointer != nil {
 			if cerr := r.Checkpointer.Cleanup(ctx, s.Name, s.Status.CheckpointNode); cerr != nil {
@@ -464,7 +464,7 @@ func containerFacts(p *corev1.Pod) (int, string) {
 // borrowGuard verifies the in-place-yield lend invariant before a borrow Pod is placed: the target
 // card must be held by a yielded/lent resident session, and at most one spot session per card. Cluster-side
 // defense-in-depth (the backend ledger enforces it atomically). Returns (false, reason) to
-// deny+requeue. (docs/paper/manuscript, §Design)
+// deny+requeue.
 func (r *SessionReconciler) borrowGuard(ctx context.Context, s *gsharev1.GShareSession) (bool, string) {
 	var list gsharev1.GShareSessionList
 	if err := r.List(ctx, &list, client.InNamespace(s.Namespace)); err != nil {
@@ -495,7 +495,7 @@ func (r *SessionReconciler) borrowGuard(ctx context.Context, s *gsharev1.GShareS
 
 // setNodeYielded adds/removes gpuUUID in the node's gshare.io/yielded-gpus annotation (CSV) — the
 // feed the HAMi scheduler-extender reads to treat the card as preemptible capacity. Best-effort,
-// conflict-safe. (build/hami-fork, docs/paper/manuscript §Implementation)
+// conflict-safe. (build/hami-fork)
 func (r *SessionReconciler) setNodeYielded(ctx context.Context, nodeName, gpuUUID string, yielded bool) error {
 	if nodeName == "" || gpuUUID == "" {
 		return nil

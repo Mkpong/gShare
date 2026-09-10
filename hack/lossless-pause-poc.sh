@@ -4,7 +4,6 @@
 #
 # It verifies, directly on a node, that cuda-checkpoint and CRIU together can return a GPU while
 # preserving its VRAM and then restore the process exactly as it was.
-# Design: see docs/paper/manuscript, §Implementation.
 #
 # What this relies on, with driver R550 or later:
 #   - cuda-checkpoint toggles directly on the host PID, with no nsenter, moving VRAM out to host RAM

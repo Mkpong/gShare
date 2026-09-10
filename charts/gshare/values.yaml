@@ -174,7 +174,6 @@ operator:
   # checkpointer is disabled: pause falls back to cold, and neither in-place yield nor graceful
   # demotion is available. It requires the criu and cuda-checkpoint node labels, the gshare-infra
   # namespace, and the gshare-lossless-agent service account.
-  # (See docs/paper/manuscript, §Implementation.)
   losslessAgentImage: ""
   # Full image reference for the MIG-mode node agent (build/images/mig-agent). Empty disables
   # card-level hami-core<->mig transitions; the pool screens still show desired modes as Pending.

@@ -73,13 +73,13 @@ type GShareSessionSpec struct {
 
 	// PauseMode: how a pause releases the GPU. "cold" (default) deletes the Pod; "yield" keeps the
 	// Pod alive and evicts VRAM via cuda-checkpoint (in-place GPU yield) so resume is lossless and
-	// the physical card can be lent to a preemptible spot session. (docs/paper/manuscript, §Design)
+	// the physical card can be lent to a preemptible spot session.
 	// +kubebuilder:validation:Enum=cold;yield
 	// +optional
 	PauseMode string `json:"pauseMode,omitempty"`
 
 	// Preemptible: this session may be admitted onto a yielded (lent) card and reclaimed (SIGTERM
-	// + grace) when the resident returns. Spot sessions run at spot semantics. (GPU yield and lending; see docs/paper/)
+	// + grace) when the resident returns. Spot sessions run at spot semantics. (GPU yield and lending)
 	// +optional
 	Preemptible bool `json:"preemptible,omitempty"`
 
@@ -91,7 +91,7 @@ type GShareSessionSpec struct {
 
 	// BorrowedGpuUuid: when set, this is a spot session placed on a resident's yielded card. The Pod
 	// is built device-plugin-BYPASS — the card is injected by UUID (NVIDIA_VISIBLE_DEVICES), with NO
-	// nvidia.com/gpu request, pinned to BorrowedNode. (docs/paper/manuscript, §Design)
+	// nvidia.com/gpu request, pinned to BorrowedNode.
 	// +optional
 	BorrowedGpuUuid string `json:"borrowedGpuUuid,omitempty"`
 
@@ -102,7 +102,7 @@ type GShareSessionSpec struct {
 	// GracefulDemote: on a yield→cold demotion (reservation-TTL expiry), toggle VRAM back into the
 	// live process and delete the Pod with its grace period so the job saves a FRESH checkpoint on
 	// SIGTERM, instead of cold-deleting the suspended process. Set by the control plane only when the
-	// card is NOT lent (physically free, so restore is safe). (docs/paper/manuscript, §Design)
+	// card is NOT lent (physically free, so restore is safe).
 	// +optional
 	GracefulDemote bool `json:"gracefulDemote,omitempty"`
 
@@ -231,7 +231,7 @@ type GShareSessionStatus struct {
 
 	// YieldState: "" (not yielded) | "Yielded" (VRAM evicted, Pod alive, card lendable) |
 	// "Lent" (a spot session is using the card). Distinguishes in-place yield from cold pause and
-	// tells resume to toggle VRAM back rather than recreate the Pod. (GPU yield and lending; see docs/paper/)
+	// tells resume to toggle VRAM back rather than recreate the Pod. (GPU yield and lending)
 	// +optional
 	YieldState string `json:"yieldState,omitempty"`
 

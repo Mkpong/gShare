@@ -290,8 +290,7 @@ class SessionService:
         If the card is not lent — physically free — the demotion is graceful: the operator toggles
         VRAM back so the job can write a fresh checkpoint on SIGTERM, and only then deletes the pod,
         which preserves the latest progress rather than the last periodic checkpoint. When the card
-        is lent, a spot session is on it, so the demotion is a plain cold one with no restore. (See
-        docs/paper/manuscript, §Design.) """
+        is lent, a spot session is on it, so the demotion is a plain cold one with no restore. """
         graceful = False  # set when the card is not lent, so a restore and fresh checkpoint are possible
         await self.db.rollback()
         async with self.db.begin():
@@ -468,7 +467,7 @@ class SessionService:
 A spot allocation (kind='spot') never added to device.used_*, so nothing is subtracted; the card
         simply returns to the lendable pool (lend_state 'lent' -> 'yielded', since the resident is
         still yielding). Releasing a resident allocation does subtract from used_*.
-        (See docs/paper/manuscript, §Design.)
+       
         """
         alloc = (
             await self.db.scalars(
@@ -521,7 +520,7 @@ A spot allocation (kind='spot') never added to device.used_*, so nothing is subt
         resident's resume. Returns True when the card was reclaimed or was already free.
 
         A rollback expires the ORM objects, so the scalars we need are captured beforehand.
-        (See docs/paper/manuscript, §Design.)
+       
         """
         await self.db.rollback()
         resident_alloc = (

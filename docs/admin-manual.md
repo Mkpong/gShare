@@ -7,9 +7,7 @@ resource catalogue, offerings, and policy; credit allocation; clusters and nodes
 session monitoring; and the audit log. The end-user screens are covered in
 [`user-manual.md`](./user-manual.md).
 
-> The screenshots are of the fictional company *Nexus AI Lab* (see
-> [`screenshots/README.md`](screenshots/README.md)), captured in English. The console also ships
-> in Korean — switch from the top bar.
+> The console ships in English and Korean — switch from the top bar.
 
 ## Switching consoles, and what each role sees
 
@@ -31,10 +29,6 @@ administrator, applies at once and offers **Undo** for a few seconds.
 
 A summary of resources and sessions within your scope.
 
-| Super admin (everything) | Organization admin | Group admin |
-|---|---|---|
-| ![Global dashboard](screenshots/16-superadmin-admin-dashboard.png) | ![Organization dashboard](screenshots/39-orgadmin-dashboard.png) | ![Group dashboard](screenshots/45-groupadmin-dashboard.png) |
-
 ---
 
 An org_admin or group_admin sees the same page scoped to the people they manage: running and
@@ -50,14 +44,8 @@ Watch sessions and the queue in real time: owner, organization, group, resources
 several at once — a bulk termination asks for the count to be typed, since the sessions belong to
 other people.
 
-![Session monitoring, all scopes](screenshots/35-superadmin-admin-monitor.png)
-
 An organization admin sees only their organization's sessions; a group admin sees only
 their group's.
-
-| Organization admin | Group admin |
-|---|---|
-| ![Organization monitoring](screenshots/43-orgadmin-monitor.png) | ![Group monitoring](screenshots/48-groupadmin-monitor.png) |
 
 ---
 
@@ -82,10 +70,6 @@ what it hears — never on what it assumes:
 
 Create organizations and appoint their administrators.
 
-![Organization list](screenshots/17-superadmin-admin-orgs.png)
-![New organization](screenshots/18-superadmin-admin-org-new.png)
-![Organization admins](screenshots/19-superadmin-admin-org-admins.png)
-
 ---
 
 ## 4. Groups
@@ -93,27 +77,11 @@ Create organizations and appoint their administrators.
 Create groups under an organization and appoint their administrators. An organization admin
 sees only their own organization's groups.
 
-![Group list](screenshots/23-superadmin-admin-groups.png)
-![New group](screenshots/24-superadmin-admin-group-new.png)
-![Group admins](screenshots/25-superadmin-admin-group-admins.png)
-
-| Organization admin scope | Group admin scope |
-|---|---|
-| ![Groups in the organization](screenshots/41-orgadmin-groups.png) | ![My group](screenshots/47-groupadmin-groups.png) |
-
 ---
 
 ## 5. Users
 
 Add and edit users. Only users within your scope are listed.
-
-![User list](screenshots/20-superadmin-admin-users.png)
-![New user](screenshots/21-superadmin-admin-user-new.png)
-![Edit user](screenshots/22-superadmin-admin-user-edit.png)
-
-| Organization admin scope | Group admin scope |
-|---|---|
-| ![Organization users](screenshots/40-orgadmin-users.png) | ![Group members](screenshots/46-groupadmin-users.png) |
 
 ---
 
@@ -127,17 +95,11 @@ most-specific first: **user → group → organization → global**.
 Credits apply to GPU sessions only. CPU-class sessions and storage volumes are free; cap
 them with the concurrency and resource ceilings in the policy instead.
 
-![Resources, offerings, presets](screenshots/26-superadmin-admin-resources.png)
-
 > **`gpu_model` must equal the device's reported model string exactly** (e.g.
 > `NVIDIA RTX PRO 6000 Blackwell Max-Q Workstation Edition`, not `RTX PRO 6000`): the scheduler
 > matches offerings to cards by string equality. The "in cluster" tag on the catalogue row shows
 > whether any card in the fleet currently reports that exact string — copy the model from the GPU
 > devices screen when creating an offering.
-![New offering](screenshots/27-superadmin-admin-offering-new.png)
-![Edit offering](screenshots/28-superadmin-admin-offering-edit.png)
-![New resource policy](screenshots/29-superadmin-admin-policy-new.png)
-
 ---
 
 **GPU model names.** Admission matches an offering's `gpu_model` to the card's reported model
@@ -163,20 +125,12 @@ organization to its groups; a group admin from the group to individuals.
 Wallets are charged for **GPU session time only**. A balance never falls while no GPU
 session is running: CPU sessions and volumes cost nothing and are bounded by policy quotas.
 
-![Credit allocation, global](screenshots/34-superadmin-admin-allocations.png)
-![Credit allocation, organization admin](screenshots/42-orgadmin-allocations.png)
-
 ---
 
 ## 8. Clusters and nodes (super admin)
 
 Register clusters with a kubeconfig, and manage connection state, nodes, and GPU devices
 including their occupancy and mode.
-
-![Clusters](screenshots/30-superadmin-admin-clusters.png)
-![Register a cluster](screenshots/31-superadmin-admin-cluster-new.png)
-![Nodes](screenshots/32-superadmin-admin-nodes.png)
-![GPU devices on a node](screenshots/33-superadmin-admin-node-devices.png)
 
 Node status is driven by the operator's inventory heartbeat: a node that stops reporting for
 `NODE_STALE_SEC` (5 minutes) is marked **offline** automatically, and returns to **ready** when
@@ -228,9 +182,6 @@ reset` — is in [cluster-setup.md](cluster-setup.md#growing-or-shrinking-a-runn
 
 Manage base images — CUDA version, public or private — and import new ones.
 
-![Images and templates](screenshots/37-superadmin-admin-images.png)
-![Import an image](screenshots/38-superadmin-admin-image-import.png)
-
 ---
 
 ## 10. Audit log
@@ -238,9 +189,6 @@ Manage base images — CUDA version, public or private — and import new ones.
 Trace permission, billing, and resource changes within your scope. Filter by actor, action, target
 and period; the filter is in the address bar, so a query can be pasted into a ticket and reproduce
 the same rows. Open an entry for the full before-and-after and the identifiers to quote.
-
-![Audit log, global](screenshots/36-superadmin-admin-audit.png)
-![Audit log, organization](screenshots/44-orgadmin-audit.png)
 
 ---
 

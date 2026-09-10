@@ -77,7 +77,7 @@ class Settings(BaseSettings):
     BILLING_INTERVAL_SEC: int = 60
     IDLE_TIMEOUT_SEC: int = 1800            # stamped on the CR; operator reaper idle window
     # Grace window in seconds after credits run out. Still unpaid when it elapses, the session is
-    # gracefully paused or yielded. (See docs/paper/manuscript, §Design.)
+    # gracefully paused or yielded.
     GRACE_PERIOD_SEC: int = 600
     # ── Per-card GPU pools ──
     # When on (with the operator's --per-card-mode), pool membership is a per-CARD ledger fact:
@@ -144,7 +144,7 @@ class Settings(BaseSettings):
     VOLUME_RECLAIM_GRACE_HOURS: float = 24
     # Rate multiplier for spot sessions. A preemptible session borrows a card a resident yielded and
     # is reclaimed when the resident returns, so it pays only this fraction of the normal rate
-    # (0.3 = 30%). (See docs/paper/manuscript, §Design.)
+    # (0.3 = 30%).
     SPOT_DISCOUNT: float = 0.3
     # TTL on a yield resume reservation. A session held losslessly in host RAM by an in-place yield
     # gets a lossless reclaim if it is topped up within this window; past it, the session is demoted
@@ -153,8 +153,7 @@ class Settings(BaseSettings):
     YIELD_RESERVATION_TTL_SEC: int = 1800
     # Per-node host-RAM budget for yields, as a fraction of node RAM. Evicted VRAM lives in host
     # RAM, so once yields exceed this share the oldest and lowest-priority ones are gracefully
-    # demoted to free memory. 0 disables the pressure-driven demotion. (See docs/paper/manuscript,
-    # §Design — the host-RAM bound.)
+    # demoted to free memory. 0 disables the pressure-driven demotion — the host-RAM bound.
     YIELD_HOST_RAM_FRACTION: float = 0.5
     # Allow fractional borrowing. When true, fractional preemptible sessions share a yielded card,
     # which requires the HAMi extender path (operator.hamiYieldExtender). When false — the default,

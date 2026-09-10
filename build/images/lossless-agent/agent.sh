@@ -72,9 +72,9 @@ do_checkpoint() {
 }
 
 # restore: intentionally unsupported — it must run in a kubelet-created sandbox netns, which only
-# kubelet/CRI checkpoint-restore can provide (docs/paper/lossless-pause.md). resume is cold.
+# kubelet/CRI checkpoint-restore can provide. resume is cold.
 do_restore() {
-  die "restore is unsupported; needs kubelet/CRI checkpoint-restore (docs/paper/lossless-pause.md). resume is cold; progress is preserved by app-level checkpointing."
+  die "restore is unsupported; needs kubelet/CRI checkpoint-restore. resume is cold; progress is preserved by app-level checkpointing."
 }
 
 # yield: in-place GPU yield — evict VRAM only (process kept alive) to free the physical card; records

@@ -6,7 +6,7 @@ allocations down the hierarchy: system to organization to group to individual. O
 are already seeded at bootstrap and are not touched here; the GPU catalogue lives in
 hack/seed_resources.py.
 
-The scenario matches docs/screenshots/README.md. Organizations, groups, and users are idempotent —
+The scenario is the fictional company *Nexus AI Lab*. Organizations, groups, and users are idempotent —
 an existing one is looked up and reused. Step 5, the credit allocation, assumes a **fresh database
 and a single run**; running it again allocates again, so a clean demo means redeploying first.
 

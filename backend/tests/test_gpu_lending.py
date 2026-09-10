@@ -5,7 +5,6 @@ Asserts the borrow ledger primitives against the in-memory SQLite ``db`` fixture
 - the drift reconcile excludes borrow allocations,
 - releasing a borrow returns the card to the lendable pool,
 - borrow placement is refused on a non-yielded (active) card.
-(docs/paper/manuscript, §Design)
 """
 from __future__ import annotations
 

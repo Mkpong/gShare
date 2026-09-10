@@ -1116,7 +1116,7 @@ class SchedulerService:
         HAMi extender does the actual placement, one yielded card can host **several fractional spot
         sessions**: an exclusive spot session takes a full card (only one with no existing borrow),
         while fractional spot sessions pack into the remaining borrow capacity. When the resident
-        returns, every spot session on the card is reclaimed. (See docs/paper/manuscript, §Design.)
+        returns, every spot session on the card is reclaimed.
 
         Runs inside the caller's transaction. True on success, False when no lendable card is free.
         """
@@ -1190,7 +1190,7 @@ class SchedulerService:
         yields its card into the lending pool, and the caller then places the requester on it with
         reserve_spot_slice. Reclaim respects priority too, so a lower-priority victim cannot preempt
         a higher-priority spot session back — see _reclaim_borrower.
-        (See docs/paper/manuscript, §Design.)
+       
 
         True when a victim yielded, False when there was nothing to take. `stop` commits, so call
         this outside a begin() block. """

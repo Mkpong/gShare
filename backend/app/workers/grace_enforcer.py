@@ -155,8 +155,7 @@ async def run() -> None:
     # Idle-yield demotion pass. An operator-driven idle yield (armed by status_sync) has nothing to
     # do with credits — the session is solvent. It is never resumed automatically, since we wait for
     # user activity or an explicit resume; the only action is demoting to durable past the
-    # reservation TTL, so an idle session cannot hold host RAM indefinitely. (See
-    # docs/paper/manuscript, §Design.)
+    # reservation TTL, so an idle session cannot hold host RAM indefinitely.
     async for key in redis.scan_iter(match="yield-idle:*"):
         sid = key.split("yield-idle:", 1)[1]
         armed = await redis.get(key)
@@ -182,7 +181,7 @@ async def run() -> None:
     # Host-RAM pressure demotion. Evicted VRAM lives in host RAM, so once a node's yielded footprint
     # exceeds its budget (node.mem * fraction), the lowest-priority and oldest yields are gracefully
     # demoted to free memory. This is the answer to the host-RAM bound on in-place yield.
-    # (See docs/paper/manuscript, §Design.)
+    #
     frac = settings.YIELD_HOST_RAM_FRACTION
     if frac > 0:
         async with maker() as db:
