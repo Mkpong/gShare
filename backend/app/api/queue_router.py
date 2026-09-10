@@ -139,10 +139,19 @@ async def list_queue(
 
 @router.get("/mine", response_model=QueueMineList)
 async def my_queue(
+    cluster_id: str | None = Query(default=None),
     principal: Principal = Depends(get_current_principal),
     db: AsyncSession = Depends(get_db),
 ):
     ranked = await _ranked(db)
+    # Narrowing to one cluster hides the entries on the others but keeps each position as it is:
+    # the queue is fleet-wide, and renumbering a filtered view would promise a place in a line
+    # that does not exist.
+    if cluster_id:
+        in_cluster = set((await db.scalars(
+            select(Session.id).where(Session.cluster_id == cluster_id)
+        )).all())
+        ranked = [(e, r) for e, r in ranked if e.session_id in in_cluster]
     # Map session -> owner to filter to the caller's entries (preserve global position).
     sess_ids = [e.session_id for e, _ in ranked]
     owners: dict[str, str] = {}

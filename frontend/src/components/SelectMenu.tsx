@@ -22,7 +22,10 @@ export interface SelectMenuOption {
  * "all/none" choice. Keyboard: Enter/Space/ArrowDown open; ArrowUp/Down move; Enter
  * selects; Escape closes. Not a form control — a filter control.
  */
-export function SelectMenu({ value, onChange, options, disabled, ariaLabel, className = '', id, buttonClassName = '' }: {
+export function SelectMenu({
+  value, onChange, options, disabled, ariaLabel, className = '', id, buttonClassName = '',
+  bare = false, leading,
+}: {
   value: string;
   onChange: (v: string) => void;
   options: SelectMenuOption[];
@@ -32,6 +35,11 @@ export function SelectMenu({ value, onChange, options, disabled, ariaLabel, clas
   /** Field integration: the label's htmlFor targets the trigger button. */
   id?: string;
   buttonClassName?: string;
+  /** Drop the form-field styling: for a control that is not a field (a context switch, say),
+   *  where looking like an input is exactly the wrong signal. */
+  bare?: boolean;
+  /** Rendered before the label inside the trigger — an icon that says what is being chosen. */
+  leading?: ReactNode;
 }) {
   const [open, setOpen] = useState(false);
   const [active, setActive] = useState(0);           // keyboard cursor, index into options
@@ -120,12 +128,16 @@ export function SelectMenu({ value, onChange, options, disabled, ariaLabel, clas
         aria-controls={open ? listboxId : undefined}
         onClick={() => setOpen((v) => !v)}
         onKeyDown={onTriggerKey}
-        className={`gs-input w-auto min-w-[10rem] max-w-full inline-flex items-center justify-between gap-2
-                   text-left disabled:opacity-50 disabled:cursor-not-allowed ${buttonClassName}`}
+        className={`${bare ? '' : 'gs-input w-auto min-w-[10rem]'} max-w-full inline-flex items-center
+                   justify-between gap-2 text-left disabled:opacity-50 disabled:cursor-not-allowed
+                   ${buttonClassName}`}
       >
-        <span className="truncate">
-          {selected?.label ?? '-'}
-          {selected?.hint && <span className="text-muted ml-1.5 text-xs">{selected.hint}</span>}
+        <span className="inline-flex items-center gap-2 min-w-0">
+          {leading}
+          <span className="truncate">
+            {selected?.label ?? '-'}
+            {selected?.hint && <span className="text-muted ml-1.5 text-xs">{selected.hint}</span>}
+          </span>
         </span>
         <CaretDown size={12} className={`shrink-0 text-muted transition-transform duration-150 ${open ? 'rotate-180' : ''}`} aria-hidden="true" />
       </button>

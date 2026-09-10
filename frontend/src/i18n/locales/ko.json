@@ -719,7 +719,7 @@
       "sessionsHeading": "세션 ({{count}})",
       "subtitle": "전체 세션 · 대기열 실시간 관제",
       "terminateRequested": "{{session}} 강제 종료 요청됨 (정산 진행)",
-      "terminateSelected": "선택한 {{count}}개 강제 종료",
+      "terminateSelected": "강제 종료 ({{count}})",
       "terminateTitle": "세션 강제 종료",
       "terminateWarning": "소유자 동의 없이 즉시 종료하며, 예약 해제·소모 확정·환불의 정상 정산 경로를 수행합니다.",
       "terminating": "종료 중…",
@@ -741,7 +741,11 @@
       "selectErrored": "오류 {{count}}건 선택",
       "confirmCleanupTitle": "세션 {{count}}건을 정리할까요?",
       "confirmCleanupBody": "이미 중단된 세션들입니다. 남은 예약과 리소스를 회수하고 종료로 기록합니다. 오류 사유는 그대로 보존됩니다.",
-      "bulkCleaned": "{{count}}건을 정리했습니다."
+      "bulkCleaned": "{{count}}건을 정리했습니다.",
+      "cleanupBulk": "일괄 정리 ({{count}})",
+      "cleanupNothing": "정리할 오류 세션이 없습니다",
+      "terminateSelectedHint": "종료할 세션을 표에서 선택하세요",
+      "cleanupPick": "정리할 오류 세션을 표에서 선택하세요"
     },
     "nodes": {
       "availGpus": "가용 GPU",

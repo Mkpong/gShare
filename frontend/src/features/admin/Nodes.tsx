@@ -423,7 +423,14 @@ export function AdminNodes() {
   }, { replace: true });
   const confirm = useConfirm();
 
-  const { data: nodes, isLoading, isError, error, refetch } = useNodes(statusFilter ? { status: statusFilter } : {}, { enabled: isSuper });
+  // Driven by the top bar, not a second dropdown of its own. The cluster narrows the QUERY, so
+  // the counters above the table and the table itself are the same set — filtering the result
+  // instead left the tiles counting the whole fleet.
+  const clusterInfo = useActiveCluster();
+  const { data: nodes, isLoading, isError, error, refetch } = useNodes(
+    { ...(statusFilter ? { status: statusFilter } : {}), ...(clusterInfo.id ? { cluster_id: clusterInfo.id } : {}) },
+    { enabled: isSuper },
+  );
   const poolsData = useNodePools(undefined, { enabled: isSuper }).data;
   const pools = useMemo(() => poolsData ?? [], [poolsData]);
   const cordon = useCordonNode();
@@ -576,11 +583,7 @@ export function AdminNodes() {
   ], [t, cordon.isPending, toggleCordon, pools, isSuper, removeNode.isPending, onDeleteNode]);
 
   const all = nodes ?? [];
-  const clusterInfo = useActiveCluster();
-  // Driven by the top bar, not a second dropdown of its own.
-  const clusterFilter = clusterInfo.id ?? '';
   const matched = all.filter((n) => {
-    if (clusterFilter && n.cluster_id !== clusterFilter) return false;
     const q = table.query.trim().toLowerCase();
     return !q || n.hostname.toLowerCase().includes(q) || (n.cluster_name ?? '').toLowerCase().includes(q) || (n.pool_name ?? '').toLowerCase().includes(q);
   });

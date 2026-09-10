@@ -1,6 +1,7 @@
 import { Link } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
 import { useQueue, useCancelQueueEntry } from '@/api/hooks/useQueue';
+import { useActiveCluster } from '@/api/hooks/useClusters';
 import { Table, Pagination, type Column } from '@/components/Table';
 import { PageHeader } from '@/components/PageHeader';
 import { EmptyState, TableSkeleton } from '@/components/EmptyState';
@@ -17,7 +18,9 @@ type QueueEntryView = components['schemas']['QueueEntryView'];
 // Queue status, polled every 5 seconds: position, estimated wait, and the option to leave.
 export function QueuePage() {
   const { t } = useTranslation();
-  const { data, isLoading, isError, refetch } = useQueue();
+  // The queue follows the top bar like every other list.
+  const cluster = useActiveCluster();
+  const { data, isLoading, isError, refetch } = useQueue(cluster.id ?? undefined);
   const cancel = useCancelQueueEntry();
   const confirm = useConfirm();
   const pushToast = useUiStore((s) => s.pushToast);

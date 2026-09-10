@@ -35,7 +35,13 @@ const MODES: GpuMode[] = ['fractional', 'exclusive', 'mig'];
 export function AdminGpus() {
   const { t } = useTranslation();
   const pushToast = useUiStore((s) => s.pushToast);
-  const devicesData = useGpuDevices().data;
+  const clusterInfo = useActiveCluster();
+  // The cluster comes from the top bar. A second control here meant two answers to one question,
+  // and this screen could disagree with the dashboard about which cluster you were looking at.
+  // It narrows the QUERY, so the model list, the counter and the table are one set — the model
+  // dropdown used to offer cards from clusters the table was not showing.
+  const clusterFilter = clusterInfo.id ?? '';
+  const devicesData = useGpuDevices(undefined, { cluster_id: clusterFilter || undefined }).data;
   const devices = useMemo(() => (devicesData ?? []) as DeviceRow[], [devicesData]);
   const nodesData = useNodes().data;
   const nodes = useMemo(() => nodesData ?? [], [nodesData]);
@@ -45,24 +51,14 @@ export function AdminGpus() {
   const confirm = useConfirm();
   const prompt = usePrompt();
   const [modelFilter, setModelFilter] = useState('');
-  const clusterInfo = useActiveCluster();
-  // The cluster comes from the top bar. A second control here meant two answers to one question,
-  // and this screen could disagree with the dashboard about which cluster you were looking at.
-  const clusterFilter = clusterInfo.id ?? '';
 
   const nodeName = useMemo(() => {
     const m: Record<string, string> = {};
     for (const n of nodes as { id: string; hostname: string }[]) m[n.id] = n.hostname;
     return m;
   }, [nodes]);
-  // Cards carry a node, nodes carry a cluster: the cluster filter goes through that map.
-  const nodeCluster = useMemo(() => {
-    const m: Record<string, string> = {};
-    for (const n of nodes as { id: string; cluster_id?: string | null }[]) if (n.cluster_id) m[n.id] = n.cluster_id;
-    return m;
-  }, [nodes]);
   const models = useMemo(() => [...new Set(devices.map((d) => d.model ?? '-'))], [devices]);
-  const rows = devices.filter((d) => (!modelFilter || (d.model ?? '-') === modelFilter) && (!clusterFilter || nodeCluster[d.node_id ?? ''] === clusterFilter));
+  const rows = devices.filter((d) => !modelFilter || (d.model ?? '-') === modelFilter);
 
   const modeLabel = (m?: string | null) => (m ? t(`enum.gpuMode.${m}`, { defaultValue: m }) : '-');
   const onMode = (d: DeviceRow, mode: GpuMode) => {

@@ -223,7 +223,7 @@ export function Table<T>({
 
 /** Toolbar above a list: labelled search, clear control, and a live match count. */
 export function TableToolbar({
-  query, onQueryChange, placeholder, total, shown, children, onClear,
+  query, onQueryChange, placeholder, total, shown, children, onClear, showCount = true, trailing,
 }: {
   query: string;
   onQueryChange: (v: string) => void;
@@ -232,6 +232,11 @@ export function TableToolbar({
   shown: number;
   children?: ReactNode;
   onClear?: () => void;
+  /** Off where the pager below already states the count: two figures for one list — "104 of 12"
+   *  above and "12 of 1-12" below — read as a contradiction rather than as two facts. */
+  showCount?: boolean;
+  /** Pinned to the right of the toolbar, where the count would be: actions on the whole list. */
+  trailing?: ReactNode;
 }) {
   const { t } = useTranslation();
   const id = useId();
@@ -263,13 +268,16 @@ export function TableToolbar({
       </div>
       {children}
       {(query || filtered) && onClear && (
-        <button type="button" className="gs-btn gs-btn-sm" onClick={onClear}>
+        <button type="button" className="gs-btn gs-btn-mid" onClick={onClear}>
           {t('table.clearFilters')}
         </button>
       )}
-      <span data-result-count className="text-muted text-xs ml-auto" role="status" aria-live="polite">
-        {filtered ? t('table.countFiltered', { shown, total }) : t('table.count', { count: total })}
-      </span>
+      {showCount && (
+        <span data-result-count className="text-muted text-xs ml-auto" role="status" aria-live="polite">
+          {filtered ? t('table.countFiltered', { shown, total }) : t('table.count', { count: total })}
+        </span>
+      )}
+      {trailing && <div className={`flex items-center gap-2 ${showCount ? '' : 'ml-auto'}`}>{trailing}</div>}
     </div>
   );
 }

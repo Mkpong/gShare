@@ -4,6 +4,7 @@ import { PageHeader } from '@/components/PageHeader';
 import { CopyButton } from '@/components/CopyButton';
 import { useTranslation } from 'react-i18next';
 import { useSessions } from '@/api/hooks/useSessions';
+import { useActiveCluster } from '@/api/hooks/useClusters';
 import { useQueue } from '@/api/hooks/useQueue';
 import { useVolumes } from '@/api/hooks/useVolumes';
 import { useDashboardSummary } from '@/api/hooks/useDashboard';
@@ -102,7 +103,9 @@ export function Dashboard() {
   const [newVolOpen, setNewVolOpen] = useState(false);
   const [quotaOpen, setQuotaOpen] = useState(false);
   const { data: sessions } = useSessions();
-  const { data: queued } = useQueue();
+  // The queue follows the top bar like every other list.
+  const cluster = useActiveCluster();
+  const { data: queued } = useQueue(cluster.id ?? undefined);
   const { data: volumes } = useVolumes();
   const [regionPage, setRegionPage] = useState(0);
 

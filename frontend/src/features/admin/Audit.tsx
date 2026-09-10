@@ -9,6 +9,7 @@ import { CopyableId } from '@/components/CopyButton';
 import { useTranslation } from 'react-i18next';
 import i18n from '@/i18n';
 import { useAuditLogs, exportAuditCsv, type AuditFilter } from '@/api/hooks/useAudit';
+import { useActiveCluster } from '@/api/hooks/useClusters';
 import { useUiStore } from '@/store/uiStore';
 import { DownloadSimple } from '@/components/icons';
 import { formatDateTime } from '@/lib/format';
@@ -188,8 +189,12 @@ export function AdminAudit() {
   // range is already in the URL).
   const [customPeriod, setCustomPeriod] = useState(!!from || !!to);
 
+  // The trail follows the top bar like every other screen: an administrator narrowed to one
+  // cluster was still reading every cluster's entries.
+  const clusterInfo = useActiveCluster();
   const filter: AuditFilter = useMemo(
     () => ({
+      cluster_id: clusterInfo.id ?? undefined,
       actor_q: actor.trim() || undefined,
       action: action.trim() || undefined,
       result: result || undefined,
@@ -206,7 +211,7 @@ export function AdminAudit() {
       size: PAGE_SIZE,
       sort: '-at',
     }),
-    [actor, action, result, target, from, to, period, page],
+    [actor, action, result, target, from, to, period, page, clusterInfo.id],
   );
 
   const { data, isLoading, isError, error, isFetching, refetch } = useAuditLogs(filter);

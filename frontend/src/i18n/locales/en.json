@@ -719,7 +719,7 @@
       "sessionsHeading": "Sessions ({{count}})",
       "subtitle": "Every session and the queue, live",
       "terminateRequested": "{{session}}: force termination requested; settlement is running.",
-      "terminateSelected": "Force-terminate {{count}} selected",
+      "terminateSelected": "Force-terminate ({{count}})",
       "terminateTitle": "Force-terminate session",
       "terminateWarning": "This terminates the session immediately, without the owner's consent, and runs the normal settlement path: releasing the hold, confirming consumption, and refunding the remainder.",
       "terminating": "Terminating…",
@@ -741,7 +741,11 @@
       "selectErrored": "Select {{count}} errored",
       "confirmCleanupTitle": "Clean up {{count}} sessions?",
       "confirmCleanupBody": "These sessions already stopped. Cleaning up reclaims the remaining reservation and resources and files them as terminated. Their error reasons are kept.",
-      "bulkCleaned": "Cleaned up {{count}} sessions."
+      "bulkCleaned": "Cleaned up {{count}} sessions.",
+      "cleanupBulk": "Clean up ({{count}})",
+      "cleanupNothing": "No errored sessions to clean up",
+      "terminateSelectedHint": "Tick the sessions to terminate",
+      "cleanupPick": "Tick the errored sessions to clean up"
     },
     "nodes": {
       "availGpus": "Available GPUs",

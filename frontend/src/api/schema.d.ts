@@ -9761,6 +9761,7 @@ export interface operations {
     my_queue_api_v1_queue_mine_get: {
         parameters: {
             query?: {
+                cluster_id?: string | null;
                 /** @description Token fallback for clients that cannot set custom headers, such as EventSource (SSE) */
                 access_token?: string | null;
             };
