@@ -26,6 +26,13 @@ Two consequences worth stating before you start:
 
 ---
 
+Every operator token is minted as `operator:<cluster_id>` and the control plane holds each
+callback to it: a status report, an inventory upsert or a batch of usage samples is accepted only
+for sessions and nodes of the cluster named in the token (`403 forbidden` otherwise). A cluster
+that is compromised can therefore lie about its own sessions, but not about anyone else's.
+
+---
+
 ## Prerequisites
 
 **On the control plane**, the internal plane has to be reachable from your data-plane clusters.
@@ -84,7 +91,8 @@ grep server: remote.kubeconfig     # must be the node's LAN address, not localho
   --name lab-c2 \
   --control-plane https://gshare.example.com \
   --session-domain gshare.lab-c2.example.com \
-  --ingress-node master-c2
+  --ingress-node master-c2 \
+  --storage-values ~/csi-values.yaml     # optional, see "Volumes and storage"
 ```
 
 `--session-domain` is the hostname that must resolve to the node running this cluster's
@@ -105,7 +113,9 @@ roll the operator forward. What it does:
 5. Installs ingress-nginx (skip with `--skip-ingress` if you already run one).
 6. Registers the cluster with the control plane, which probes it before accepting.
 7. Deploys the operator, mints its token on the control plane and injects it.
-8. Runs the connection test and waits for the first inventory report.
+8. With `--storage-values`: checks every node has an NFS client, installs democratic-csi against
+   the shared pool and points the operator at its StorageClass. Skipped otherwise.
+9. Runs the connection test and waits for the first inventory report.
 
 ---
 
@@ -124,6 +134,42 @@ admin screens narrow to it.
 
 The real test is a session. Create one, pinned to the new cluster, and open it. The URL should
 carry the new cluster's hostname — if it carries the control plane's, `session_domain` was not set.
+
+---
+
+## Volumes and storage
+
+gShare volumes are not tied to a cluster: a volume has an owner and a quota, and the operator of
+whichever cluster a session lands on creates the PVC for it. That only works if **every cluster
+mounts the same pool** — one NFS/ZFS server, one democratic-csi driver per cluster, all pointed at
+it. Per-cluster storage would pin each user to the cluster their data happens to be on, which is
+the opposite of what a shared fleet is for.
+
+On the control-plane cluster the driver was installed by `cluster-bootstrap.sh`. On an attached
+cluster, export its values and install the same driver there:
+
+```bash
+# On the control plane: the driver config, including the SSH key it uses on the storage box
+helm -n gshare-storage get values gshare-storage > csi-values.yaml && chmod 600 csi-values.yaml
+# Edit ONE thing: controller.nodeSelector → a node of the new cluster (it runs the provisioner)
+./hack/attach-cluster.sh ... --storage-values csi-values.yaml
+```
+
+The values file carries the storage box's SSH key. Keep it out of the repository and delete it
+when the attach is done.
+
+Prerequisites on the attached cluster — the script checks both and stops with the fix if missing:
+
+- **An NFS client on every node** (`nfs-common` on Debian/Ubuntu, `nfs-utils` on RHEL): the
+  driver mounts the pool on whichever node runs the session. A node without `mount.nfs` leaves
+  sessions stuck in `ContainerCreating`.
+- **Network reach from every node to the storage box** on 2049/tcp (and 111/tcp, 20048/tcp if the
+  export is NFSv3). Nodes on another subnet also need to be listed in the export's allowed range.
+
+The admin dashboard's storage tile reads the pool fleet-wide and says *shared across clusters*
+when a cluster is selected, because the pool is not any one cluster's own. `STORAGE_POOL_CAPACITY_GB`
+on the control plane states the pool's real size; without it the tile falls back to the storage
+node's disk.
 
 ---
 
@@ -191,9 +237,18 @@ its nodes and devices; the session history stays, because the ledger references 
 
 ## Known limits
 
+- **Prometheus is control-plane-wide, not per cluster.** The monitoring screens read one
+  Prometheus; an attached cluster's nodes and cards do not appear there until you federate or add
+  a second scrape target. The dashboard, node, card and session screens are unaffected — they read
+  the control plane's own inventory, which is per cluster.
 - **Token rotation is manual.** See above.
 - **Images are per cluster.** A session image has to be pullable from the cluster the session lands
   on. Either publish to a registry every cluster can reach, or pre-load each cluster.
+- **A volume stays on the cluster that first mounted it.** PersistentVolume objects are per
+  cluster, so a volume whose PVC exists on cluster A cannot be mounted by a session on cluster B —
+  the scheduler keeps such sessions on A and refuses an explicit request for B (`409
+  volume_on_another_cluster`). The data is on the shared pool, but binding it into a second
+  cluster's PVC is not automated yet.
 - **The credential cannot be rotated in place.** Updating a cluster's kubeconfig means
   deregistering and registering again, which mints a new cluster id — and therefore a new operator
   token and a Helm value to update.

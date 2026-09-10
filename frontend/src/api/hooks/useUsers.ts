@@ -82,7 +82,7 @@ export interface UsersPage {
 
 // GET /users — paginated, filterable by q, status, and org_id; the full envelope, so list
 // screens can page server-side (2000 students never fit in one response).
-export function useUsersPage(filter: UserListFilter = {}) {
+export function useUsersPage(filter: UserListFilter = {}, opts?: { enabled?: boolean }) {
   const query: Record<string, unknown> = { page: filter.page ?? 1, size: filter.size ?? 50 };
   if (filter.q) query.q = filter.q;
   if (filter.status) query.status = filter.status;
@@ -90,6 +90,7 @@ export function useUsersPage(filter: UserListFilter = {}) {
   if (filter.group_id) query.group_id = filter.group_id;
   return useQuery({
     queryKey: userKeys.list(filter),
+    enabled: opts?.enabled ?? true,
     queryFn: async () => {
       const { data } = await raw.GET('/api/v1/users', { params: { query } });
       const page = (data ?? {}) as Partial<UsersPage>;
@@ -102,8 +103,8 @@ export function useUsersPage(filter: UserListFilter = {}) {
 }
 
 // Data-only convenience for pickers (bounded by `size`; use useUsersPage for list screens).
-export function useUsers(filter: UserListFilter = {}) {
-  const query = useUsersPage(filter);
+export function useUsers(filter: UserListFilter = {}, opts?: { enabled?: boolean }) {
+  const query = useUsersPage(filter, opts);
   return { ...query, data: query.data?.data };
 }
 

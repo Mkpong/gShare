@@ -15,7 +15,7 @@ from pydantic import BaseModel, Field
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.auth.internal_jwt import require_internal_jwt
+from app.auth.internal_jwt import operator_cluster, require_internal_jwt
 from app.core.logging import get_logger
 from app.core.redis import get_redis
 from app.db.base import get_db
@@ -50,7 +50,7 @@ class AgentReport(BaseModel):
 @router.post("/internal/metrics/session-samples")
 async def ingest_session_samples(
     report: AgentReport,
-    _claims: dict = Depends(require_internal_jwt),   # aud=gshare-internal
+    claims: dict = Depends(require_internal_jwt),    # aud=gshare-internal
     db: AsyncSession = Depends(get_db),
 ) -> dict:
     """Accept one node's batch of session samples.
@@ -66,7 +66,13 @@ async def ingest_session_samples(
     rows = (
         await db.scalars(select(SessionRow).where(SessionRow.deleted_at.is_(None)))
     ).all() if names else []
-    by_cr = {r.id.lower().replace("_", "-"): r.id for r in rows}
+    # A cluster-scoped token may only feed the live view of its own cluster's sessions.
+    mine = operator_cluster(claims)
+    by_cr = {
+        r.id.lower().replace("_", "-"): r.id
+        for r in rows
+        if mine is None or r.cluster_id is None or r.cluster_id == mine
+    }
 
     redis = get_redis()
     pipe = redis.pipeline()

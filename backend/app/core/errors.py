@@ -99,6 +99,16 @@ class IncompatibleImage(DomainError):
     # card.
     code, http = "incompatible_image", 422
 
+class VolumeOnAnotherCluster(DomainError):
+    """The requested volumes' data lives on a different cluster than the one asked for.
+
+    409, not 422: the request is well-formed and would have been valid yesterday — the conflict is
+    with where the data already sits. Starting anyway would hand the user an empty disk.
+    """
+
+    code, http = "volume_on_another_cluster", 409
+
+
 
 class NotImplementedFeature(DomainError):
     # The endpoint exists in the contract but the behavior behind it is not built yet. Answering
@@ -152,11 +162,51 @@ _HTTP_STATUS_CODES = {
 }
 
 
+async def _record_denial(req: Request, exc: DomainError) -> None:
+    """Append a refused action to the audit log.
+
+    The trail recorded what people were allowed to do and said nothing about what they tried and
+    were refused — an account probing administrative endpoints left no trace at all, which is the
+    one pattern an audit log exists to surface. Written on its own session (the request's is
+    unwinding) and deduplicated for a minute per actor and route, so a client that retries in a
+    loop cannot drown the trail.
+    """
+    if exc.code == "password_change_required":
+        return                                   # a forced password change is not an attempt at anything
+    principal = getattr(req.state, "principal", None)
+    actor = getattr(principal, "user_id", None)
+    if not actor:
+        return                                   # unauthenticated: nothing to attribute it to
+    path = req.url.path
+    try:
+        from app.core.redis import get_redis
+
+        if not await get_redis().set(f"audit:denied:{actor}:{req.method}:{path}", "1", nx=True, ex=60):
+            return
+    except Exception:  # noqa: BLE001 — a Redis hiccup must not swallow the record
+        pass
+    try:
+        from app.db.base import get_sessionmaker
+        from app.domain.audit_service import AuditService
+
+        async with get_sessionmaker()() as db:
+            await AuditService(db).record(
+                actor=actor, action="access.denied", target=path, result="denied",
+                method=req.method, code=exc.code, message=exc.message,
+                request_id=getattr(req.state, "request_id", None),
+            )
+            await db.commit()
+    except Exception:  # noqa: BLE001 — auditing a refusal must never turn it into a 500
+        log.warning("could not audit denial of %s %s", req.method, path)
+
+
 def register_exception_handlers(app: FastAPI) -> None:
     """Install envelope handlers on the app."""
 
     @app.exception_handler(DomainError)
     async def _domain(req: Request, exc: DomainError):  # noqa: ANN202
+        if exc.http == 403:
+            await _record_denial(req, exc)
         return JSONResponse(
             status_code=exc.http,
             content={"error": {

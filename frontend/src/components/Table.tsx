@@ -94,7 +94,7 @@ export function Table<T>({
   };
 
   return (
-    <div className="overflow-x-auto -mx-1 px-1">
+    <div className="overflow-x-auto">
       {/* Below this width the wrapper scrolls instead of squeezing every column thinner. A
           `w-full` table with ten columns crushes them until headers and readings break apart,
           which is worse than a horizontal scrollbar the user can see and use. */}

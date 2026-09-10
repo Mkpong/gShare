@@ -178,3 +178,31 @@ async def test_heartbeat_follows_the_pod_to_its_new_node(db):
     await StatusSync(db).on_status(sess.id, _ev(node_name="cpu02"))
     db.expunge_all()
     assert (await db.get(Session, sess.id)).node_hostname == "cpu02"
+
+
+@pytest.mark.asyncio
+async def test_an_operator_outage_does_not_settle_the_sessions_it_stops_reporting(db, monkeypatch):
+    """The window that ended real sessions.
+
+    Both thresholds are the same length, so an operator that dies takes its sessions past the
+    session-stale line a beat before its nodes cross the node-stale line. In that window the
+    guard saw "cluster alive, session quiet" and tore down every running session — a five-minute
+    operator restart became data loss. The operator now has to have kept reporting *past* the
+    session's own silence before its pod is called lost.
+    """
+    monkeypatch.setattr(session_liveness, "get_sessionmaker", lambda: (lambda: db))
+    monkeypatch.setattr(session_liveness, "SessionService", _Svc)
+    _Svc.calls = []
+    now = datetime.now(UTC)
+    # The operator died ~5 minutes ago: its last session heartbeat and its last node report are
+    # from the same moment, and the nodes have not been declared stale yet.
+    died_at = now - timedelta(seconds=settings.SESSION_STALE_SEC + 10)
+    quiet = _session(cluster_id="clu_blip", last_reported_at=died_at)
+    async with db.begin():
+        db.add_all([
+            quiet,
+            GpuNode(id=ids.new("node"), cluster_id="clu_blip", hostname="n3", status="ready",
+                    last_seen_at=now - timedelta(seconds=settings.NODE_STALE_SEC - 30)),
+        ])
+    await session_liveness.run()
+    assert _Svc.calls == []

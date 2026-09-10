@@ -16,7 +16,7 @@ from app.api.schemas.internal import (
     OperatorNodeHealthEvent,
     OperatorNodeUpsert,
 )
-from app.auth.internal_jwt import require_internal_jwt
+from app.auth.internal_jwt import operator_cluster, require_internal_jwt, require_operator_cluster
 from app.cluster.inventory_sync import InventorySync
 from app.core import ids
 from app.core.logging import get_logger
@@ -34,12 +34,10 @@ async def upsert_gpu_device(
     claims: dict = Depends(require_internal_jwt),     # aud=gshare-internal
     db: AsyncSession = Depends(get_db),
 ):
-    # cluster_id from payload, else derive from the operator token subject
-    # ("operator:<cluster_id>").
-    cluster_id = ev.cluster_id
-    if not cluster_id:
-        sub = str(claims.get("sub", ""))
-        cluster_id = sub.split(":", 1)[1] if sub.startswith("operator:") else sub
+    # The token says which cluster is reporting; a payload that names another one is refused
+    # rather than believed, so no attached cluster can rewrite a neighbour's inventory.
+    require_operator_cluster(claims, ev.cluster_id, what="inventory report")
+    cluster_id = operator_cluster(claims) or ev.cluster_id or str(claims.get("sub", ""))
     await InventorySync(db).upsert_device(ev, cluster_id)
     return {"accepted": True}
 
@@ -50,12 +48,10 @@ async def upsert_node(
     claims: dict = Depends(require_internal_jwt),     # aud=gshare-internal
     db: AsyncSession = Depends(get_db),
 ):
-    # cluster_id from payload, else derive from the operator token subject
-    # ("operator:<cluster_id>").
-    cluster_id = ev.cluster_id
-    if not cluster_id:
-        sub = str(claims.get("sub", ""))
-        cluster_id = sub.split(":", 1)[1] if sub.startswith("operator:") else sub
+    # The token says which cluster is reporting; a payload that names another one is refused
+    # rather than believed, so no attached cluster can rewrite a neighbour's inventory.
+    require_operator_cluster(claims, ev.cluster_id, what="inventory report")
+    cluster_id = operator_cluster(claims) or ev.cluster_id or str(claims.get("sub", ""))
     await InventorySync(db).upsert_node(ev, cluster_id)
     return {"accepted": True}
 

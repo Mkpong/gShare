@@ -275,7 +275,7 @@ async def test_set_node_pool_and_node_reads(db):
     ch = (await _audit(db, "node.set_pool"))[-1].detail["changes"]
     assert ch == {"pool_id": {"from": None, "to": w.pool.id}, "pool_name": {"from": None, "to": "P"}}
 
-    rows = {n["hostname"]: n for n in (await list_nodes(status=None, region=None, principal=w.su, db=db))["data"]}
+    rows = {n["hostname"]: n for n in (await list_nodes(status=None, region=None, cluster_id=None, principal=w.su, db=db))["data"]}
     assert rows["n1"]["pool_name"] == "P" and rows["n2"]["pool_id"] == w.pool.id
     one = await get_node(w.node.id, principal=w.su, db=db)
     assert one["pool_id"] == w.pool.id and one["pool_name"] == "P"

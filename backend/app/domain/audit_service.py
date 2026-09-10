@@ -22,7 +22,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.api.schemas.internal import OperatorAuditEvent
 from app.core import ids
-from app.db.models import AuditLog, Membership, Project
+from app.db.models import AuditLog, GpuDevice, GpuNode, Membership, NodePool, Project, Session
 
 GENESIS = "GENESIS"
 
@@ -87,6 +87,9 @@ class AuditService:
         # attacker's organization and was invisible to the tenant it was done to.
         target_org_id = detail.pop("target_org_id", None)
         target_group_id = detail.pop("target_group_id", None)
+        # The cluster: explicit when the caller knows it, otherwise resolved from the target so
+        # existing call sites gain the attribution without being touched.
+        cluster_id = detail.pop("cluster_id", None) or await self._cluster_of_target(target)
         if target_org_id is not None or target_group_id is not None:
             org_id = target_org_id if target_org_id is not None else org_id
             group_id = target_group_id if target_group_id is not None else group_id
@@ -102,7 +105,26 @@ class AuditService:
             created_at=None,
             org_id=org_id,
             group_id=group_id,
+            cluster_id=cluster_id,
         )
+
+    async def _cluster_of_target(self, target: str | None) -> str | None:
+        """The cluster a target belongs to, by its id shape. None for cluster-agnostic targets."""
+        if not target:
+            return None
+        if target.startswith("clu_"):
+            return target
+        if target.startswith("ses_"):
+            return await self.db.scalar(select(Session.cluster_id).where(Session.id == target))
+        if target.startswith("nod_"):
+            return await self.db.scalar(select(GpuNode.cluster_id).where(GpuNode.id == target))
+        if target.startswith("GPU-"):
+            return await self.db.scalar(
+                select(GpuDevice.cluster_id).where(GpuDevice.gpu_uuid == target)
+            )
+        if target.startswith("npl_"):
+            return await self.db.scalar(select(NodePool.cluster_id).where(NodePool.id == target))
+        return None
 
     async def _scope_for_actor(self, actor: str) -> tuple[str | None, str | None]:
         """Derive the (group_id, org_id) scope from an actor.
@@ -141,6 +163,7 @@ class AuditService:
         created_at: datetime | None,
         org_id: str | None = None,
         group_id: str | None = None,
+        cluster_id: str | None = None,
     ) -> AuditLog:
         """Insert one chained row. prev_hash = last row's entry_hash (or GENESIS)."""
         prev_hash = await self._last_entry_hash()
@@ -172,6 +195,7 @@ class AuditService:
             trace_id=trace_id,
             org_id=org_id,
             group_id=group_id,
+            cluster_id=cluster_id,
             prev_hash=prev_hash,
             entry_hash=entry_hash,
             # The hashed timestamp MUST be the stored one: leaving created_at to the DB

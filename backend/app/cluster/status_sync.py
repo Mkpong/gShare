@@ -63,6 +63,16 @@ class StatusSync:
         self.credit = CreditEngine(db)
         self.sessions = SessionService(db)
 
+    async def cluster_of(self, session_id: str) -> str | None:
+        """The cluster of the session a callback addresses, by id or CR name.
+
+        Callers need this *before* on_status to check the reporting operator is entitled to speak
+        for the session, so it opens and closes its own transaction — on_status begins its own.
+        """
+        async with self.db.begin():
+            sess = await self._load_session(session_id)
+            return sess.cluster_id if sess is not None else None
+
     async def on_status(self, session_id: str, ev: OperatorStatusEvent) -> None:
         """Apply an operator status event idempotently.
 
@@ -193,6 +203,19 @@ class StatusSync:
                 if self._crash_looping(sess, ev):
                     ev.message = ev.message or "crash loop"
                     await self._on_error(sess, ev, reason="crash_loop")
+                    return
+                # A heartbeat only ever comes from a live pod. A session still waiting to start
+                # therefore missed its Running report: the operator writes the phase to the CR
+                # first and drops the callback's error, so it never re-sends a phase it has
+                # already recorded. One failed callback used to strand a session in `pending`
+                # forever — pod running, no billing, no connect URL, no way back. The heartbeat
+                # carries the same binding facts, so the transition is applied from here.
+                if sess.status in ("pending", "preparing"):
+                    log.warning(
+                        "heartbeat for %s still %s: applying the missed running transition",
+                        sess.id, sess.status,
+                    )
+                    await self._on_running(sess, ev)
                 return
             if phase == "running":
                 await self._on_running(sess, ev)

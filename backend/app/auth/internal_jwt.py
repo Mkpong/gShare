@@ -14,7 +14,7 @@ from jose import jwk, jwt
 from jose.constants import ALGORITHMS
 
 from app.core.config import settings
-from app.core.errors import Unauthenticated
+from app.core.errors import Forbidden, Unauthenticated
 
 _ijwks_cache: dict = {}
 _ijwks_exp: float = 0.0
@@ -98,3 +98,24 @@ async def load_internal_jwks() -> dict:
     if prev_pem and prev_kid and prev_kid not in seen:
         keys.append(_public_jwk_from_private(prev_pem, prev_kid))
     return {"keys": keys}
+
+
+def operator_cluster(claims: dict) -> str | None:
+    """The cluster an operator token speaks for (``sub=operator:<cluster_id>``), else None."""
+    sub = str(claims.get("sub", ""))
+    return sub.split(":", 1)[1] if sub.startswith("operator:") else None
+
+
+def require_operator_cluster(claims: dict, cluster_id: str | None, *, what: str) -> None:
+    """Refuse an operator token that names a different cluster than the resource it touches.
+
+    Every attached cluster holds a token signed by the same key; without this check any one of
+    them could report status, inventory or samples for sessions and nodes on every other cluster.
+    A token without an ``operator:`` subject is not cluster-scoped and passes.
+    """
+    mine = operator_cluster(claims)
+    if mine is not None and cluster_id is not None and mine != cluster_id:
+        raise Forbidden(
+            f"operator token is not for this {what}'s cluster",
+            {"token_cluster": mine, "cluster_id": cluster_id},
+        )

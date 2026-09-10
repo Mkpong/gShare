@@ -334,6 +334,8 @@
     },
     "clusters": {
       "colApiServer": "API server",
+      "colSessionDomain": "Session domain",
+      "sessionDomainUnset": "not set - falls back to the control plane",
       "colRole": "Role",
       "colGpus": "GPUs",
       "colRunning": "Running",
@@ -517,6 +519,9 @@
       "fleetTitle": "Fleet",
       "gpuUtilBasis": "allocated · usage on Monitoring",
       "storageSubShort": "{{count}} node · provisioned volume quota",
+      "storageSubShared": "Shared across clusters · {{count}} node · provisioned volume quota",
+      "storageNoneCluster": "No storage is attached to this cluster.",
+      "storageNone": "No storage server is attached.",
       "allClusters": "All clusters",
       "deviceUnavailable": "Unavailable",
       "devicePage": "Page {{page}}"

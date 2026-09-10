@@ -197,6 +197,8 @@ class QueueEntryView(BaseModel):
     session_name: str | None = None
     owner_name: str | None = None
     gpu_model: str | None = None
+    # Which cluster this entry is waiting for, so the queue can be read per cluster.
+    cluster_id: str | None = None
     # Why the scheduler last refused this entry (no_gpu_capacity | host_headroom). Without it a
     # position reads as "your turn is coming" even when nothing in the cluster can satisfy it.
     reason: str | None = None

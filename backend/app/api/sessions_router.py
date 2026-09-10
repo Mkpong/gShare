@@ -285,6 +285,7 @@ async def list_sessions(
     page: Pagination = Depends(),
     status_filter: str | None = Query(default=None, alias="status"),
     group_id: str | None = Query(default=None),
+    cluster_id: str | None = Query(default=None),
     scope: str = Query(default="mine", pattern="^(mine|all)$"),
     principal: Principal = Depends(get_current_principal),
     db: AsyncSession = Depends(get_db),
@@ -321,6 +322,8 @@ async def list_sessions(
         stmt = stmt.where(Session.status == status_filter)
     if group_id is not None:
         stmt = stmt.where(Session.group_id == group_id)
+    if cluster_id is not None:
+        stmt = stmt.where(Session.cluster_id == cluster_id)
 
     total = int(await db.scalar(select(func.count()).select_from(stmt.subquery())) or 0)
     stmt = stmt.order_by(Session.created_at.desc()).offset(page.offset).limit(page.size)
@@ -554,10 +557,21 @@ async def get_session(
     if node_host is None and sess.node_hostname:
         node_host = sess.node_hostname
         node_id = await db.scalar(select(GpuNode.id).where(GpuNode.hostname == node_host))
+    # Why a waiting session is waiting — the same reading the list gives. Without it the detail
+    # screen was the one place that showed a queued session with no explanation for the wait.
+    queued_reason = None
+    if sess.status == "pending":
+        queued_reason = (await db.execute(
+            select(SessionEvent.reason)
+            .where(SessionEvent.session_id == sess.id, SessionEvent.kind == "queued",
+                   SessionEvent.reason.is_not(None))
+            .order_by(SessionEvent.created_at.desc())
+            .limit(1)
+        )).scalar_one_or_none()
     read = _session_read(
         sess, gpu_model=gpu_model, node_hostname=node_host, node_id=node_id,
         image_name=img[0] if img else None, image_ref=img[1] if img else None,
-        gpu_alias=gpu_alias,
+        gpu_alias=gpu_alias, queued_reason=queued_reason,
     )
     # Mounted volumes, joined with their names — the detail screens list what the session sees.
     from app.api.schemas.session import SessionMountRead

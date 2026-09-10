@@ -731,6 +731,10 @@ class AuditLog(Base, TimestampMixin):
     # payload, which keeps append-only inserts safe.
     org_id: Mapped[str | None] = mapped_column(String, index=True, default=None)
     group_id: Mapped[str | None] = mapped_column(String, index=True, default=None)
+    # Which cluster the action concerned, when it concerned one — a session, node, card, pool or
+    # the cluster itself. Outside the hash chain like the two scope columns above, so it can be
+    # filled in or corrected without breaking verification.
+    cluster_id: Mapped[str | None] = mapped_column(String, index=True, default=None)
     prev_hash: Mapped[str | None] = mapped_column(String, default=None)  # hash chain
     entry_hash: Mapped[str | None] = mapped_column(String, default=None)
 

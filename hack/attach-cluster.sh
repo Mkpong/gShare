@@ -10,11 +10,18 @@
 #       --name lab-c2 \
 #       --control-plane http://gshare.10.10.0.161.nip.io \
 #       --session-domain gshare.10.10.0.167.nip.io \
-#       --ingress-node master-c2
+#       --ingress-node master-c2 \
+#       --storage-values ~/csi-values.yaml        # optional: mount the shared volume pool here too
 #
-# What it does NOT do: install the NVIDIA driver or the container toolkit. Those are OS-level and
-# have to run on each GPU node (see `cluster-bootstrap.sh prereqs --gpu`); this script checks for
-# them and stops with a clear message if they are missing.
+# Storage: gShare volumes live on ONE pool shared by every cluster (volumes have no cluster of
+# their own). Pass --storage-values with the democratic-csi values of the control-plane cluster
+# (`helm -n gshare-storage get values gshare-storage > csi-values.yaml`, then set the controller's
+# nodeSelector to a node of THIS cluster) and the same driver is installed here, pointed at the
+# same NFS/ZFS box. Without it the cluster runs sessions but cannot mount volumes.
+#
+# What it does NOT do: install the NVIDIA driver, the container toolkit, or the NFS client. Those
+# are OS-level and have to run on each node (see `cluster-bootstrap.sh prereqs --gpu`); this script
+# checks for them and stops with a clear message if they are missing.
 set -Eeuo pipefail
 
 die(){ echo "error: $*" >&2; exit 1; }
@@ -25,6 +32,7 @@ KUBECONFIG_FILE=""; NAME=""; CONTROL_PLANE=""; SESSION_DOMAIN=""; INGRESS_NODE="
 ADMIN_USER="${GSHARE_ADMIN_USER:-}"; ADMIN_PASS="${GSHARE_ADMIN_PASS:-}"
 OPERATOR_TAG="${OPERATOR_TAG:-latest}"; HAMI_VERSION="${HAMI_VERSION:-2.10.0}"
 NGINX_VERSION="${NGINX_VERSION:-4.15.1}"; ROLE="${ROLE:-primary}"
+CSI_VERSION="${CSI_VERSION:-0.15.1}"; STORAGE_VALUES=""; STORAGE_CLASS="${STORAGE_CLASS:-gshare-data}"
 CP_NAMESPACE="${CP_NAMESPACE:-gshare-system}"     # namespace of the CONTROL PLANE, in your current kube context
 SKIP_INGRESS=0
 
@@ -38,6 +46,8 @@ while [ $# -gt 0 ]; do
     --operator-tag) OPERATOR_TAG="$2"; shift 2;;
     --role) ROLE="$2"; shift 2;;
     --skip-ingress) SKIP_INGRESS=1; shift;;
+    --storage-values) STORAGE_VALUES="$2"; shift 2;;
+    --storage-class) STORAGE_CLASS="$2"; shift 2;;
     -h|--help) sed -n '2,30p' "$0"; exit 0;;
     *) die "unknown argument: $1";;
   esac
@@ -48,6 +58,7 @@ done
 [ -n "$NAME" ] || die "--name is required (the cluster's name in the console)"
 [ -n "$CONTROL_PLANE" ] || die "--control-plane is required, e.g. http://gshare.example.com"
 [ -n "$SESSION_DOMAIN" ] || die "--session-domain is required: the hostname THIS cluster serves sessions on"
+[ -z "$STORAGE_VALUES" ] || [ -f "$STORAGE_VALUES" ] || die "storage values not found: $STORAGE_VALUES"
 
 command -v kubectl >/dev/null || die "kubectl not found"
 command -v helm >/dev/null || die "helm not found"
@@ -60,7 +71,7 @@ CHART="$REPO_ROOT/charts/gshare"
 # Everything below addresses the REMOTE cluster unless it explicitly says otherwise.
 r(){ KUBECONFIG="$KUBECONFIG_FILE" "$@"; }
 
-step "1/8  remote cluster reachable"
+step "1/9  remote cluster reachable"
 r kubectl version -o json >/dev/null 2>&1 || die "cannot reach the cluster with that kubeconfig.
   If its server: line points at 127.0.0.1, change it to the control-plane node's LAN address —
   the control plane has to reach this cluster too, not just you."
@@ -69,7 +80,7 @@ log "apiserver: $SERVER"
 case "$SERVER" in *127.0.0.1*|*localhost*) die "the kubeconfig points at localhost; use the node's LAN address";; esac
 r kubectl get nodes -o wide
 
-step "2/8  GPU nodes have a working driver and container runtime"
+step "2/9  GPU nodes have a working driver and container runtime"
 GPU_NODES=$(r kubectl get nodes -o json | python3 -c '
 import json,sys
 # A GPU node is one that already advertises nvidia.com/gpu, or any non-control-plane node when
@@ -115,7 +126,7 @@ EOF
   r kubectl -n default delete pod "$POD" --wait=false >/dev/null 2>&1 || true
 done
 
-step "3/8  RuntimeClass and GPU node labels"
+step "3/9  RuntimeClass and GPU node labels"
 cat <<'EOF' | r kubectl apply -f - >/dev/null
 apiVersion: node.k8s.io/v1
 kind: RuntimeClass
@@ -129,7 +140,7 @@ for n in $GPU_NODES; do
   log "$n labelled"
 done
 
-step "4/8  HAMi $HAMI_VERSION"
+step "4/9  HAMi $HAMI_VERSION"
 KUBE_VERSION=$(r kubectl version -o json | python3 -c 'import json,sys; print(json.load(sys.stdin)["serverVersion"]["gitVersion"])')
 log "pinning HAMi's kube-scheduler image to the cluster version: $KUBE_VERSION"
 helm repo add hami https://project-hami.github.io/HAMi/ >/dev/null 2>&1 || true
@@ -151,7 +162,7 @@ done
 log "GPUs advertised: $ADVERTISED"
 
 if [ "$SKIP_INGRESS" -eq 0 ]; then
-  step "5/8  ingress-nginx (serves this cluster's session URLs)"
+  step "5/9  ingress-nginx (serves this cluster's session URLs)"
   helm repo add ingress-nginx https://kubernetes.github.io/ingress-nginx >/dev/null 2>&1 || true
   helm repo update ingress-nginx >/dev/null 2>&1 || true
   KUBECONFIG="$KUBECONFIG_FILE" helm upgrade -i ingress-nginx ingress-nginx/ingress-nginx \
@@ -165,10 +176,10 @@ if [ "$SKIP_INGRESS" -eq 0 ]; then
     --wait --timeout 6m >/dev/null
   log "ingress-nginx ready; $SESSION_DOMAIN must resolve to the node it runs on"
 else
-  step "5/8  ingress-nginx — skipped (--skip-ingress)"
+  step "5/9  ingress-nginx — skipped (--skip-ingress)"
 fi
 
-step "6/8  register the cluster with the control plane"
+step "6/9  register the cluster with the control plane"
 [ -n "$ADMIN_USER" ] || read -rp "control-plane admin email: " ADMIN_USER
 [ -n "$ADMIN_PASS" ] || { read -rsp "password: " ADMIN_PASS; echo; }
 TOKEN=$(curl -sS -m 30 -X POST "$CONTROL_PLANE/api/v1/auth/login" \
@@ -197,7 +208,17 @@ print(json.dumps({"name":sys.argv[1],"role":sys.argv[2],"session_domain":sys.arg
   log "registered as $CLUSTER_ID"
 fi
 
-step "7/8  deploy the operator and inject its token"
+# Whether it was just registered or already existed, the session hostname must match what this
+# run was told. A cluster registered without one advertises its sessions under the control
+# plane's own domain — a host with no route to them — and the connect button leads nowhere.
+curl -sS -m 30 -X PATCH "$CONTROL_PLANE/api/v1/clusters/$CLUSTER_ID" \
+  -H "Authorization: Bearer $TOKEN" -H 'Content-Type: application/json' \
+  -H "Idempotency-Key: $(python3 -c 'import uuid;print(uuid.uuid4())')" \
+  -d "$(python3 -c 'import json,sys; print(json.dumps({"session_domain":sys.argv[1]}))' "$SESSION_DOMAIN")" \
+  >/dev/null || die "could not set the cluster's session domain"
+log "sessions on this cluster are advertised at $SESSION_DOMAIN"
+
+step "7/9  deploy the operator and inject its token"
 r kubectl create namespace gshare-system --dry-run=client -o yaml | r kubectl apply -f - >/dev/null
 r kubectl label ns gshare-system app.kubernetes.io/managed-by=Helm --overwrite >/dev/null
 r kubectl annotate ns gshare-system \
@@ -209,6 +230,7 @@ KUBECONFIG="$KUBECONFIG_FILE" helm upgrade -i gshare "$CHART" -n gshare-system \
   --set operator.clusterId="$CLUSTER_ID" \
   --set operator.controlPlaneUrl="$CONTROL_PLANE" \
   --set global.domains.console="$SESSION_DOMAIN" \
+  ${STORAGE_VALUES:+--set operator.volumeStorageClass="$STORAGE_CLASS"} \
   --timeout 6m >/dev/null
 log "operator deployed"
 
@@ -225,7 +247,49 @@ r kubectl -n gshare-system rollout restart deploy/gshare-operator >/dev/null
 r kubectl -n gshare-system rollout status deploy/gshare-operator --timeout=180s >/dev/null
 log "operator token injected (valid 7 days — see 'token rotation' in docs/cluster-connect.md)"
 
-step "8/8  verify"
+if [ -n "$STORAGE_VALUES" ]; then
+  step "8/9  shared volume pool (democratic-csi $CSI_VERSION → StorageClass $STORAGE_CLASS)"
+  # The driver mounts NFS on whichever node runs the session, so every node needs the client.
+  ALL_NODES=$(r kubectl get nodes -o jsonpath='{.items[*].metadata.name}')
+  for n in $ALL_NODES; do
+    POD="gshare-attach-probe-$n"
+    r kubectl -n default delete pod "$POD" --ignore-not-found --wait=false >/dev/null 2>&1 || true
+    cat <<EOF | r kubectl apply -f - >/dev/null
+apiVersion: v1
+kind: Pod
+metadata: {name: $POD, namespace: default}
+spec:
+  nodeName: $n
+  hostPID: true
+  restartPolicy: Never
+  tolerations: [{operator: "Exists"}]
+  containers:
+    - {name: probe, image: busybox:1.36, command: ["sleep","600"],
+       securityContext: {privileged: true}, volumeMounts: [{name: host, mountPath: /host}]}
+  volumes: [{name: host, hostPath: {path: /}}]
+EOF
+    r kubectl -n default wait --for=condition=Ready "pod/$POD" --timeout=120s >/dev/null
+    if ! r kubectl -n default exec "$POD" -- chroot /host sh -c 'command -v mount.nfs' >/dev/null 2>&1; then
+      r kubectl -n default delete pod "$POD" --wait=false >/dev/null 2>&1 || true
+      die "$n: no NFS client. On that node run:
+  sudo apt-get install -y nfs-common      (Debian/Ubuntu)   or   sudo dnf install -y nfs-utils"
+    fi
+    log "$n: NFS client OK"
+    r kubectl -n default delete pod "$POD" --wait=false >/dev/null 2>&1 || true
+  done
+  helm repo add democratic-csi https://democratic-csi.github.io/charts/ >/dev/null 2>&1 || true
+  helm repo update democratic-csi >/dev/null 2>&1 || true
+  KUBECONFIG="$KUBECONFIG_FILE" helm upgrade -i gshare-storage democratic-csi/democratic-csi \
+    --version "$CSI_VERSION" -n gshare-storage --create-namespace -f "$STORAGE_VALUES" \
+    --wait --timeout 5m >/dev/null
+  r kubectl get storageclass "$STORAGE_CLASS" >/dev/null 2>&1 \
+    || die "StorageClass $STORAGE_CLASS did not appear — check storageClasses[].name in $STORAGE_VALUES"
+  log "StorageClass $STORAGE_CLASS ready; the operator provisions volume PVCs from it"
+else
+  step "8/9  shared volume pool — skipped (no --storage-values; sessions here cannot mount volumes)"
+fi
+
+step "9/9  verify"
 CHECK=$(curl -sS -m 120 -X POST "$CONTROL_PLANE/api/v1/clusters/$CLUSTER_ID/connection-test" \
   -H "Authorization: Bearer $TOKEN" -H 'Content-Type: application/json' \
   -H "Idempotency-Key: $(python3 -c 'import uuid;print(uuid.uuid4())')" -d '{}')

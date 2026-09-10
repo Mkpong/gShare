@@ -132,3 +132,27 @@ async def test_oversized_request_is_refused_up_front(db, fake_handoff):
             _req(cluster_id, offering, image, group, wallet, mem_gb=30),
             Principal(user_id=user_id), idem="hh-big")
     assert exc.value.details.get("reason") == "node_too_small"
+
+
+@pytest.mark.asyncio
+async def test_cpu_session_needs_a_cpu_node(db, fake_handoff):
+    """The operator pins CPU sessions to `gshare.io/node-type=cpu`; a cluster of GPU nodes only,
+    however much RAM they add up to, has nowhere to put one — refuse up front instead of leaving
+    the pod Pending on a selector nothing matches."""
+    from app.core.errors import NoCapacity
+    from app.db.models import Image as _Image
+    from app.db.models import Offering as _Offering
+
+    cluster_id, _, _, group, wallet, user_id, _ = await _fleet(db, (31, 32), (31, 32))
+    cpu_off = _Offering(id=ids.new("offering"), name="cpu", resource_class="cpu",
+                        credit_per_hour=Decimal("0"), cpu=2, mem_gb=4, disk_gb=10)
+    img = _Image(id=ids.new("image"), name="ubuntu")
+    async with db.begin():
+        db.add_all([cpu_off, img])
+    svc = SchedulerService(db)
+    svc.handoff = fake_handoff
+    req = SessionCreate(offering_id=cpu_off.id, image_id=img.id, resource_class="cpu",
+                        cluster_id=cluster_id, group_id=group.id, cpu=2, mem_gb=4, disk_gb=10)
+    with pytest.raises(NoCapacity) as e:
+        await svc.create_session(req, Principal(user_id=user_id), idem="cpu-none")
+    assert e.value.details.get("reason") == "no_cpu_node"

@@ -45,7 +45,7 @@ export interface DashboardSummary {
 
 // GET /metrics/cluster — cluster-wide KPIs. node.read is super_admin only, so anyone else would
 // get a 403; enabled=false stops the call being made at all.
-export function useClusterMetrics(query: { region?: string } = {}, opts?: { enabled?: boolean }) {
+export function useClusterMetrics(query: { region?: string; cluster_id?: string } = {}, opts?: { enabled?: boolean }) {
   return useQuery({
     queryKey: ['metrics', 'cluster', query],
     enabled: opts?.enabled ?? true,

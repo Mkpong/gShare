@@ -24,6 +24,7 @@ import {
   type PolicyScope,
 } from '@/api/hooks/useResources';
 import { useOrganizations, useProjects } from '@/api/hooks/useGroups';
+import { useActiveCluster } from '@/api/hooks/useClusters';
 import { useUsers } from '@/api/hooks/useUsers';
 import { Table, TableToolbar, Pagination, sortAccessor, type Column } from '@/components/Table';
 import { EmptyState, NoResults, TableSkeleton, ErrorState } from '@/components/EmptyState';
@@ -86,6 +87,7 @@ export function AdminResources() {
 }
 
 function OfferingsTab() {
+  const clusterInfo = useActiveCluster();
   const { t } = useTranslation();
   const [createOpen, setCreateOpen] = useState(false);
   const [editOffering, setEditOffering] = useState<Offering | null>(null);
@@ -93,7 +95,7 @@ function OfferingsTab() {
   // Which GPU models physically exist in the cluster right now — catalogue-only rows (A100/H100
   // price entries with no hardware) get no tag, so the two kinds read apart at a glance.
   // Fleet-wide: pool grants must not hide a model that physically exists in the cluster.
-  const availModels = new Set((useGpuAvailability({ fleet: true }).data ?? []).map((m) => m.gpu_model));
+  const availModels = new Set((useGpuAvailability({ fleet: true, clusterId: clusterInfo.id ?? undefined }).data ?? []).map((m) => m.gpu_model));
   const del = useDeleteOffering();
   const pushToast = useUiStore((s) => s.pushToast);
   const confirm = useConfirm();

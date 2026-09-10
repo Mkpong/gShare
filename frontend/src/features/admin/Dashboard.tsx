@@ -97,8 +97,15 @@ function DeviceTile({ model, alias, index, freeMemMb, totalMemMb, freeCores, mod
     <div className={`rounded-ctl border px-3 py-2.5 min-w-0 ${out ? 'border-danger/40 bg-danger-soft/20' : 'border-border bg-surface-2/40'}`}>
       <div className="flex items-center justify-between gap-2 mb-1.5">
         {/* An alias is the card's name; without one it is the model plus its list position. */}
-        <span className={`text-xs font-bold truncate ${out ? 'text-muted' : ''}`} title={alias ? model : undefined}>
-          {alias ? alias : <>{shortModel(model)} <span className="text-muted gs-num">#{index + 1}</span></>}
+        <span className="flex items-baseline gap-1.5 min-w-0">
+          <span className={`text-xs font-bold truncate ${out ? 'text-muted' : ''}`} title={alias ? model : undefined}>
+            {alias ? alias : <>{shortModel(model)} <span className="text-muted gs-num">#{index + 1}</span></>}
+          </span>
+          {/* Next to the name, because that is the thing it qualifies: which cluster's card this
+              is. Down by the usage figures it read as another measurement. */}
+          {cluster && (
+            <span className="gs-tag shrink-0 truncate max-w-[8rem]" title={cluster}>{cluster}</span>
+          )}
         </span>
         <span className={`gs-tag shrink-0 ${out ? 'text-danger' : ''}`}>
           {out ? t(out.key, { defaultValue: out.fallback }) : t(`enum.deviceMode.${mode}`, { defaultValue: mode })}
@@ -106,10 +113,7 @@ function DeviceTile({ model, alias, index, freeMemMb, totalMemMb, freeCores, mod
       </div>
       <Meter value={out ? 100 : usedPct} variant={variant} />
       <div className="flex items-center justify-between gap-2 mt-1.5 text-2xs gs-num text-muted">
-        <span className="flex items-center gap-1.5 min-w-0">
-          <span>{formatVram(totalMemMb - freeMemMb)} / {formatVram(totalMemMb)}</span>
-          {cluster && <span className="gs-tag shrink-0 truncate max-w-[9rem]" title={cluster}>{cluster}</span>}
-        </span>
+        <span>{formatVram(totalMemMb - freeMemMb)} / {formatVram(totalMemMb)}</span>
         {/* No headroom is reported for a card that cannot be placed on — the figure would be a lie. */}
         <span>{out ? t('admin.dashboard.deviceUnavailable') : `${t('admin.dashboard.deviceFreeShort')} ${freeCores}%`}</span>
       </div>
@@ -122,7 +126,14 @@ export function AdminDashboard() {
   // /metrics/cluster is super_admin only, so other roles never make the call and see a scoped
   // summary instead.
   const isSuper = useAuthStore((s) => s.claims.global_role === 'super_admin');
-  const { data: m, isLoading, isError, error, refetch: refetchMetrics } = useClusterMetrics({}, { enabled: isSuper });
+  // Every figure on this page follows the cluster chosen in the top bar. Leaving the tiles
+  // fleet-wide while the grid below them narrowed was the contradiction users reported: eight
+  // nodes and three cards above a panel showing one cluster's single card.
+  const clusterInfo = useActiveCluster();
+  const { data: m, isLoading, isError, error, refetch: refetchMetrics } = useClusterMetrics(
+    clusterInfo.id ? { cluster_id: clusterInfo.id } : {},
+    { enabled: isSuper },
+  );
   const { data: summary } = useDashboardSummary('managed');
   // The fleet inventory, NOT /sessions/gpu-availability: that endpoint applies the caller's
   // node-pool access, which hid pool-granted cards from the admin's own grid.
@@ -132,7 +143,6 @@ export function AdminDashboard() {
   // It used to carry a second selector of its own, which meant two controls for one decision and
   // let the panel disagree with the rest of the console. The KPI figures above stay fleet-wide;
   // per-cluster totals are on the cluster management page.
-  const clusterInfo = useActiveCluster();
   const gridCluster = clusterInfo.id ?? '';
   const { data: nodeRows = [] } = useNodes({}, { enabled: isSuper && clusterInfo.multi });
   const nodeCluster = useMemo(() => {
@@ -312,23 +322,33 @@ export function AdminDashboard() {
                 </section>
               )}
 
-              {(m as { storage?: { disk_gb: { used: number; total: number; source?: string }; node_count: number } }).storage && (() => {
-                const st = (m as unknown as { storage: { disk_gb: { used: number; total: number; source?: string }; node_count: number } }).storage;
+              {(() => {
+                // The tile stays put whether or not this cluster has storage: an empty slot in the
+                // fleet-pressure row reads as a rendering bug, while a stated "none attached" is a fact.
+                const st = (m as { storage?: { disk_gb: { used: number; total: number; source?: string }; node_count: number; shared?: boolean } | null }).storage;
                 return (
                   <section className="gs-panel p-5">
                     <h2 className="gs-h2">{t('admin.dashboard.storageTitle')}</h2>
-                    <p className="gs-sub mt-1 inline-flex items-center gap-1.5">
-                      {t('admin.dashboard.storageSubShort', { count: st.node_count })}
-                      <HelpTip text={t(st.disk_gb.source === 'pool' ? 'admin.dashboard.storageSub' : 'admin.dashboard.storageSubNodeDisk', { count: st.node_count })} />
-                    </p>
-                    <div className="mt-1">
-                      <CapacityRow
-                        label={t('admin.dashboard.storageAllocated')}
-                        reading={`${st.disk_gb.used} / ${st.disk_gb.total} GB`}
-                        pct={st.disk_gb.total > 0 ? (st.disk_gb.used / st.disk_gb.total) * 100 : 0}
-                        variant={st.disk_gb.used > st.disk_gb.total ? 'danger' : 'primary'}
-                      />
-                    </div>
+                    {st ? (
+                      <>
+                        <p className="gs-sub mt-1 inline-flex items-center gap-1.5">
+                          {t(st.shared ? 'admin.dashboard.storageSubShared' : 'admin.dashboard.storageSubShort', { count: st.node_count })}
+                          <HelpTip text={t(st.disk_gb.source === 'pool' ? 'admin.dashboard.storageSub' : 'admin.dashboard.storageSubNodeDisk', { count: st.node_count })} />
+                        </p>
+                        <div className="mt-1">
+                          <CapacityRow
+                            label={t('admin.dashboard.storageAllocated')}
+                            reading={`${st.disk_gb.used} / ${st.disk_gb.total} GB`}
+                            pct={st.disk_gb.total > 0 ? (st.disk_gb.used / st.disk_gb.total) * 100 : 0}
+                            variant={st.disk_gb.used > st.disk_gb.total ? 'danger' : 'primary'}
+                          />
+                        </div>
+                      </>
+                    ) : (
+                      <p className="gs-sub mt-1">
+                        {t(clusterInfo.id ? 'admin.dashboard.storageNoneCluster' : 'admin.dashboard.storageNone')}
+                      </p>
+                    )}
                   </section>
                 );
               })()}

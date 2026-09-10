@@ -2446,7 +2446,13 @@ export interface paths {
             path?: never;
             cookie?: never;
         };
-        /** List Nodes */
+        /**
+         * List Nodes
+         * @description Nodes, optionally narrowed to one cluster.
+         *
+         *     The console filtered this list in the browser, which meant every screen fetched every
+         *     cluster's nodes to show one cluster's. `GpuNode.cluster_id` is indexed; the filter belongs here.
+         */
         get: operations["list_nodes_api_v1_nodes_get"];
         put?: never;
         /**
@@ -2780,7 +2786,14 @@ export interface paths {
             path?: never;
             cookie?: never;
         };
-        /** Metrics Cluster */
+        /**
+         * Metrics Cluster
+         * @description Fleet figures, or one cluster's when `cluster_id` is given.
+         *
+         *     Without the filter the console showed a cluster's card grid beside fleet-wide totals — eight
+         *     nodes and three cards while the panel below said one. Every aggregate here now narrows the
+         *     same way, so the numbers on one screen describe one thing.
+         */
         get: operations["metrics_cluster_api_v1_metrics_cluster_get"];
         put?: never;
         post?: never;
@@ -3409,6 +3422,8 @@ export interface components {
             actor_email?: string | null;
             /** Target Name */
             target_name?: string | null;
+            /** Cluster Id */
+            cluster_id?: string | null;
         };
         /**
          * AuditLogList
@@ -3706,6 +3721,8 @@ export interface components {
             api_server?: string | null;
             /** Runtime */
             runtime?: string | null;
+            /** Session Domain */
+            session_domain?: string | null;
             /** Status */
             status: string;
             /** Node Count */
@@ -3751,6 +3768,11 @@ export interface components {
              * @default 0
              */
             node_count: number;
+            /**
+             * Shared
+             * @default false
+             */
+            shared: boolean;
         };
         /** ClusterStorageDisk */
         ClusterStorageDisk: {
@@ -4910,6 +4932,8 @@ export interface components {
             owner_name?: string | null;
             /** Gpu Model */
             gpu_model?: string | null;
+            /** Cluster Id */
+            cluster_id?: string | null;
             /** Reason */
             reason?: string | null;
         };
@@ -8771,6 +8795,7 @@ export interface operations {
             query?: {
                 status?: string | null;
                 group_id?: string | null;
+                cluster_id?: string | null;
                 scope?: string;
                 page?: number;
                 size?: number;
@@ -9564,6 +9589,7 @@ export interface operations {
         parameters: {
             query?: {
                 group_id?: string | null;
+                cluster_id?: string | null;
                 page?: number;
                 size?: number;
                 /** @description Token fallback for clients that cannot set custom headers, such as EventSource (SSE) */
@@ -11185,6 +11211,7 @@ export interface operations {
                 "at[gte]"?: string | null;
                 "at[lt]"?: string | null;
                 result?: string | null;
+                cluster_id?: string | null;
                 /** @description Token fallback for clients that cannot set custom headers, such as EventSource (SSE) */
                 access_token?: string | null;
             };
@@ -11225,6 +11252,7 @@ export interface operations {
                 "at[gte]"?: string | null;
                 "at[lt]"?: string | null;
                 result?: string | null;
+                cluster_id?: string | null;
                 sort?: string;
                 verify?: boolean;
                 page?: number;
@@ -11411,6 +11439,7 @@ export interface operations {
             query?: {
                 status?: string | null;
                 region?: string | null;
+                cluster_id?: string | null;
                 /** @description Token fallback for clients that cannot set custom headers, such as EventSource (SSE) */
                 access_token?: string | null;
             };
@@ -11909,6 +11938,7 @@ export interface operations {
         parameters: {
             query?: {
                 node_id?: string | null;
+                cluster_id?: string | null;
                 /** @description Token fallback for clients that cannot set custom headers, such as EventSource (SSE) */
                 access_token?: string | null;
             };
@@ -12109,6 +12139,7 @@ export interface operations {
         parameters: {
             query?: {
                 region?: string | null;
+                cluster_id?: string | null;
                 /** @description Token fallback for clients that cannot set custom headers, such as EventSource (SSE) */
                 access_token?: string | null;
             };

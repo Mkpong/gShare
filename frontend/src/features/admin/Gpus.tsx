@@ -45,8 +45,10 @@ export function AdminGpus() {
   const confirm = useConfirm();
   const prompt = usePrompt();
   const [modelFilter, setModelFilter] = useState('');
-  const [clusterFilter, setClusterFilter] = useState('');
   const clusterInfo = useActiveCluster();
+  // The cluster comes from the top bar. A second control here meant two answers to one question,
+  // and this screen could disagree with the dashboard about which cluster you were looking at.
+  const clusterFilter = clusterInfo.id ?? '';
 
   const nodeName = useMemo(() => {
     const m: Record<string, string> = {};
@@ -59,7 +61,6 @@ export function AdminGpus() {
     for (const n of nodes as { id: string; cluster_id?: string | null }[]) if (n.cluster_id) m[n.id] = n.cluster_id;
     return m;
   }, [nodes]);
-  const clusterOpts = useMemo(() => [...new Set(Object.values(nodeCluster))], [nodeCluster]);
   const models = useMemo(() => [...new Set(devices.map((d) => d.model ?? '-'))], [devices]);
   const rows = devices.filter((d) => (!modelFilter || (d.model ?? '-') === modelFilter) && (!clusterFilter || nodeCluster[d.node_id ?? ''] === clusterFilter));
 
@@ -207,12 +208,6 @@ export function AdminGpus() {
       <PageHeader title={t('admin.gpus.title')} description={t('admin.gpus.subtitle')} />
       <div className="gs-card">
         <div className="flex items-center gap-3 mb-3 flex-wrap">
-          {clusterInfo.multi && (
-            <Select className="gs-input w-auto" value={clusterFilter} aria-label={t('admin.gpus.allClusters')} onChange={(e) => setClusterFilter(e.target.value)}>
-              <option value="">{t('admin.gpus.allClusters')}</option>
-              {clusterOpts.map((c) => <option key={c} value={c}>{clusterInfo.name(c)}</option>)}
-            </Select>
-          )}
           <Select className="gs-input w-auto" value={modelFilter} aria-label={t('admin.gpus.colModel')}
             onChange={(e) => setModelFilter(e.target.value)}>
             <option value="">{t('admin.gpus.allModels')}</option>

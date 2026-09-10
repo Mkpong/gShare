@@ -35,6 +35,7 @@ from app.core.errors import (
     QuotaExceeded,
     Unserviceable,
     VolumeLocked,
+    VolumeOnAnotherCluster,
     VramBelowMinimum,
 )
 from app.core.logging import get_logger
@@ -112,6 +113,19 @@ class SchedulerService:
 
         # Enforce mount permissions server-side: existence, access, mode (rw), and ROX -> ro.
         await self._validate_mounts(req, principal)
+        # And that the chosen cluster can actually see those volumes' data. When the caller named
+        # a cluster, this is the only place it is checked — _resolve_cluster is skipped entirely.
+        if getattr(req, "cluster_id", None):
+            # Own transaction: the validators around this one each open theirs, and a bare query
+            # here autobegins one that the next `db.begin()` then trips over.
+            async with self.db.begin():
+                pinned = await self._clusters_holding_volumes(req)
+            if pinned is not None and req.cluster_id not in pinned:
+                raise VolumeOnAnotherCluster(
+                    "the requested volumes hold data on another cluster; "
+                    "a session here would start with an empty disk",
+                    {"cluster_id": req.cluster_id, "clusters_with_data": sorted(pinned)},
+                )
 
         # A session may only bill the requester's own personal wallet; charging another's is
         # blocked.
@@ -231,6 +245,35 @@ class SchedulerService:
             await self._refund_stranded_hold(sid)
             raise
 
+    async def _clusters_holding_volumes(self, req: SessionCreate) -> set[str] | None:
+        """Clusters where every requested volume already has its data.
+
+        A volume's PVC is created lazily by whichever cluster's operator first runs a session that
+        mounts it. Nothing tied the volume to that cluster, so a later session placed elsewhere
+        found no PVC, had a fresh empty one created, and handed the user an empty home directory
+        while the original data sat untouched on the other cluster's pool — silently, with the same
+        ledger row and quota counted twice.
+
+        Until volumes are explicitly cluster-scoped, the clusters a volume has actually been
+        mounted on are the record of where its data lives. None means "no constraint": either the
+        session mounts nothing, or its volumes have never been used and may land anywhere.
+        """
+        mounts = getattr(req, "volume_mounts", None) or []
+        vol_ids = [m.volume_id for m in mounts if getattr(m, "volume_id", None)]
+        if not vol_ids:
+            return None
+        allowed: set[str] | None = None
+        for vid in vol_ids:
+            rows = set((await self.db.scalars(
+                select(Session.cluster_id)
+                .join(VolumeMount, VolumeMount.session_id == Session.id)
+                .where(VolumeMount.volume_id == vid, Session.cluster_id.is_not(None))
+            )).all())
+            if not rows:
+                continue                      # never mounted anywhere: unconstrained
+            allowed = rows if allowed is None else (allowed & rows)
+        return allowed
+
     async def _resolve_cluster(self, req: SessionCreate, principal: Principal) -> str:
         """Pick a cluster automatically when the request did not name one.
 
@@ -252,6 +295,16 @@ class SchedulerService:
             ).all()
             if not clusters:
                 raise NoCapacity("no connected cluster is available")
+            # A session that mounts volumes must land where those volumes' data already is.
+            # Placing it elsewhere silently creates empty PVCs and shows the user an empty disk.
+            pinned = await self._clusters_holding_volumes(req)
+            if pinned is not None:
+                clusters = [c for c in clusters if c.id in pinned]
+                if not clusters:
+                    raise NoCapacity(
+                        "no connected cluster holds every requested volume; "
+                        "the volumes live on a cluster that is not available"
+                    )
             if len(clusters) == 1:
                 return clusters[0].id
 
@@ -547,6 +600,17 @@ class SchedulerService:
                 )
             )
         ).all()
+        # Only the nodes the pod can actually land on count. The operator pins a CPU session to
+        # `gshare.io/node-type=cpu`, so a cluster whose ready nodes are all GPU/master nodes has no
+        # room for it even when their RAM adds up — admitting one there left the pod Pending on a
+        # selector no node matched, and the session stuck in "preparing" with nothing to report.
+        if sess.resource_class == "cpu":
+            nodes = [n for n in nodes if n.role == "cpu"]
+            if not nodes:
+                raise NoCapacity(
+                    "cannot be scheduled: this cluster has no CPU node",
+                    {"resource": "cpu", "reason": "no_cpu_node", "cluster_id": sess.cluster_id},
+                )
         # 1. Single-node feasibility. A node reporting 0 for a resource is skipped for
         #    that resource. CPU and RAM subtract the NODE_RESERVED_* margin that the placement
         #    gate (_filter_node_headroom) holds back too — a request that clears raw capacity
@@ -589,6 +653,7 @@ class SchedulerService:
                     Session.cluster_id == sess.cluster_id,
                     Session.id != sess.id,
                     Session.deleted_at.is_(None),
+                    Session.resource_class == "cpu",   # GPU sessions live on the GPU nodes
                     Session.status.in_(("pending", "preparing", "reserved", "running")),
                 )
             )

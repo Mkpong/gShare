@@ -334,6 +334,8 @@
     },
     "clusters": {
       "colApiServer": "API 주소",
+      "colSessionDomain": "세션 도메인",
+      "sessionDomainUnset": "미지정 · 제어 플레인 도메인 사용",
       "colRole": "역할",
       "colGpus": "GPU 수",
       "colRunning": "실행 세션",
@@ -517,6 +519,9 @@
       "fleetTitle": "플릿 현황",
       "gpuUtilBasis": "할당 기준 · 사용량은 모니터링",
       "storageSubShort": "노드 {{count}}대 · 프로비저닝된 볼륨 쿼터",
+      "storageSubShared": "클러스터 공용 스토리지 · 노드 {{count}}대 · 프로비저닝된 볼륨 쿼터",
+      "storageNoneCluster": "이 클러스터에 연결된 스토리지가 없습니다.",
+      "storageNone": "연결된 스토리지 서버가 없습니다.",
       "allClusters": "전체 클러스터",
       "deviceUnavailable": "배치 불가",
       "devicePage": "{{page}}쪽"

@@ -13,7 +13,7 @@ import {
 import { Table, TableToolbar, Pagination, sortAccessor, type Column } from '@/components/Table';
 import { EmptyState, NoResults, TableSkeleton } from '@/components/EmptyState';
 import { useTableState, sortRows } from '@/hooks/useTableState';
-import { useUrlFilters, distinct, distinctPairs } from '@/hooks/useUrlFilters';
+import { useUrlFilters, distinctPairs } from '@/hooks/useUrlFilters';
 import { useActiveCluster } from '@/api/hooks/useClusters';
 import { useConfirm } from '@/components/ConfirmDialog';
 import { useBulkTerminateSessions } from '@/api/hooks/useSessions';
@@ -70,7 +70,7 @@ type QueueRow = components['schemas']['QueueEntryView'];
 
 const MONITOR_PAGE = 25;
 
-const MON_FILTERS = ['org', 'group', 'cluster'] as const;
+const MON_FILTERS = ['org', 'group'] as const;
 
 export function AdminMonitor() {
   const { t } = useTranslation();
@@ -93,8 +93,10 @@ export function AdminMonitor() {
   const queueTable = useTableState('q', { sort: 'position', dir: 'asc' });
   const statusFilter = table.tab ?? '';
   const filters = useUrlFilters(MON_FILTERS);
-  const { org, group, cluster: clusterF } = filters.values;
+  const { org, group } = filters.values;
   const clusterInfo = useActiveCluster();
+  // The cluster comes from the top bar, like every other admin screen.
+  const clusterF = clusterInfo.id ?? '';
   const clearAll = () => { table.clear(); filters.clear(); };
   const setStatusFilter = (v: string) => table.setTab(v || null);
 
@@ -103,7 +105,7 @@ export function AdminMonitor() {
 
   // /metrics/cluster and /nodes are super_admin only, so other roles never call them.
   const isSuper = useAuthStore((s) => s.claims.global_role === 'super_admin');
-  const metricsQ = useClusterMetrics({}, { enabled: isSuper });
+  const metricsQ = useClusterMetrics(clusterF ? { cluster_id: clusterF } : {}, { enabled: isSuper });
   const sessionsQ = useAllSessions({ status: statusFilter || undefined }, livePaused);
   const queueQ = useAdminQueue({ status: 'queued' }, livePaused);
 
@@ -460,12 +462,6 @@ export function AdminMonitor() {
             <option value="">{t('admin.monitor.allGroups')}</option>
             {groupOpts.map((o) => <option key={o.value} value={o.value}>{o.label}</option>)}
           </Select>
-          {clusterInfo.multi && (
-            <Select data-url-state className="gs-input w-auto" value={clusterF} aria-label={t('admin.monitor.allClusters')} onChange={(e) => filters.set('cluster', e.target.value)}>
-              <option value="">{t('admin.monitor.allClusters')}</option>
-              {distinct(sessions, (r) => r.cluster_id).map((v) => <option key={v} value={v}>{clusterInfo.name(v)}</option>)}
-            </Select>
-          )}
         </TableToolbar>
         {sessionsQ.isLoading ? (
           <TableSkeleton rows={5} columns={5} />

@@ -95,6 +95,8 @@ def _entry_view(entry: QueueEntry, score: float, position: int) -> dict:
         "score": round(score, 3),
         "session_req": entry.session_req,
         "enqueued_at": enq.isoformat() if enq else None,
+        # Carried so the console can group or filter without a second round trip.
+        "cluster_id": (entry.session_req or {}).get("cluster_id"),
     }
 
 
@@ -102,12 +104,20 @@ def _entry_view(entry: QueueEntry, score: float, position: int) -> dict:
 async def list_queue(
     page: Pagination = Depends(),
     group_id: str | None = Query(default=None),
+    cluster_id: str | None = Query(default=None),
     principal: Principal = Depends(get_current_principal),
     db: AsyncSession = Depends(get_db),
 ):
     principal.require(action="queue.read")
     ranked = await _ranked(db)
 
+    if cluster_id is not None:
+        # A queue entry has no cluster of its own; it inherits the one from its session. Without
+        # this the queue was the one panel with no cluster filter at all.
+        cluster_sids = set((await db.scalars(
+            select(Session.id).where(Session.cluster_id == cluster_id)
+        )).all())
+        ranked = [(e, sc) for e, sc in ranked if e.session_id in cluster_sids]
     if group_id is not None:
         # Filter to entries whose session belongs to group_id.
         sess_rows = (

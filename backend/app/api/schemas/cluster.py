@@ -16,6 +16,8 @@ class ClusterRead(BaseModel):
     role: str
     api_server: str | None = None
     runtime: str | None = None
+    # Where this cluster serves its sessions; None falls back to the global SESSION_DOMAIN.
+    session_domain: str | None = None
     status: str
     node_count: int
     gpu_count: int

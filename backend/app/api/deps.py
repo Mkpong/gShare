@@ -43,6 +43,12 @@ async def get_current_principal(
     # read-only, so rolling back immediately closes it and lets the endpoint's unit of work (`async
     # with db.begin`) start a fresh transaction without colliding — SQLAlchemy 2.0 autobegin.
     await db.rollback()
+    # Who is asking, for the denial handler: an authorization failure is raised deep inside a
+    # handler with no access to the principal, and "nobody tried anything" is the wrong answer for
+    # an audit trail to give.
+    state = getattr(request, "state", None)
+    if state is not None:
+        state.principal = principal
     return principal
 
 

@@ -346,13 +346,16 @@ class SessionService:
         """Restart a session: stop (pause + finalize consume) then start (resume)."""
         sess = await self._get(session_id)
         status = sess.status
+        # Only a live session can be restarted. Returning the row unchanged for any other state
+        # answered 200 and wrote a "session.restart ok" audit entry for a terminated session that
+        # nothing had touched.
+        if status not in ("running", "paused"):
+            raise InvalidStateTransition(f"{status} -> restart")
         if status == "running":
             await self.stop(session_id)
             status = "paused"
         # After a stop the session is paused; resume it.
-        if status == "paused":
-            return await self.start(session_id)
-        return sess
+        return await self.start(session_id)
 
     async def terminate(self, session_id: str, *, forced: bool = False, reason: str = "user_stopped"):
         """Terminate + settle. Also invoked by operator idle-reaper -> terminated->settle.

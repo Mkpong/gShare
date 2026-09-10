@@ -24,6 +24,8 @@ class AuditLogEntry(BaseModel):
     actor_name: str | None = None
     actor_email: str | None = None   # resolved for the detail view (5-6); operator actors have none
     target_name: str | None = None   # the target id resolved to a human-readable name: whose wallet, session, or volume
+    # Which cluster the action concerned; null for cluster-agnostic actions (users, credits, ...).
+    cluster_id: str | None = None
 
 
 class AuditChainResult(BaseModel):

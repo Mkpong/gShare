@@ -127,6 +127,8 @@ class ClusterStorageDisk(BaseModel):
 class ClusterStorage(BaseModel):
     disk_gb: ClusterStorageDisk
     node_count: int = 0
+    # True under a cluster filter: the pool is fleet-wide, not this cluster's own.
+    shared: bool = False
 
 
 class ClusterMetrics(BaseModel):

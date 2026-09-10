@@ -95,7 +95,7 @@ export function useNodes(filter: { status?: string; region?: string; gpu_mode?: 
 
 // GET /metrics/cluster — cluster-wide aggregates over GPUs, VRAM, nodes, and credits.
 // super_admin only.
-export function useClusterMetrics(query: { region?: string } = {}, opts?: { enabled?: boolean }) {
+export function useClusterMetrics(query: { region?: string; cluster_id?: string } = {}, opts?: { enabled?: boolean }) {
   return useQuery({
     queryKey: [...monitorKeys.cluster, query],
     enabled: opts?.enabled ?? true,
