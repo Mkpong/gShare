@@ -9,6 +9,7 @@ from __future__ import annotations
 from datetime import UTC, datetime
 
 import pytest
+from sqlalchemy import select
 
 from app.api.schemas.internal import OperatorPoolCapacity, OperatorVolumeSync
 from app.cluster.volume_sync import VolumeSync
@@ -118,3 +119,36 @@ async def test_capacity_for_an_unregistered_class_is_ignored(db):
             __import__("sqlalchemy").select(__import__("sqlalchemy").func.count())
             .select_from(StoragePool)
         ) == 1
+
+
+@pytest.mark.asyncio
+async def test_deregistering_a_cluster_retires_its_pools_and_shares(db):
+    """A pool of a deregistered cluster is not a place a volume can go; leaving it live kept its
+    capacity in the fleet's bound and its row on the dashboard."""
+    from app.api.clusters_router import deregister_cluster
+    from app.auth.rbac import Principal
+
+    await _cluster(db, "clu_gone")
+    await _cluster(db, "clu_stays")
+    dying = await _pool(db, cluster_id="clu_gone", name="going", capacity_bytes=2000 * GB)
+    living = await _pool(db, cluster_id="clu_stays", name="staying", scope="selected",
+                         capacity_bytes=500 * GB)
+    async with db.begin():
+        # The dying cluster was allowed onto the surviving cluster's restricted pool.
+        db.add(StoragePoolShare(id=ids.new("storage_pool_share"), pool_id=living.id,
+                                cluster_id="clu_gone"))
+    assert (await pool_bound_gb(db))[0] == 2000
+    dying_id, living_id = dying.id, living.id   # ids before the commit expires the instances
+
+    await deregister_cluster("clu_gone", Principal(user_id="usr_su", global_roles={"super_admin"}), db)
+
+    db.expunge_all()   # the deregistration committed; read the rows back, not the cached ones
+    async with db.begin():
+        retired = dict((await db.execute(
+            select(StoragePool.id, StoragePool.deleted_at)
+        )).all())
+    assert retired[dying_id] is not None
+    assert retired[living_id] is None
+    # Its share of someone else's pool goes too, and the fleet bound follows.
+    assert {p.id for p in await usable_pools(db, "clu_stays")} == {living_id}
+    assert (await pool_bound_gb(db))[0] == 500

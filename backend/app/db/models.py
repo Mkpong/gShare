@@ -411,7 +411,11 @@ class StoragePool(Base, TimestampMixin, SoftDeleteMixin):
     cluster_id: Mapped[str] = mapped_column(ForeignKey("cluster.id"), index=True)
     # The server itself, when it is a node of that cluster (it usually is). Kept as a plain
     # hostname too, so a pool survives the node being re-registered.
-    node_id: Mapped[str | None] = mapped_column(ForeignKey("gpu_node.id"), default=None, index=True)
+    # ON DELETE SET NULL: the node link is descriptive, and a node being removed — a finished
+    # decommission, a deregistered cluster — must not be blocked by a pool naming it.
+    node_id: Mapped[str | None] = mapped_column(
+        ForeignKey("gpu_node.id", ondelete="SET NULL"), default=None, index=True
+    )
     node_hostname: Mapped[str | None] = mapped_column(String, default=None)
     # The StorageClass that provisions from this pool. This is the join key for the capacity the
     # operator reports, and what the operator is configured with (--volume-storage-class).

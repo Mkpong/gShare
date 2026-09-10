@@ -33,7 +33,7 @@ from app.cluster.credentials import decrypt_kubeconfig, encrypt_kubeconfig
 from app.core import ids
 from app.core.errors import DomainError, NotFound
 from app.db.base import get_db
-from app.db.models import Allocation, Cluster, GpuDevice, GpuNode
+from app.db.models import Allocation, Cluster, GpuDevice, GpuNode, StoragePool, StoragePoolShare
 from app.db.models import Session as SessionModel
 from app.domain.audit_service import AuditService
 
@@ -526,6 +526,24 @@ async def deregister_cluster(
         )
     await db.execute(delete(GpuDevice).where(GpuDevice.cluster_id == cluster_id))
     await db.execute(delete(GpuNode).where(GpuNode.cluster_id == cluster_id))
+    # Retire the cluster's storage pools with it. A pool of a deregistered cluster is not a place
+    # a volume can be put any more, and leaving it live kept its capacity in the fleet's bound.
+    dead_pools = (
+        await db.scalars(
+            select(StoragePool.id).where(
+                StoragePool.cluster_id == cluster_id, StoragePool.deleted_at.is_(None)
+            )
+        )
+    ).all()
+    if dead_pools:
+        await db.execute(
+            delete(StoragePoolShare).where(StoragePoolShare.pool_id.in_(dead_pools))
+        )
+        await db.execute(
+            update(StoragePool).where(StoragePool.id.in_(dead_pools)).values(deleted_at=func.now())
+        )
+    # A pool elsewhere that was shared *with* this cluster keeps existing; only the share goes.
+    await db.execute(delete(StoragePoolShare).where(StoragePoolShare.cluster_id == cluster_id))
 
     # Soft-delete + discard the credential reference (operator/external-secrets reclaims the
     # secret).
