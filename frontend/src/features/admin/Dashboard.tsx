@@ -325,7 +325,11 @@ export function AdminDashboard() {
               {(() => {
                 // The tile stays put whether or not this cluster has storage: an empty slot in the
                 // fleet-pressure row reads as a rendering bug, while a stated "none attached" is a fact.
-                const st = (m as { storage?: { disk_gb: { used: number; total: number; source?: string }; node_count: number; shared?: boolean } | null }).storage;
+                type StorageNode = {
+                  id: string; hostname?: string | null;
+                  cluster_name?: string | null; status?: string | null; disk_gb?: number | null;
+                };
+                const st = (m as { storage?: { disk_gb: { used: number; total: number; source?: string }; node_count: number; shared?: boolean; nodes?: StorageNode[] } | null }).storage;
                 return (
                   <section className="gs-panel p-5">
                     <h2 className="gs-h2">{t('admin.dashboard.storageTitle')}</h2>
@@ -335,6 +339,27 @@ export function AdminDashboard() {
                           {t(st.shared ? 'admin.dashboard.storageSubShared' : 'admin.dashboard.storageSubShort', { count: st.node_count })}
                           <HelpTip text={t(st.disk_gb.source === 'pool' ? 'admin.dashboard.storageSub' : 'admin.dashboard.storageSubNodeDisk', { count: st.node_count })} />
                         </p>
+                        {/* Which machines hold the pool, each tagged with the cluster it sits in —
+                            the same reading the GPU tiles give. A count alone said how many
+                            without saying which, and on a shared pool that is the first thing an
+                            administrator needs before touching one. */}
+                        <ul className="mt-2">
+                          {(st.nodes ?? []).map((n) => (
+                            <li key={n.id} className="gs-hair flex items-center gap-2 py-1.5 text-xs min-w-0">
+                              <span className="font-semibold truncate" title={n.hostname ?? undefined}>
+                                {n.hostname ?? n.id}
+                              </span>
+                              {n.cluster_name && (
+                                <span className="gs-tag shrink-0 truncate max-w-[8rem]" title={n.cluster_name}>
+                                  {n.cluster_name}
+                                </span>
+                              )}
+                              <span className="gs-num text-muted ml-auto shrink-0">
+                                {n.disk_gb ? `${n.disk_gb} GB` : '-'}
+                              </span>
+                            </li>
+                          ))}
+                        </ul>
                         <div className="mt-1">
                           <CapacityRow
                             label={t('admin.dashboard.storageAllocated')}

@@ -16,6 +16,7 @@ from app.api.deps import Pagination, get_current_principal
 from app.api.schemas.volume import PermissionBody, VolumeCreate, VolumePatch, VolumeRead
 from app.auth.rbac import Principal, rbac_allows
 from app.core import ids
+from app.core.config import settings
 from app.core.errors import (
     AlreadyExists,
     DomainError,
@@ -130,12 +131,22 @@ class StorageCapacityExceeded(DomainError):
 async def _physical_storage(db: AsyncSession) -> tuple[int | None, int]:
     """(capacity_gb, allocated_gb) of the volume-backing storage pool.
 
-    Capacity is the storage-role nodes' host disk (operator inventory) with a 5% safety margin —
-    ZFS/CSI need working space and a 100%-provisioned pool ends in ENOSPC for everyone. Allocation
-    is the provisioned quota of every live volume. None = no storage node reported (no gate)."""
-    cap = await db.scalar(
-        select(func.coalesce(func.sum(GpuNode.disk), 0)).where(GpuNode.role == "storage")
-    )
+    Capacity is what a volume can actually be created on, with a 5% safety margin — ZFS/CSI need
+    working space and a 100%-provisioned pool ends in ENOSPC for everyone. Allocation is the
+    provisioned quota of every live volume. None = no storage node reported (no gate).
+
+    A volume lives on ONE pool: the StorageClass its PVC names decides where, and gShare picks
+    nothing. So several storage servers are not one big pool, and adding their disks up licensed
+    volumes no single server could hold. Without an explicit `STORAGE_POOL_CAPACITY_GB` the
+    largest single server is the honest bound; with it, the administrator's figure wins — the same
+    source the dashboard reads, so the gate and the panel cannot disagree.
+    """
+    if settings.STORAGE_POOL_CAPACITY_GB:
+        cap: int | None = settings.STORAGE_POOL_CAPACITY_GB
+    else:
+        cap = await db.scalar(
+            select(func.coalesce(func.max(GpuNode.disk), 0)).where(GpuNode.role == "storage")
+        )
     if not cap:
         return None, 0
     allocated = int(await db.scalar(

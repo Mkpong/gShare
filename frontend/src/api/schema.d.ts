@@ -3773,6 +3773,11 @@ export interface components {
              * @default false
              */
             shared: boolean;
+            /**
+             * Nodes
+             * @default []
+             */
+            nodes: components["schemas"]["ClusterStorageNode"][];
         };
         /** ClusterStorageDisk */
         ClusterStorageDisk: {
@@ -3785,6 +3790,24 @@ export interface components {
              * @default node_disk
              */
             source: string;
+        };
+        /**
+         * ClusterStorageNode
+         * @description One storage server: its name, where it sits, and what it reports.
+         */
+        ClusterStorageNode: {
+            /** Id */
+            id: string;
+            /** Hostname */
+            hostname?: string | null;
+            /** Cluster Id */
+            cluster_id?: string | null;
+            /** Cluster Name */
+            cluster_name?: string | null;
+            /** Status */
+            status?: string | null;
+            /** Disk Gb */
+            disk_gb?: number | null;
         };
         /** ConnectionInfo */
         ConnectionInfo: {

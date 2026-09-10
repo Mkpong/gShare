@@ -1356,17 +1356,36 @@ async def metrics_cluster(
     vol_alloc = int(await db.scalar(
         select(func.coalesce(func.sum(StorageVolume.quota_gb), 0)).where(StorageVolume.deleted_at.is_(None))
     ) or 0)
+    # Which machines actually hold the pool, and where they sit. "노드 1대" answered how many
+    # without answering which — and on a shared pool the cluster a server belongs to is the part
+    # an administrator needs before touching it.
+    storage_cluster_names = dict(
+        (await db.execute(select(Cluster.id, Cluster.name))).all()
+    ) if storage_nodes else {}
     storage = {
         # The pool that actually backs volumes is not something the operator can see (it reports
         # the node's root disk); an administrator states it once in the chart, otherwise the panel
-        # falls back to the storage nodes' disk and says so.
+        # falls back to the storage nodes' disk and says so. Several servers are not one pool — a
+        # volume lands on whichever one its StorageClass points at — so the largest is the bound,
+        # never the sum. Same rule as the volume-creation gate, which reads the same setting.
         "disk_gb": {
             "used": vol_alloc,
-            "total": settings.STORAGE_POOL_CAPACITY_GB or sum(n.disk or 0 for n in storage_nodes),
+            "total": settings.STORAGE_POOL_CAPACITY_GB or max((n.disk or 0 for n in storage_nodes), default=0),
             "source": "pool" if settings.STORAGE_POOL_CAPACITY_GB else "node_disk",
         },
         "node_count": len(storage_nodes),
         "shared": bool(cluster_id),
+        "nodes": [
+            {
+                "id": n.id,
+                "hostname": n.hostname,
+                "cluster_id": n.cluster_id,
+                "cluster_name": storage_cluster_names.get(n.cluster_id) if n.cluster_id else None,
+                "status": n.status,
+                "disk_gb": n.disk,
+            }
+            for n in sorted(storage_nodes, key=lambda n: n.hostname or "")
+        ],
     } if storage_nodes else None
 
     # ALLOCATION based, deliberately: this dashboard answers "how much of the fleet is handed out",

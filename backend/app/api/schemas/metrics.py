@@ -118,6 +118,17 @@ class ClusterCompute(BaseModel):
     disk_gb: ClusterResource
 
 
+class ClusterStorageNode(BaseModel):
+    """One storage server: its name, where it sits, and what it reports."""
+
+    id: str
+    hostname: str | None = None
+    cluster_id: str | None = None
+    cluster_name: str | None = None
+    status: str | None = None
+    disk_gb: int | None = None
+
+
 class ClusterStorageDisk(BaseModel):
     used: int   # provisioned volume quota (GiB) — allocation, not bytes on disk
     total: int  # configured pool capacity (GB) when known, else the storage nodes' host disk
@@ -129,6 +140,8 @@ class ClusterStorage(BaseModel):
     node_count: int = 0
     # True under a cluster filter: the pool is fleet-wide, not this cluster's own.
     shared: bool = False
+    # The machines holding the pool, each with the cluster it belongs to.
+    nodes: list[ClusterStorageNode] = []
 
 
 class ClusterMetrics(BaseModel):

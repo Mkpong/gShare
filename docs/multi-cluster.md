@@ -158,6 +158,15 @@ helm -n gshare-storage get values gshare-storage > csi-values.yaml && chmod 600 
 The values file carries the storage box's SSH key. Keep it out of the repository and delete it
 when the attach is done.
 
+**Several storage servers are not one pool.** A volume lives on exactly one — the StorageClass its
+PVC names decides where, and gShare chooses nothing. So a second storage server is only reachable
+through a second CSI driver and StorageClass, and because the operator takes one
+`--volume-storage-class` per cluster, the split can only be per cluster (and a volume then cannot
+move between them; see the limits below). The capacity gate and the dashboard both treat the
+*largest* server as the bound, never the sum. When the real pool is bigger than any node's root
+disk — a ZFS pool across several disks, which is what the operator sees — state it once with
+`STORAGE_POOL_CAPACITY_GB` on the control plane; both readings follow that figure.
+
 Prerequisites on the attached cluster — the script checks both and stops with the fix if missing:
 
 - **An NFS client on every node** (`nfs-common` on Debian/Ubuntu, `nfs-utils` on RHEL): the
