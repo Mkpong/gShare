@@ -98,3 +98,16 @@ misconfigurations:
       - "build/images/lossless-agent/Dockerfile"
       - "build/hami-fork/Dockerfile.scheduler"
     statement: "MIG toggle and CRIU checkpointing drive host devices as root by design; the fork mirrors upstream HAMi."
+
+vulnerabilities:
+  # ── Documentation site build toolchain (website/) ───────────────────────────────────────
+  # image-size runs at `docusaurus build` time to read the dimensions of the screenshots checked
+  # into this repository. The reported denial of service needs a crafted ICNS/JXL/HEIF buffer
+  # from an untrusted source; the only inputs here are our own PNGs, and no fixed release exists
+  # yet (2.0.2 is current). The package is not part of any shipped gShare image.
+  - id: CVE-2025-71329
+    paths: ["website/package-lock.json"]
+    statement: "Build-time image parser over repository-owned screenshots; no fixed version published."
+  - id: CVE-2025-71330
+    paths: ["website/package-lock.json"]
+    statement: "Same as CVE-2025-71329."
