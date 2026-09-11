@@ -527,6 +527,7 @@
       "devicePage": "{{page}}쪽",
       "storageShareAll": "공용",
       "storageCapacityUnknown": "미측정",
+      "storageUnplaced": "아직 미생성 볼륨(서버 미배정) {{gb}} GB",
       "storageSource": {
         "csi": "CSI 드라이버가 측정한 값",
         "manual": "관리자가 지정한 값",

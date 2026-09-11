@@ -33,7 +33,7 @@ only: a tenant administrator manages people, not machines.
 | **GPU devices** | One tile per card: cluster tag, mode, VRAM occupancy, free cores |
 | **Node status** | Busy, ready, cordoned, offline, open health alerts |
 | **Host resources** | CPU, memory and disk across the fleet |
-| **Storage server** | The registered [pool](./storage.md), its cluster, sharing, and provisioned quota against capacity |
+| **Storage server** | Provisioned volume quota against the capacity of every registered [pool](./storage.md) added up, then one row per pool with its own allocation, cluster and sharing |
 | **Recent activity** | The latest audit entries, fleet-wide |
 
 The **cluster selector** in the top bar narrows every figure to one cluster. The storage panel

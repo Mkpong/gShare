@@ -12,7 +12,7 @@ from typing import Any
 
 from fastapi import APIRouter, Depends, Query, Response, status
 from pydantic import BaseModel, Field
-from sqlalchemy import select
+from sqlalchemy import delete, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.api.deps import get_current_principal
@@ -128,6 +128,28 @@ async def list_pools(
     return {"data": [await _view(db, p, names) for p in pools]}
 
 
+async def _release_retired_key(db: AsyncSession, cluster_id: str, storage_class: str) -> None:
+    """Make (cluster, StorageClass) registrable again after the pool holding it was deregistered.
+
+    Deregistering soft-deletes the row, and the uniqueness of the key ignores nothing — so a class
+    registered, removed and registered again hit the constraint and surfaced as a 500. The retired
+    row has nothing left to say (its shares were cleared, the audit log keeps the history), so it
+    is purged here rather than kept beside its replacement.
+    """
+    retired = (await db.scalars(
+        select(StoragePool).where(
+            StoragePool.cluster_id == cluster_id,
+            StoragePool.storage_class == storage_class,
+            StoragePool.deleted_at.is_not(None),
+        )
+    )).all()
+    for row in retired:
+        await db.execute(delete(StoragePoolShare).where(StoragePoolShare.pool_id == row.id))
+        await db.delete(row)
+    if retired:
+        await db.flush()
+
+
 @router.post("", status_code=status.HTTP_201_CREATED)
 async def create_pool(
     body: PoolCreate,
@@ -164,6 +186,7 @@ async def create_pool(
         name = hostname or (body.name or "").strip()
         if not name:
             raise _Validation("a pool without a node needs a name", {"name": body.name})
+        await _release_retired_key(db, body.cluster_id, body.storage_class.strip())
         pool = StoragePool(
             id=ids.new("storage_pool"), name=name, cluster_id=body.cluster_id,
             node_id=body.node_id, node_hostname=hostname, storage_class=body.storage_class.strip(),
@@ -196,6 +219,20 @@ async def update_pool(
         if body.storage_class is not None and body.storage_class.strip() != pool.storage_class:
             # The class is the join key for the operator's capacity report; a changed class means
             # the stored measurement describes something else.
+            taken = (await db.scalars(
+                select(StoragePool).where(
+                    StoragePool.cluster_id == pool.cluster_id,
+                    StoragePool.storage_class == body.storage_class.strip(),
+                    StoragePool.deleted_at.is_(None),
+                    StoragePool.id != pool.id,
+                )
+            )).first()
+            if taken is not None:
+                raise AlreadyExists(
+                    "a pool for this cluster and storage class already exists",
+                    {"pool_id": taken.id, "storage_class": body.storage_class.strip()},
+                )
+            await _release_retired_key(db, pool.cluster_id, body.storage_class.strip())
             changes["storage_class"] = {"from": pool.storage_class, "to": body.storage_class.strip()}
             pool.storage_class = body.storage_class.strip()
             pool.capacity_bytes = None

@@ -527,6 +527,7 @@
       "devicePage": "Page {{page}}",
       "storageShareAll": "shared",
       "storageCapacityUnknown": "not measured",
+      "storageUnplaced": "Not yet provisioned (on no server yet): {{gb}} GB",
       "storageSource": {
         "csi": "measured by the CSI driver",
         "manual": "stated by an administrator",

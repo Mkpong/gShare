@@ -210,3 +210,77 @@ async def test_a_pool_without_a_node_needs_a_typed_name(db):
     await db.rollback()
     made = await create_pool(PoolCreate(name="appliance-1", cluster_id="clu_x", storage_class="gshare-data"), principal=root, db=db)
     assert made["name"] == "appliance-1"
+
+
+# ── the dashboard tile: fleet total on top, each pool's own allocation below ─────────────
+
+@pytest.mark.asyncio
+async def test_dashboard_storage_reports_each_pools_allocation_and_the_fleet_total(db):
+    from app.api.infra_router import metrics_cluster
+    from app.auth.rbac import Principal
+    from app.db.models import StorageVolume
+    await _cluster(db, "clu_m")
+    a = await _pool(db, cluster_id="clu_m", name="nas-a", storage_class="gshare-data", manual_gb=1000)
+    b = await _pool(db, cluster_id="clu_m", name="nas-b", storage_class="gshare-nfs", manual_gb=3000)
+    async with db.begin():
+        db.add_all([
+            StorageVolume(id=ids.new("volume"), scope="user", scope_id="u", type="home", name="v1", access_mode="RWX",
+                          quota_gb=100, used_gb=0, cluster_id="clu_m", storage_class="gshare-data"),
+            StorageVolume(id=ids.new("volume"), scope="user", scope_id="u", type="home", name="v2", access_mode="RWX",
+                          quota_gb=50, used_gb=0, cluster_id="clu_m", storage_class="gshare-data"),
+            StorageVolume(id=ids.new("volume"), scope="user", scope_id="u", type="home", name="v3", access_mode="RWX",
+                          quota_gb=700, used_gb=0, cluster_id="clu_m", storage_class="gshare-nfs"),
+            # PVC not created yet: on no pool, but still part of the fleet's provisioned quota.
+            StorageVolume(id=ids.new("volume"), scope="user", scope_id="u", type="home", name="v4", access_mode="RWX",
+                          quota_gb=20, used_gb=0),
+        ])
+    m = await metrics_cluster(region=None, cluster_id="clu_m",
+                              principal=Principal(user_id="root", global_roles={"super_admin"}), db=db)
+    st = m["storage"]
+    used = {p["name"]: p["used_gb"] for p in st["pools"]}
+    assert used == {"nas-a": 150, "nas-b": 700}
+    assert st["capacity_gb"] == 4000            # the header meter: every pool added up
+    assert st["disk_gb"]["total"] == 3000       # the placement bound stays the largest pool
+    assert st["disk_gb"]["used"] == 870 and st["unplaced_gb"] == 20
+    assert {p["name"]: p["capacity_gb"] for p in st["pools"]} == {"nas-a": 1000, "nas-b": 3000}
+    assert a.id != b.id
+
+
+# ── a deregistered class can be registered again ─────────────────────────────────────────
+
+@pytest.mark.asyncio
+async def test_a_class_can_be_registered_again_after_its_pool_was_removed(db):
+    from app.api.storage_pools_router import (
+        PoolCreate,
+        PoolPatch,
+        create_pool,
+        delete_pool,
+        update_pool,
+    )
+    from app.auth.rbac import Principal
+    from app.core.errors import AlreadyExists
+    await _cluster(db, "clu_r")
+    root = Principal(user_id="root", global_roles={"super_admin"})
+    first = await create_pool(PoolCreate(name="nas-02", cluster_id="clu_r", storage_class="gshare-nfs", manual_capacity_gb=2000),
+                              principal=root, db=db)
+    await db.commit()
+    await delete_pool(first["id"], principal=root, db=db)
+    await db.commit()
+    # the same key again: before, the soft-deleted row still held the unique constraint → 500
+    again = await create_pool(PoolCreate(name="nas-02", cluster_id="clu_r", storage_class="gshare-nfs", manual_capacity_gb=2500),
+                              principal=root, db=db)
+    await db.commit()
+    assert again["id"] != first["id"] and again["capacity_gb"] == 2500
+    live = (await db.scalars(select(StoragePool).where(StoragePool.cluster_id == "clu_r"))).all()
+    assert [p.id for p in live] == [again["id"]]      # the retired row is gone, not kept beside it
+    await db.commit()
+    # moving another pool onto a live class is still refused, and onto a retired one succeeds
+    other = await create_pool(PoolCreate(name="nas-03", cluster_id="clu_r", storage_class="gshare-data"), principal=root, db=db)
+    await db.commit()
+    with pytest.raises(AlreadyExists):
+        await update_pool(other["id"], PoolPatch(storage_class="gshare-nfs"), principal=root, db=db)
+    await db.rollback()
+    await delete_pool(again["id"], principal=root, db=db)
+    await db.commit()
+    moved = await update_pool(other["id"], PoolPatch(storage_class="gshare-nfs"), principal=root, db=db)
+    assert moved["storage_class"] == "gshare-nfs"

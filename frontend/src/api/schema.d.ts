@@ -3815,6 +3815,16 @@ export interface components {
              */
             node_count: number;
             /**
+             * Capacity Gb
+             * @default 0
+             */
+            capacity_gb: number;
+            /**
+             * Unplaced Gb
+             * @default 0
+             */
+            unplaced_gb: number;
+            /**
              * Shared
              * @default false
              */
@@ -3862,6 +3872,11 @@ export interface components {
             capacity_source?: string | null;
             /** Capacity Reported At */
             capacity_reported_at?: string | null;
+            /**
+             * Used Gb
+             * @default 0
+             */
+            used_gb: number;
         };
         /** ConnectionInfo */
         ConnectionInfo: {

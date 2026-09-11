@@ -328,9 +328,18 @@ export function AdminDashboard() {
                 type StoragePool = {
                   id: string; name?: string | null; hostname?: string | null;
                   cluster_name?: string | null; share_scope?: string | null;
-                  capacity_gb?: number | null; capacity_source?: string | null;
+                  capacity_gb?: number | null; capacity_source?: string | null; used_gb?: number | null;
                 };
-                const st = (m as { storage?: { disk_gb: { used: number; total: number; source?: string }; node_count: number; shared?: boolean; pools?: StoragePool[] } | null }).storage;
+                type Storage = {
+                  disk_gb: { used: number; total: number; source?: string };
+                  node_count: number; shared?: boolean; pools?: StoragePool[];
+                  capacity_gb?: number; unplaced_gb?: number;
+                };
+                const st = (m as { storage?: Storage | null }).storage;
+                // The header meter is the fleet total (every pool's capacity added up); each pool
+                // row below carries its own allocation against its own capacity, which is the
+                // figure that decides whether one more volume fits — a volume lives on one server.
+                const fleetCap = st?.capacity_gb ?? st?.disk_gb.total ?? 0;
                 return (
                   <section className="gs-panel p-5">
                     <h2 className="gs-h2">{t('admin.dashboard.storageTitle')}</h2>
@@ -340,39 +349,47 @@ export function AdminDashboard() {
                           {t(st.shared ? 'admin.dashboard.storageSubShared' : 'admin.dashboard.storageSubShort', { count: st.node_count })}
                           <HelpTip text={t(st.disk_gb.source === 'pool' ? 'admin.dashboard.storageSub' : 'admin.dashboard.storageSubNodeDisk', { count: st.node_count })} />
                         </p>
-                        {/* Each registered pool, tagged with the cluster its server sits in — the
-                            same reading the GPU tiles give. A count alone said how many without
-                            saying which, and on a shared pool that is the first thing an
-                            administrator needs before touching one. */}
-                        <ul className="mt-2">
-                          {(st.pools ?? []).map((p) => (
-                            <li key={p.id} className="gs-hair flex items-center gap-2 py-1.5 text-xs min-w-0">
-                              <span className="font-semibold truncate" title={p.hostname ?? undefined}>
-                                {p.name ?? p.hostname ?? p.id}
-                              </span>
-                              {p.cluster_name && (
-                                <span className="gs-tag shrink-0 truncate max-w-[8rem]" title={p.cluster_name}>
-                                  {p.cluster_name}
-                                </span>
-                              )}
-                              {p.share_scope === 'all' && (
-                                <span className="gs-tag shrink-0">{t('admin.dashboard.storageShareAll')}</span>
-                              )}
-                              <span className="gs-num text-muted ml-auto shrink-0"
-                                    title={t(`admin.dashboard.storageSource.${p.capacity_source ?? 'unknown'}`, { defaultValue: '' })}>
-                                {p.capacity_gb ? `${p.capacity_gb} GB` : t('admin.dashboard.storageCapacityUnknown')}
-                              </span>
-                            </li>
-                          ))}
-                        </ul>
                         <div className="mt-1">
                           <CapacityRow
                             label={t('admin.dashboard.storageAllocated')}
-                            reading={`${st.disk_gb.used} / ${st.disk_gb.total} GB`}
-                            pct={st.disk_gb.total > 0 ? (st.disk_gb.used / st.disk_gb.total) * 100 : 0}
-                            variant={st.disk_gb.used > st.disk_gb.total ? 'danger' : 'primary'}
+                            reading={`${st.disk_gb.used} / ${fleetCap} GB`}
+                            pct={fleetCap > 0 ? (st.disk_gb.used / fleetCap) * 100 : 0}
+                            variant={st.disk_gb.used > fleetCap ? 'danger' : 'primary'}
                           />
                         </div>
+                        <ul className="mt-1">
+                          {(st.pools ?? []).map((p) => {
+                            const used = p.used_gb ?? 0;
+                            const cap = p.capacity_gb ?? 0;
+                            return (
+                              <li key={p.id} className="gs-hair py-2 text-xs min-w-0">
+                                <div className="flex items-center gap-2 min-w-0">
+                                  <span className="font-semibold truncate" title={p.hostname ?? undefined}>
+                                    {p.name ?? p.hostname ?? p.id}
+                                  </span>
+                                  {p.cluster_name && (
+                                    <span className="gs-tag shrink-0 truncate max-w-[8rem]" title={p.cluster_name}>
+                                      {p.cluster_name}
+                                    </span>
+                                  )}
+                                  {p.share_scope === 'all' && (
+                                    <span className="gs-tag shrink-0">{t('admin.dashboard.storageShareAll')}</span>
+                                  )}
+                                  <span className="gs-num text-muted ml-auto shrink-0"
+                                        title={t(`admin.dashboard.storageSource.${p.capacity_source ?? 'unknown'}`, { defaultValue: '' })}>
+                                    {cap ? `${used} / ${cap} GB` : `${used} GB / ${t('admin.dashboard.storageCapacityUnknown')}`}
+                                  </span>
+                                </div>
+                                {cap > 0 && (
+                                  <Meter value={(used / cap) * 100} variant={used > cap ? 'danger' : 'primary'} className="!mt-1.5" />
+                                )}
+                              </li>
+                            );
+                          })}
+                        </ul>
+                        {(st.unplaced_gb ?? 0) > 0 && (
+                          <p className="text-muted text-xs mt-2">{t('admin.dashboard.storageUnplaced', { gb: st.unplaced_gb })}</p>
+                        )}
                       </>
                     ) : (
                       <p className="gs-sub mt-1">
