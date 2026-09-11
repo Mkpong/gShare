@@ -17,6 +17,7 @@ from datetime import UTC, datetime
 from decimal import Decimal
 
 from sqlalchemy import (
+    BigInteger,
     Boolean,
     CheckConstraint,
     DateTime,
@@ -82,7 +83,13 @@ class Notification(Base, TimestampMixin):
 class Organization(Base, TimestampMixin, SoftDeleteMixin):
     __tablename__ = "organization"
     id: Mapped[str] = mapped_column(String, primary_key=True)            # org_ULID
-    name: Mapped[str] = mapped_column(String, unique=True)
+    # Unique among LIVE organizations only: a deleted one is soft-deleted, and a plain UNIQUE
+    # kept its name reserved forever — re-creating it hit a row nobody could see.
+    name: Mapped[str] = mapped_column(String)
+    __table_args__ = (
+        Index("uq_organization_name_live", "name", unique=True,
+              postgresql_where=text("deleted_at IS NULL"), sqlite_where=text("deleted_at IS NULL")),
+    )
     status: Mapped[str] = mapped_column(String, default="active")
     timezone: Mapped[str] = mapped_column(String, default="Asia/Seoul")
 
@@ -327,8 +334,18 @@ class Cluster(Base, TimestampMixin, SoftDeleteMixin):
     api_server: Mapped[str] = mapped_column(String)
     runtime: Mapped[str] = mapped_column(String)
     status: Mapped[str] = mapped_column(String, default="pending")
-    # Secret reference only — never store plaintext kubeconfig.
+    # Where the credential lives when it is projected as a file (external-secrets, host mount).
     kubeconfig_secret_ref: Mapped[str] = mapped_column(String)
+    # The hostname sessions on THIS cluster are reached at. Each cluster terminates its own
+    # ingress, so a session's URL has to follow the cluster it actually runs on; a single global
+    # domain sent every user to cluster one, where the session's ingress does not exist. Empty
+    # falls back to the global GSHARE_SESSION_DOMAIN, which is right for a single-cluster install.
+    session_domain: Mapped[str | None] = mapped_column(String, default=None)
+    # The credential itself, encrypted at rest (see app.cluster.credentials). Registration used to
+    # discard the uploaded kubeconfig and keep only the reference above, which left every remote
+    # cluster unusable until someone placed the file by hand. Null for the local cluster, which
+    # authenticates with its own in-cluster service account.
+    kubeconfig_encrypted: Mapped[str | None] = mapped_column(Text, default=None)
     __table_args__ = (
         Index(
             "uq_cluster_name_active",
@@ -378,6 +395,60 @@ class NodePool(Base, TimestampMixin):
     __table_args__ = (UniqueConstraint("cluster_id", "name", name="uq_node_pool_cluster_name"),)
 
 
+class StoragePool(Base, TimestampMixin, SoftDeleteMixin):
+    """A volume-backing pool: one storage server, seen through one StorageClass.
+
+    A volume lives on exactly one pool — the StorageClass its PVC names decides where, and gShare
+    chooses nothing — so pools are never summed into one big number. The pool belongs to the
+    cluster its server sits in; `share_scope` says who else may place volumes on it: "all" for
+    every cluster (the usual shape, one NFS box exported to the whole fleet), or "selected" for
+    the clusters listed in StoragePoolShare.
+
+    Capacity is measured, not typed in: the operator reads the CSI driver's own answer
+    (CSIStorageCapacity, published by the external-provisioner) and reports it here. A site whose
+    driver does not publish capacity falls back to `manual_capacity_gb`, and failing that to the
+    storage node's root disk — which is not the pool and is labelled as such.
+    """
+    __tablename__ = "storage_pool"
+    id: Mapped[str] = mapped_column(String, primary_key=True)            # stp_ULID
+    name: Mapped[str] = mapped_column(String)
+    # The cluster the storage server belongs to. Volumes may still be placed from elsewhere; see
+    # share_scope.
+    cluster_id: Mapped[str] = mapped_column(ForeignKey("cluster.id"), index=True)
+    # The server itself, when it is a node of that cluster (it usually is). Kept as a plain
+    # hostname too, so a pool survives the node being re-registered.
+    # ON DELETE SET NULL: the node link is descriptive, and a node being removed — a finished
+    # decommission, a deregistered cluster — must not be blocked by a pool naming it.
+    node_id: Mapped[str | None] = mapped_column(
+        ForeignKey("gpu_node.id", ondelete="SET NULL"), default=None, index=True
+    )
+    node_hostname: Mapped[str | None] = mapped_column(String, default=None)
+    # The StorageClass that provisions from this pool. This is the join key for the capacity the
+    # operator reports, and what the operator is configured with (--volume-storage-class).
+    storage_class: Mapped[str] = mapped_column(String)
+    share_scope: Mapped[str] = mapped_column(String, default="all")      # all|selected
+    # Measured capacity, newest report wins. Bytes, because that is what CSI speaks.
+    capacity_bytes: Mapped[int | None] = mapped_column(BigInteger, default=None)
+    capacity_source: Mapped[str | None] = mapped_column(String, default=None)   # csi|manual|node_disk
+    capacity_reported_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), default=None)
+    # The administrator's figure, used when the driver publishes nothing.
+    manual_capacity_gb: Mapped[int | None] = mapped_column(Integer, default=None)
+    __table_args__ = (
+        UniqueConstraint("cluster_id", "storage_class", name="uq_storage_pool_cluster_class"),
+    )
+
+
+class StoragePoolShare(Base, TimestampMixin):
+    """One cluster allowed to place volumes on a pool whose share_scope is "selected"."""
+    __tablename__ = "storage_pool_share"
+    id: Mapped[str] = mapped_column(String, primary_key=True)            # sps_ULID
+    pool_id: Mapped[str] = mapped_column(ForeignKey("storage_pool.id"), index=True)
+    cluster_id: Mapped[str] = mapped_column(ForeignKey("cluster.id"), index=True)
+    __table_args__ = (
+        UniqueConstraint("pool_id", "cluster_id", name="uq_storage_pool_share"),
+    )
+
+
 class NodePoolGrant(Base, TimestampMixin):
     """Grants a tenant (organization or group) the use of a pool's nodes."""
     __tablename__ = "node_pool_grant"
@@ -422,7 +493,7 @@ class GpuDevice(Base, TimestampMixin):
     # In-place GPU yield lending state: "" (normal), "yielded" (the owner yielded, so the physical
     # card is free and lendable), or "lent" (a preemptible spot session is using it). used_* always
     # reflects resident occupancy; borrows are not counted.
-    # (docs/paper/manuscript, §Design)
+    #
     lend_state: Mapped[str] = mapped_column(String, default="", server_default=text("''"))
     __table_args__ = (
         # Final overcommit defense.
@@ -486,7 +557,7 @@ class Session(Base, TimestampMixin, SoftDeleteMixin):
     # In-place GPU yield: "cold" (the default, deletes the pod) or "yield" (keeps the pod and evicts
     # VRAM, so the resume is lossless). Under yield, stop keeps the allocation because the live pod
     # still holds the card, and start skips readmission — the operator just toggles VRAM back.
-    # (See docs/paper/manuscript, §Design.)
+    #
     pause_mode: Mapped[str] = mapped_column(String, default="cold", server_default=text("'cold'"))
     # Privileged session: the container runs as root with a relaxed security context (policy-gated
     # at admission via limits.allow_privileged). Passed through as spec.privileged.
@@ -497,7 +568,7 @@ class Session(Base, TimestampMixin, SoftDeleteMixin):
     # Scheduling priority; higher wins. Active preemption: when no capacity is free, a request can
     # make a lower-priority yieldable session yield and borrow its card. Reclaim respects priority
     # too, so a lower-priority victim cannot preempt a higher-priority spot session back.
-    # (See docs/paper/manuscript, §Design.)
+    #
     priority: Mapped[int] = mapped_column(Integer, default=0, server_default=text("0"))
     # status: pending|preparing|running|paused|terminating|terminated|error
     status: Mapped[str] = mapped_column(String, default="pending", index=True)
@@ -532,7 +603,7 @@ class Allocation(Base, TimestampMixin):
     status: Mapped[str] = mapped_column(String, default="reserved")      # reserved|bound|released
     # "resident" is a normal allocation and counts towards device.used_*. "spot" is a preemptible
     # session borrowing a yielded card: the physical card is free, so it is excluded from used_*,
-    # from drift reconciliation, and from capacity sums. (See docs/paper/manuscript, §Design.)
+    # from drift reconciliation, and from capacity sums.
     kind: Mapped[str] = mapped_column(String, default="resident", server_default=text("'resident'"))
     started_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), default=None)
     ended_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), default=None)
@@ -721,6 +792,10 @@ class AuditLog(Base, TimestampMixin):
     # payload, which keeps append-only inserts safe.
     org_id: Mapped[str | None] = mapped_column(String, index=True, default=None)
     group_id: Mapped[str | None] = mapped_column(String, index=True, default=None)
+    # Which cluster the action concerned, when it concerned one — a session, node, card, pool or
+    # the cluster itself. Outside the hash chain like the two scope columns above, so it can be
+    # filled in or corrected without breaking verification.
+    cluster_id: Mapped[str | None] = mapped_column(String, index=True, default=None)
     prev_hash: Mapped[str | None] = mapped_column(String, default=None)  # hash chain
     entry_hash: Mapped[str | None] = mapped_column(String, default=None)
 

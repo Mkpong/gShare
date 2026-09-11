@@ -41,9 +41,10 @@ export interface TopupRequestFilter {
 }
 
 // GET /credits/topup-requests — the top-up request inbox that drives the approval workflow.
-export function useTopupRequests(filter: TopupRequestFilter = {}) {
+export function useTopupRequests(filter: TopupRequestFilter = {}, opts?: { enabled?: boolean }) {
   return useQuery({
     queryKey: billingKeys.topupRequests(filter),
+    enabled: opts?.enabled ?? true,
     queryFn: async () => {
       // The history tab filters this list client-side; with a first page of nothing but pending
       // rows it rendered empty while decided requests existed.

@@ -122,7 +122,7 @@ func (b *Builder) BuildPod(s *gsharev1.GShareSession) *corev1.Pod {
 		// (gshare.io/preemptible), targeted to the chosen card by nvidia.com/use-gpuuuid; HAMi places
 		// it (no NodeName pin) so the allocation is properly accounted. Fractional borrow uses
 		// gpumem/gpucores; else a full-card exclusive borrow (gpumem-percentage=100 + gpucores=100).
-		// (build/hami-fork, docs/paper/manuscript §Implementation)
+		// (build/hami-fork)
 		spec.RuntimeClassName = &rc
 		spec.SchedulerName = "hami-scheduler"
 		limits["nvidia.com/gpu"] = resource.MustParse("1")
@@ -138,7 +138,7 @@ func (b *Builder) BuildPod(s *gsharev1.GShareSession) *corev1.Pod {
 		// Borrow fallback (stock HAMi): device-plugin BYPASS — the nvidia runtime injects the specific
 		// yielded card by UUID (NVIDIA_VISIBLE_DEVICES in env(), NO nvidia.com/gpu request), pinned to
 		// the resident's node (NodeName below). Exclusive only (one spot session per yielded card).
-		// (docs/paper/manuscript, §Design)
+		//
 		spec.RuntimeClassName = &rc
 
 	case s.Spec.Mode == "fractional":

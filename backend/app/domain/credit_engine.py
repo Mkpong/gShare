@@ -174,8 +174,11 @@ class CreditEngine:
                 await self._record(
                     wallet, type="consume", amount=-debit, ref=session.id, key=key
                 )
-            # exhaustion: the wallet could not cover the minute, or available hit zero.
-            if debit < delta or wallet.balance - wallet.reserved <= _ZERO:
+            # Exhaustion: the wallet could not cover this minute, or nothing is left for the
+            # NEXT one. The second test must count this session's own untouched reservation as
+            # spendable by it — otherwise a session funded exactly to its hold is declared
+            # bankrupt at its first tick while an hour of credit sits reserved in its name.
+            if debit < delta or await self.available_for(wallet, session) <= _ZERO:
                 exhausted = True
 
         if exhausted:
@@ -271,6 +274,24 @@ class CreditEngine:
         )
         return _round2(Decimal(result.scalar_one() or _ZERO))
 
+    async def own_outstanding_hold(self, session) -> Decimal:
+        """This session's own reservation that has not yet converted to spend.
+
+        `reserved` is a wallet-wide figure, so `balance - reserved` answers "what could another
+        session still take", not "can THIS session keep running". Using the wallet-wide number as
+        a solvency test declared a session bankrupt the moment its own hold consumed the balance —
+        exactly the boundary `hold` had just blessed. Subtracting this quantity turns the test
+        back into the intended one.
+        """
+        held = await self._sum_held(session)
+        consumed = await self._sum_consumed(session)
+        leftover = held - consumed
+        return leftover if leftover > _ZERO else _ZERO
+
+    async def available_for(self, wallet, session) -> Decimal:
+        """Credit this session may still draw on: the wallet's free balance plus its own hold."""
+        return wallet.balance - wallet.reserved + await self.own_outstanding_hold(session)
+
     async def _release_hold(self, wallet, session) -> Decimal:
         """Release *this session's* leftover reservation at settle.
 
@@ -301,8 +322,10 @@ class CreditEngine:
                       ref: str | None = None) -> None:
         """INSERT a CreditTransaction with balance_after snapshot, in the same tx."""
         amount = _round2(Decimal(amount))
-        # balance_after = available balance snapshot after applying this txn.
-        balance_after = _round2(wallet.balance - wallet.reserved)
+        # balance_after is the wallet BALANCE after this row, matching what the router-written
+        # rows record. It used to store balance - reserved here only, so the ledger's running
+        # balance jumped by the reserved amount whenever the two writers alternated.
+        balance_after = _round2(wallet.balance)
         txn = CreditTransaction(
             id=new_id("transaction"),
             wallet_id=wallet.id,

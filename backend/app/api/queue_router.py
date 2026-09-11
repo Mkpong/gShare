@@ -95,6 +95,8 @@ def _entry_view(entry: QueueEntry, score: float, position: int) -> dict:
         "score": round(score, 3),
         "session_req": entry.session_req,
         "enqueued_at": enq.isoformat() if enq else None,
+        # Carried so the console can group or filter without a second round trip.
+        "cluster_id": (entry.session_req or {}).get("cluster_id"),
     }
 
 
@@ -102,12 +104,20 @@ def _entry_view(entry: QueueEntry, score: float, position: int) -> dict:
 async def list_queue(
     page: Pagination = Depends(),
     group_id: str | None = Query(default=None),
+    cluster_id: str | None = Query(default=None),
     principal: Principal = Depends(get_current_principal),
     db: AsyncSession = Depends(get_db),
 ):
     principal.require(action="queue.read")
     ranked = await _ranked(db)
 
+    if cluster_id is not None:
+        # A queue entry has no cluster of its own; it inherits the one from its session. Without
+        # this the queue was the one panel with no cluster filter at all.
+        cluster_sids = set((await db.scalars(
+            select(Session.id).where(Session.cluster_id == cluster_id)
+        )).all())
+        ranked = [(e, sc) for e, sc in ranked if e.session_id in cluster_sids]
     if group_id is not None:
         # Filter to entries whose session belongs to group_id.
         sess_rows = (
@@ -129,10 +139,19 @@ async def list_queue(
 
 @router.get("/mine", response_model=QueueMineList)
 async def my_queue(
+    cluster_id: str | None = Query(default=None),
     principal: Principal = Depends(get_current_principal),
     db: AsyncSession = Depends(get_db),
 ):
     ranked = await _ranked(db)
+    # Narrowing to one cluster hides the entries on the others but keeps each position as it is:
+    # the queue is fleet-wide, and renumbering a filtered view would promise a place in a line
+    # that does not exist.
+    if cluster_id:
+        in_cluster = set((await db.scalars(
+            select(Session.id).where(Session.cluster_id == cluster_id)
+        )).all())
+        ranked = [(e, r) for e, r in ranked if e.session_id in in_cluster]
     # Map session -> owner to filter to the caller's entries (preserve global position).
     sess_ids = [e.session_id for e, _ in ranked]
     owners: dict[str, str] = {}

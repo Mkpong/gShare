@@ -6,8 +6,8 @@
 //   docker compose exec -T postgres psql -U gshare -d gshare < test/e2e/ux/fixture.sql
 //   ORIGIN=http://localhost:8000 node test/e2e/ux/screenshots.js
 //
-// Writes docs/screenshots/NN-role-screen.png at 1440x900. Re-run after a change to the console
-// so the manuals show what the reader will see.
+// Writes NN-role-screen.png at 1440x900 under test/e2e/ux/out (SHOTS_OUT overrides), one per
+// persona and screen — a quick way to eyeball every screen after a console change.
 
 import { chromium } from 'playwright';
 import { mkdirSync, readdirSync, unlinkSync } from 'node:fs';
@@ -18,7 +18,7 @@ import { personaById } from './personas.js';
 const HERE = dirname(fileURLToPath(import.meta.url));
 const ORIGIN = process.env.ORIGIN || 'http://localhost:8000';
 const API = process.env.API_ORIGIN || ORIGIN;
-const OUT = process.env.SHOTS_OUT || join(HERE, '../../../docs/screenshots');
+const OUT = process.env.SHOTS_OUT || join(HERE, 'out');
 const VIEWPORT = { width: 1440, height: 900 };
 const SETTLE = Number(process.env.SHOTS_SETTLE || 1500);
 

@@ -14,7 +14,7 @@ from app.db.models import AuditLog
 from app.domain.audit_service import AuditService
 
 # Direct (non-FastAPI) calls would otherwise hand the handler its Query default objects.
-_NONE = dict(actor_id=None, actor_q=None, action=None, target=None, at_gte=None, at_lt=None, result=None,)
+_NONE = dict(actor_id=None, actor_q=None, action=None, target=None, at_gte=None, at_lt=None, result=None, cluster_id=None)
 ROOT = Principal(user_id="usr_root", global_role="super_admin", global_roles={"super_admin"})
 
 

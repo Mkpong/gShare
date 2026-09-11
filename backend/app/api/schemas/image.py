@@ -22,6 +22,10 @@ class ImageRead(BaseModel):
     tags: dict[str, Any]
     supported_gpus: list[Any]
     cuda_version: str | None = None
+    # A base with no CUDA toolkit that is still a valid GPU choice: the container runtime injects
+    # the driver, so the user installs the toolkit and framework they want. The wizard needs this
+    # to offer a bare OS for a GPU session.
+    gpu_ready: bool = False
     public: bool = True
     # null = shared catalogue entry; set = a private image its owner (and admins) can see. The
     # console distinguishes the caller's own images with it, so it has to survive the projection.

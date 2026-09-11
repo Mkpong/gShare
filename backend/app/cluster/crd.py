@@ -20,9 +20,20 @@ from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.config import settings
-from app.core.errors import NotFound
+from app.core.errors import DomainError, NotFound
 from app.db.models import Cluster
 from app.domain.policy import resolve_effective_policy
+
+
+class MissingClusterCredential(DomainError):
+    """A remote cluster has no usable kubeconfig.
+
+    503, not 4xx: the caller did nothing wrong — the platform holds no credential for a cluster it
+    is being asked to drive.
+    """
+
+    code, http = "cluster_credential_missing", 503
+
 
 GROUP = "gshare.io"
 VERSION = "v1"  # matches the operator CRD: gshare.io/v1, a camelCase structural schema
@@ -594,15 +605,27 @@ class GShareSessionCRD:
         (resolved by external-secrets); we never persist plaintext kubeconfig in the DB.
         """
         kubeconfig_yaml = await self._read_secret(cluster.kubeconfig_secret_ref)
+        if not kubeconfig_yaml:
+            from app.cluster.credentials import decrypt_kubeconfig
+
+            kubeconfig_yaml = decrypt_kubeconfig(getattr(cluster, "kubeconfig_encrypted", None))
         if kubeconfig_yaml:
             import yaml  # lazy
             loader = config.kube_config.KubeConfigLoader(
                 config_dict=yaml.safe_load(kubeconfig_yaml)
             )
             await loader.load_and_set(configuration)
-        else:
-            # In-cluster SA fallback for a per-cluster agent / single-cluster dev.
+        elif cluster.id == settings.LOCAL_CLUSTER_ID:
+            # The local cluster authenticates as itself.
             config.load_incluster_config(client_configuration=configuration)
+        else:
+            # Falling back to our own service account while pointing at someone else's apiserver
+            # produced 401s that named neither the cluster nor the missing credential. Say what is
+            # actually wrong instead.
+            raise MissingClusterCredential(
+                f"no kubeconfig for cluster {cluster.id}; register it again or mount its credential",
+                {"cluster_id": cluster.id},
+            )
         # Always honor the registered apiserver endpoint when present.
         if cluster.api_server:
             configuration.host = cluster.api_server

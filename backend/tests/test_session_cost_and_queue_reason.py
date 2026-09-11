@@ -27,7 +27,7 @@ def _session(sid: str, status: str) -> Session:
 
 async def _rows(db):
     page = await list_sessions(page=Pagination(page=1, size=50), status_filter=None, group_id=None,
-                               scope="mine", principal=P, db=db)
+                               cluster_id=None, scope="mine", principal=P, db=db)
     return {r.id: r for r in page["data"]}
 
 

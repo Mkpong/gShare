@@ -195,9 +195,11 @@ function GrantForm({ pool, isSuper, orgs, groups, onDone }: {
 
 function NodePoolsPanel({ isSuper }: { isSuper: boolean }) {
   const { t } = useTranslation();
+  // Pools are per cluster; list the ones for the cluster the top bar is showing.
+  const clusterInfo = useActiveCluster();
   const confirm = useConfirm();
   const pushToast = useUiStore((s) => s.pushToast);
-  const { data: pools, isLoading, isError, error, refetch } = useNodePools();
+  const { data: pools, isLoading, isError, error, refetch } = useNodePools(clusterInfo.id ?? undefined);
   // cluster.read is super_admin only; an org_admin never creates a pool, so the list is skipped.
   const clusters = useClusters({ enabled: isSuper }).data ?? [];
   const orgs = useOrganizations().data ?? [];
@@ -340,6 +342,30 @@ function NodePoolsPanel({ isSuper }: { isSuper: boolean }) {
 
 // Per-row pool selector on the node table: the pools in the node's cluster plus "shared
 // (unassigned)". super_admin only; everyone else sees the pool name as text.
+/** The mode column: one tag per mode actually present on the node, with its card count.
+ *
+ * `gpu_mode` alone reads "mixed" for any node holding both a fractional and an exclusive card —
+ * and, having no translation, printed the English word into the Korean console. The counts the
+ * API already returns say the useful thing: which modes, and how many cards in each. */
+function NodeModeCell({ node }: { node: GpuNode }) {
+  const { t } = useTranslation();
+  const label = (m: string) => t(`enum.deviceMode.${m}`, { defaultValue: m });
+  const counts = node.mode_counts ?? {};
+  const modes = Object.keys(counts);
+  if (modes.length === 0) return <span className="text-muted">-</span>;
+  if (modes.length === 1) return <span className="gs-tag">{label(modes[0])}</span>;
+  // Deterministic order, so a node does not reshuffle its tags between refreshes.
+  return (
+    <span className="inline-flex flex-wrap gap-1" title={t('admin.nodes.mixedModeHint')}>
+      {modes.sort().map((m) => (
+        <span key={m} className="gs-tag whitespace-nowrap">
+          {label(m)} <span className="gs-num">{counts[m]}</span>
+        </span>
+      ))}
+    </span>
+  );
+}
+
 function NodePoolCell({ node, pools, canManage }: { node: GpuNode; pools: NodePool[]; canManage: boolean }) {
   const { t } = useTranslation();
   const pushToast = useUiStore((s) => s.pushToast);
@@ -397,7 +423,14 @@ export function AdminNodes() {
   }, { replace: true });
   const confirm = useConfirm();
 
-  const { data: nodes, isLoading, isError, error, refetch } = useNodes(statusFilter ? { status: statusFilter } : {}, { enabled: isSuper });
+  // Driven by the top bar, not a second dropdown of its own. The cluster narrows the QUERY, so
+  // the counters above the table and the table itself are the same set — filtering the result
+  // instead left the tiles counting the whole fleet.
+  const clusterInfo = useActiveCluster();
+  const { data: nodes, isLoading, isError, error, refetch } = useNodes(
+    { ...(statusFilter ? { status: statusFilter } : {}), ...(clusterInfo.id ? { cluster_id: clusterInfo.id } : {}) },
+    { enabled: isSuper },
+  );
   const poolsData = useNodePools(undefined, { enabled: isSuper }).data;
   const pools = useMemo(() => poolsData ?? [], [poolsData]);
   const cordon = useCordonNode();
@@ -489,7 +522,16 @@ export function AdminNodes() {
       sortBy: (n) => n.pool_name ?? '',
       render: (n) => <NodePoolCell node={n} pools={pools} canManage={isSuper} />,
     },
-    { key: 'gpu_mode', header: t('admin.nodes.colMode'), hideOnMobile: true, sortBy: (n) => n.gpu_mode ?? '', render: (n) => <span className="gs-tag">{t(`enum.deviceMode.${n.gpu_mode}`, { defaultValue: n.gpu_mode })}</span> },
+    {
+      key: 'gpu_mode',
+      header: t('admin.nodes.colMode'),
+      hideOnMobile: true,
+      sortBy: (n) => n.gpu_mode ?? '',
+      // A node's cards may sit in different modes. The backend collapses that to "mixed" for a
+      // single label, but it also sends the real per-mode counts — so show those instead of a
+      // word that says only "not one thing".
+      render: (n) => <NodeModeCell node={n} />,
+    },
     { key: 'device_count', header: t('admin.nodes.colGpu'), align: 'right', sortBy: (n) => n.device_count ?? 0, render: (n) => t('admin.nodes.gpuCount', { count: n.device_count }) },
     { key: 'running_sessions', header: t('admin.nodes.colRunning'), align: 'right', hideOnMobile: true, sortBy: (n) => n.running_sessions ?? 0, render: (n) => <span className="gs-num">{n.running_sessions ?? 0}</span> },
     { key: 'cpu', header: t('admin.nodes.colCpuMem'), hideOnMobile: true, sortBy: (n) => n.cpu ?? 0, render: (n) => `${n.cpu} core · ${n.mem_gb} GiB · ${n.disk_gb ?? 0} GiB` },
@@ -541,10 +583,7 @@ export function AdminNodes() {
   ], [t, cordon.isPending, toggleCordon, pools, isSuper, removeNode.isPending, onDeleteNode]);
 
   const all = nodes ?? [];
-  const clusterInfo = useActiveCluster();
-  const [clusterFilter, setClusterFilter] = useState('');
   const matched = all.filter((n) => {
-    if (clusterFilter && n.cluster_id !== clusterFilter) return false;
     const q = table.query.trim().toLowerCase();
     return !q || n.hostname.toLowerCase().includes(q) || (n.cluster_name ?? '').toLowerCase().includes(q) || (n.pool_name ?? '').toLowerCase().includes(q);
   });
@@ -589,14 +628,8 @@ export function AdminNodes() {
         placeholder={t('admin.nodes.searchPlaceholder')}
         total={all.length}
         shown={matched.length}
-        onClear={() => { table.clear(); setStatusFilter(''); setClusterFilter(''); }}
+        onClear={() => { table.clear(); setStatusFilter(''); }}
       >
-        {clusterInfo.multi && (
-          <Select className="gs-input w-auto" value={clusterFilter} aria-label={t('admin.nodes.allClusters')} onChange={(e) => setClusterFilter(e.target.value)}>
-            <option value="">{t('admin.nodes.allClusters')}</option>
-            {[...new Map(all.map((n) => [n.cluster_id ?? '', n.cluster_name ?? n.cluster_id ?? ''])).entries()].filter(([id]) => id).map(([id, name]) => <option key={id} value={id}>{name}</option>)}
-          </Select>
-        )}
         <label className="gs-sr-only" htmlFor="gs-node-status">{t('admin.nodes.statusFilter')}</label>
         <Select id="gs-node-status" className="gs-input w-auto" value={statusFilter} onChange={(e) => setStatusFilter(e.target.value)}>
           <option value="">{t('common.all')}</option>

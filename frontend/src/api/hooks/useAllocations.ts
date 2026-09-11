@@ -22,9 +22,10 @@ export interface AllocRequest {
   decided_reason?: string | null;  // why it was rejected — shown to the requester
 }
 
-export function useAllocationRequests(box: 'incoming' | 'mine' | 'handled') {
+export function useAllocationRequests(box: 'incoming' | 'mine' | 'handled', opts?: { enabled?: boolean }) {
   return useQuery({
     queryKey: ['alloc-reqs', box],
+    enabled: opts?.enabled ?? true,
     refetchInterval: 8000,
     queryFn: async () => {
       const { data } = await raw.GET('/api/v1/credits/allocation-requests', { params: { query: { box, size: 100 } } });

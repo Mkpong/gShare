@@ -13,7 +13,7 @@ import {
 import { Table, TableToolbar, Pagination, sortAccessor, type Column } from '@/components/Table';
 import { EmptyState, NoResults, TableSkeleton } from '@/components/EmptyState';
 import { useTableState, sortRows } from '@/hooks/useTableState';
-import { useUrlFilters, distinct, distinctPairs } from '@/hooks/useUrlFilters';
+import { useUrlFilters, distinctPairs } from '@/hooks/useUrlFilters';
 import { useActiveCluster } from '@/api/hooks/useClusters';
 import { useConfirm } from '@/components/ConfirmDialog';
 import { useBulkTerminateSessions } from '@/api/hooks/useSessions';
@@ -70,7 +70,7 @@ type QueueRow = components['schemas']['QueueEntryView'];
 
 const MONITOR_PAGE = 25;
 
-const MON_FILTERS = ['org', 'group', 'cluster'] as const;
+const MON_FILTERS = ['org', 'group'] as const;
 
 export function AdminMonitor() {
   const { t } = useTranslation();
@@ -93,8 +93,10 @@ export function AdminMonitor() {
   const queueTable = useTableState('q', { sort: 'position', dir: 'asc' });
   const statusFilter = table.tab ?? '';
   const filters = useUrlFilters(MON_FILTERS);
-  const { org, group, cluster: clusterF } = filters.values;
+  const { org, group } = filters.values;
   const clusterInfo = useActiveCluster();
+  // The cluster comes from the top bar, like every other admin screen.
+  const clusterF = clusterInfo.id ?? '';
   const clearAll = () => { table.clear(); filters.clear(); };
   const setStatusFilter = (v: string) => table.setTab(v || null);
 
@@ -103,9 +105,14 @@ export function AdminMonitor() {
 
   // /metrics/cluster and /nodes are super_admin only, so other roles never call them.
   const isSuper = useAuthStore((s) => s.claims.global_role === 'super_admin');
-  const metricsQ = useClusterMetrics({}, { enabled: isSuper });
-  const sessionsQ = useAllSessions({ status: statusFilter || undefined }, livePaused);
-  const queueQ = useAdminQueue({ status: 'queued' }, livePaused);
+  const metricsQ = useClusterMetrics(clusterF ? { cluster_id: clusterF } : {}, { enabled: isSuper });
+  // The cluster goes into the QUERY, not into a filter over the result: every count on this
+  // screen — the tab badge, the heading, the toolbar, the pager — is derived from `sessions`, so
+  // narrowing after the fetch left them all counting a fleet the table was not showing.
+  const sessionsQ = useAllSessions(
+    { status: statusFilter || undefined, cluster_id: clusterF || undefined }, livePaused,
+  );
+  const queueQ = useAdminQueue({ status: 'queued', cluster_id: clusterF || undefined }, livePaused);
 
   const sessions = useMemo(() => (sessionsQ.data ?? []) as SessionRow[], [sessionsQ.data]);
   // Row click opens the detail drawer: the row itself can never carry WHY a session errored.
@@ -240,7 +247,7 @@ export function AdminMonitor() {
               {t('admin.monitor.cleanup')}
             </Link>
           ) : (
-            <Link to={`/admin/monitor/sessions/${s.id}/terminate`} className="gs-btn gs-btn-sm gs-btn-danger">{t('admin.monitor.forceTerminate')}</Link>
+            <Link to={`/admin/monitor/sessions/${s.id}/terminate`} className="gs-btn gs-btn-mid gs-btn-danger">{t('admin.monitor.forceTerminate')}</Link>
           ),
       },
     ],
@@ -254,10 +261,9 @@ export function AdminMonitor() {
     return sessions.filter((r) => {
       if (org && r.org_id !== org) return false;
       if (group && r.group_id !== group) return false;
-      if (clusterF && r.cluster_id !== clusterF) return false;
       return !q || `${r.name ?? ''} ${r.id} ${r.owner_name ?? ''}`.toLowerCase().includes(q);
     });
-  }, [sessions, table.query, org, group, clusterF]);
+  }, [sessions, table.query, org, group]);
   const STATUS_RANK: Record<string, number> = { running: 0, preparing: 1, pending: 2, paused: 3, terminating: 4, error: 5, terminated: 6 };
   const sessionRows = useMemo(() => {
     const acc = sortAccessor(sessionColumns, table.sort);
@@ -283,9 +289,6 @@ export function AdminMonitor() {
     () => sessionRows.filter((s) => selected.has(s.id) && s.status === 'error'),
     [sessionRows, selected],
   );
-  // Every errored row currently in view, so "clean up what is broken" is one click and not a
-  // hunt down a 61-row list.
-  const cleanable = useMemo(() => sessionRows.filter((s) => s.status === 'error'), [sessionRows]);
 
   const terminateSelected = async () => {
     const ok = await confirm({
@@ -304,19 +307,26 @@ export function AdminMonitor() {
     });
   };
 
-  const cleanupSelected = async () => {
+  // Both bulk actions follow the tick boxes and nothing else. Acting on "everything the filter
+  // shows" when the selection was empty meant the button did something different from what it
+  // looked like it would do — and there is no undo for either of these.
+  const cleanupTargets = selectedStale;
+
+  const cleanupAll = async () => {
+    if (cleanupTargets.length === 0) return;
     const ok = await confirm({
-      title: t('admin.monitor.confirmCleanupTitle', { count: selectedStale.length }),
+      title: t('admin.monitor.confirmCleanupTitle', { count: cleanupTargets.length }),
       body: t('admin.monitor.confirmCleanupBody'),
-      consequences: selectedStale.slice(0, 6).map((s) => `${s.name ?? s.id} - ${s.owner_name ?? s.owner_user_id ?? ''}`),
+      consequences: cleanupTargets.slice(0, 6).map((s) => `${s.name ?? s.id} - ${s.owner_name ?? s.owner_user_id ?? ''}`),
       confirmLabel: t('admin.monitor.cleanup'),
     });
     if (!ok) return;
     // Same endpoint as a single cleanup: it settles what is left and files the row, and reports
     // per target, so one stubborn row cannot make the rest fail.
-    bulkTerm.mutate(selectedStale.map((s) => s.id), {
+    const ids = cleanupTargets.map((s) => s.id);
+    bulkTerm.mutate(ids, {
       onSuccess: () => {
-        pushToast('success', t('admin.monitor.bulkCleaned', { count: selectedStale.length }));
+        pushToast('success', t('admin.monitor.bulkCleaned', { count: ids.length }));
         setSelected(new Set());
       },
       onError: (e) => pushToast('error', humanizeError(asApiError(e))),
@@ -418,6 +428,35 @@ export function AdminMonitor() {
           total={sessions.length}
           shown={matchedSessions.length}
           onClear={clearAll}
+          // The pager under the table already states how many rows there are and which are on
+          // screen. A second figure up here counted a different set — the fleet total against the
+          // filtered one — so the card showed "104 of 12" above and "12 of 1-12" below.
+          showCount={false}
+          trailing={
+            <>
+              {/* Both actions are always here, disabled when they have nothing to act on. They
+                  used to appear and vanish with the selection, which moved every control beside
+                  them and put the button somewhere else each time an error showed up. */}
+              <button
+                type="button"
+                className="gs-btn gs-btn-mid gs-btn-danger"
+                disabled={bulkTerm.isPending || selectedLive.length === 0}
+                title={selectedLive.length === 0 ? t('admin.monitor.terminateSelectedHint') : undefined}
+                onClick={terminateSelected}
+              >
+                {t('admin.monitor.terminateSelected', { count: selectedLive.length })}
+              </button>
+              <button
+                type="button"
+                className="gs-btn gs-btn-mid"
+                disabled={bulkTerm.isPending || cleanupTargets.length === 0}
+                title={cleanupTargets.length === 0 ? t('admin.monitor.cleanupPick') : t('admin.monitor.cleanupHint')}
+                onClick={cleanupAll}
+              >
+                {t('admin.monitor.cleanupBulk', { count: cleanupTargets.length })}
+              </button>
+            </>
+          }
         >
           {/* The filter lives next to the search box: both narrow the same list, so they read as
               one control group instead of a box on each edge of the card. Every lifecycle state is
@@ -430,28 +469,6 @@ export function AdminMonitor() {
               <option key={st} value={st}>{t(`enum.sessionStatus.${st}`)}</option>
             ))}
           </Select>
-          {selectedLive.length > 0 && (
-            <button type="button" className="gs-btn gs-btn-sm gs-btn-danger" disabled={bulkTerm.isPending} onClick={terminateSelected}>
-              {t('admin.monitor.terminateSelected', { count: selectedLive.length })}
-            </button>
-          )}
-          {selectedStale.length > 0 && (
-            <button type="button" className="gs-btn gs-btn-sm" disabled={bulkTerm.isPending} onClick={cleanupSelected}>
-              {t('admin.monitor.cleanupSelected', { count: selectedStale.length })}
-            </button>
-          )}
-          {selectedStale.length === 0 && cleanable.length > 1 && (
-            // Nothing errored is selected yet: offer the whole set rather than making someone tick
-            // boxes one by one.
-            <button
-              type="button"
-              className="gs-btn gs-btn-sm"
-              title={t('admin.monitor.cleanupHint')}
-              onClick={() => setSelected(new Set(cleanable.map((s) => s.id)))}
-            >
-              {t('admin.monitor.selectErrored', { count: cleanable.length })}
-            </button>
-          )}
           <Select data-url-state className="gs-input w-auto" value={org} aria-label={t('admin.monitor.allOrgs')} onChange={(e) => { filters.set('org', e.target.value); if (group) filters.set('group', ''); }}>
             <option value="">{t('admin.monitor.allOrgs')}</option>
             {orgOpts.map((o) => <option key={o.value} value={o.value}>{o.label}</option>)}
@@ -460,12 +477,6 @@ export function AdminMonitor() {
             <option value="">{t('admin.monitor.allGroups')}</option>
             {groupOpts.map((o) => <option key={o.value} value={o.value}>{o.label}</option>)}
           </Select>
-          {clusterInfo.multi && (
-            <Select data-url-state className="gs-input w-auto" value={clusterF} aria-label={t('admin.monitor.allClusters')} onChange={(e) => filters.set('cluster', e.target.value)}>
-              <option value="">{t('admin.monitor.allClusters')}</option>
-              {distinct(sessions, (r) => r.cluster_id).map((v) => <option key={v} value={v}>{clusterInfo.name(v)}</option>)}
-            </Select>
-          )}
         </TableToolbar>
         {sessionsQ.isLoading ? (
           <TableSkeleton rows={5} columns={5} />
@@ -485,7 +496,10 @@ export function AdminMonitor() {
               onSort={table.toggleSort}
               selected={selected}
               onSelectedChange={setSelected}
-              selectable={(s) => !['terminated', 'error'].includes(s.status)}
+              // Errored rows are tickable: cleaning one up is exactly what the bulk action does,
+              // and a checkbox you cannot tick made "일괄 정리" unreachable. A terminated row is
+              // inert — nothing left to act on — so it stays out.
+              selectable={(s) => s.status !== 'terminated'}
               onRowClick={setDetail}
             />
             <Pagination page={table.page} pageSize={MONITOR_PAGE} total={sessionRows.length} onPage={table.setPage} />

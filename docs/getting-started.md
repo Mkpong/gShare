@@ -1,3 +1,6 @@
+---
+sidebar_position: 1
+---
 # Getting started
 
 > 📚 [Documentation home](./README.md)

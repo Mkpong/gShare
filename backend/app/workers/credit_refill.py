@@ -73,8 +73,11 @@ async def run() -> None:
                     break
                 last_id = wallets[-1].id
                 for w in wallets:
+                    # Top the wallet UP to the monthly grant; never down. The reset also erased
+                    # credit that was bought, allocated by a parent or granted as welcome credit —
+                    # money the grant never provided and has no business reclaiming.
                     target = w.monthly_grant if w.monthly_grant >= w.reserved else w.reserved
-                    if target == w.balance:
+                    if target <= w.balance:
                         continue
                     delta = target - w.balance
                     w.balance = target

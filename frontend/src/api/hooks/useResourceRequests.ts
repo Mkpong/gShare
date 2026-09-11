@@ -24,9 +24,10 @@ export interface ResourceRequestRow {
 
 const keys = { box: (b: string) => ['resource-requests', b] as const };
 
-export function useResourceRequests(box: 'mine' | 'incoming') {
+export function useResourceRequests(box: 'mine' | 'incoming', opts?: { enabled?: boolean }) {
   return useQuery({
     queryKey: keys.box(box),
+    enabled: opts?.enabled ?? true,
     refetchInterval: 15000,
     queryFn: async () => {
       const { data } = await raw.GET('/api/v1/resource-policies/requests', { params: { query: { box } } });

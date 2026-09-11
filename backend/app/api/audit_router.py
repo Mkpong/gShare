@@ -181,12 +181,13 @@ def _audit_view(row: AuditLog) -> dict:
         "prev_hash": row.prev_hash,
         "entry_hash": row.entry_hash,
         "at": row.created_at.isoformat() if row.created_at else None,
+        "cluster_id": row.cluster_id,
     }
 
 
 
 def _scoped_query(principal: Principal, actor_id, actor_q, action, target, at_gte, at_lt,
-                  result=None):
+                  result=None, cluster_id=None):
     """The audit rows this principal may see, narrowed by the list filters. Shared by the pager
     and the CSV export so the file can never contain a row the screen would not show."""
     base = select(AuditLog)
@@ -216,6 +217,8 @@ def _scoped_query(principal: Principal, actor_id, actor_q, action, target, at_gt
         base = base.where(AuditLog.result == result)
     if target is not None:
         base = base.where(AuditLog.target == target)
+    if cluster_id is not None:
+        base = base.where(AuditLog.cluster_id == cluster_id)
     if at_gte is not None:
         base = base.where(AuditLog.created_at >= at_gte)
     if at_lt is not None:
@@ -228,7 +231,7 @@ def _scoped_query(principal: Principal, actor_id, actor_q, action, target, at_gt
 EXPORT_MAX_ROWS = 50_000
 _CSV_COLUMNS = (
     "at", "actor_id", "actor_name", "actor_email", "action", "result",
-    "target", "target_name", "org_id", "group_id", "detail",
+    "target", "target_name", "org_id", "group_id", "cluster_id", "detail",
 )
 
 
@@ -241,6 +244,7 @@ async def export_audit_logs(
     at_gte: datetime | None = Query(default=None, alias="at[gte]"),
     at_lt: datetime | None = Query(default=None, alias="at[lt]"),
     result: str | None = Query(default=None),  # ok | failed | ... — "what failed today"
+    cluster_id: str | None = Query(default=None),
     principal: Principal = Depends(get_current_principal),
     db: AsyncSession = Depends(get_db),
 ):
@@ -251,7 +255,8 @@ async def export_audit_logs(
     a file leaving the system is exactly the kind of event the log exists for.
     """
     principal.require(action="audit.read")
-    base = _scoped_query(principal, actor_id, actor_q, action, target, at_gte, at_lt, result)
+    base = _scoped_query(principal, actor_id, actor_q, action, target, at_gte, at_lt, result,
+                         cluster_id)
     rows = (
         await db.scalars(
             base.order_by(AuditLog.created_at.desc(), AuditLog.id.desc()).limit(EXPORT_MAX_ROWS)
@@ -294,7 +299,7 @@ async def export_audit_logs(
                 r.created_at.isoformat() if r.created_at else "",
                 r.actor or "", names.get(r.actor, ""), emails.get(r.actor, ""),
                 r.action, r.result or "", r.target or "", target_names.get(r.target or "", ""),
-                r.org_id or "", r.group_id or "",
+                r.org_id or "", r.group_id or "", r.cluster_id or "",
                 json.dumps(r.detail, ensure_ascii=False, separators=(",", ":")) if r.detail else "",
             ))
             yield buf.getvalue()
@@ -315,13 +320,15 @@ async def list_audit_logs(
     at_gte: datetime | None = Query(default=None, alias="at[gte]"),
     at_lt: datetime | None = Query(default=None, alias="at[lt]"),
     result: str | None = Query(default=None),  # ok | failed | ... — "what failed today"
+    cluster_id: str | None = Query(default=None),
     sort: str = Query(default="-at"),
     verify: bool = Query(default=False),
     principal: Principal = Depends(get_current_principal),
     db: AsyncSession = Depends(get_db),
 ):
     principal.require(action="audit.read")
-    base = _scoped_query(principal, actor_id, actor_q, action, target, at_gte, at_lt, result)
+    base = _scoped_query(principal, actor_id, actor_q, action, target, at_gte, at_lt, result,
+                         cluster_id)
 
     total = await db.scalar(select(func.count()).select_from(base.subquery()))
 

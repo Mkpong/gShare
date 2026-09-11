@@ -111,11 +111,16 @@ class SessionService:
             if sess.credit_per_hour_snapshot and sess.billing_wallet_id:
                 from decimal import Decimal as _Dec
 
+                from app.domain.credit_engine import CreditEngine as _CE
                 from app.domain.credit_engine import _occupancy as _occ
                 from app.domain.credit_engine import _round2 as _r2
 
                 w = await self.db.get(CreditWallet, sess.billing_wallet_id)
-                avail = (w.balance - w.reserved) if w is not None else _Dec("0")
+                # The session's own untouched reservation counts toward its own solvency; the
+                # bare wallet figure refuses a resume that the reservation already paid for.
+                avail = (
+                    await _CE(self.db).available_for(w, sess) if w is not None else _Dec("0")
+                )
                 # One minute of billing: the smallest unit the billing worker charges, so a
                 # session that cannot cover it would be paused again before doing any work.
                 need = _r2(_Dec(sess.credit_per_hour_snapshot) * _occ(sess) / _Dec("60"))
@@ -285,8 +290,7 @@ class SessionService:
         If the card is not lent — physically free — the demotion is graceful: the operator toggles
         VRAM back so the job can write a fresh checkpoint on SIGTERM, and only then deletes the pod,
         which preserves the latest progress rather than the last periodic checkpoint. When the card
-        is lent, a spot session is on it, so the demotion is a plain cold one with no restore. (See
-        docs/paper/manuscript, §Design.) """
+        is lent, a spot session is on it, so the demotion is a plain cold one with no restore. """
         graceful = False  # set when the card is not lent, so a restore and fresh checkpoint are possible
         await self.db.rollback()
         async with self.db.begin():
@@ -341,13 +345,16 @@ class SessionService:
         """Restart a session: stop (pause + finalize consume) then start (resume)."""
         sess = await self._get(session_id)
         status = sess.status
+        # Only a live session can be restarted. Returning the row unchanged for any other state
+        # answered 200 and wrote a "session.restart ok" audit entry for a terminated session that
+        # nothing had touched.
+        if status not in ("running", "paused"):
+            raise InvalidStateTransition(f"{status} -> restart")
         if status == "running":
             await self.stop(session_id)
             status = "paused"
         # After a stop the session is paused; resume it.
-        if status == "paused":
-            return await self.start(session_id)
-        return sess
+        return await self.start(session_id)
 
     async def terminate(self, session_id: str, *, forced: bool = False, reason: str = "user_stopped"):
         """Terminate + settle. Also invoked by operator idle-reaper -> terminated->settle.
@@ -460,7 +467,7 @@ class SessionService:
 A spot allocation (kind='spot') never added to device.used_*, so nothing is subtracted; the card
         simply returns to the lendable pool (lend_state 'lent' -> 'yielded', since the resident is
         still yielding). Releasing a resident allocation does subtract from used_*.
-        (See docs/paper/manuscript, §Design.)
+       
         """
         alloc = (
             await self.db.scalars(
@@ -513,7 +520,7 @@ A spot allocation (kind='spot') never added to device.used_*, so nothing is subt
         resident's resume. Returns True when the card was reclaimed or was already free.
 
         A rollback expires the ORM objects, so the scalars we need are captured beforehand.
-        (See docs/paper/manuscript, §Design.)
+       
         """
         await self.db.rollback()
         resident_alloc = (

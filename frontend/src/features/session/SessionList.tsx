@@ -73,14 +73,24 @@ export function SessionList() {
   const filters = useUrlFilters(LIST_FILTERS);
   const { class: klass, model } = filters.values;
   const clearAll = () => { table.clear(); filters.clear(); };
+  const cluster = useActiveCluster();
+  // Everything below reads this pool, tab badges included. Counting the whole fleet while the list
+  // showed one cluster is how the "전체" tab said 16 above a table of 6 — the same list, two
+  // answers, and no way to tell which one was lying.
+  const pool = useMemo(
+    () => (cluster.id
+      ? sessions.filter((s) => (s as { cluster_id?: string | null }).cluster_id === cluster.id)
+      : sessions),
+    [sessions, cluster.id],
+  );
   const counts = useMemo(
     () => ({
-      active: sessions.filter((s) => ACTIVE.includes(s.status)).length,
-      running: sessions.filter((s) => s.status === 'running').length,
-      terminated: sessions.filter((s) => s.status === 'terminated' || s.status === 'error').length,
-      all: sessions.length,
+      active: pool.filter((s) => ACTIVE.includes(s.status)).length,
+      running: pool.filter((s) => s.status === 'running').length,
+      terminated: pool.filter((s) => s.status === 'terminated' || s.status === 'error').length,
+      all: pool.length,
     }),
-    [sessions],
+    [pool],
   );
 
   // Estimated cost = rate (credits per hour) x occupancy x uptime in hours, measured from
@@ -97,14 +107,12 @@ export function SessionList() {
     return rate * occ * hoursElapsed(s.started_at, endMs);
   }, [now]);
 
-  const cluster = useActiveCluster();
   const inTab = useMemo(() => {
-    const pool = cluster.id ? sessions.filter((s) => (s as { cluster_id?: string | null }).cluster_id === cluster.id) : sessions;
     if (tab === 'running') return pool.filter((s) => s.status === 'running');
     if (tab === 'active') return pool.filter((s) => ACTIVE.includes(s.status));
     if (tab === 'terminated') return pool.filter((s) => s.status === 'terminated' || s.status === 'error');
     return pool;
-  }, [sessions, tab, cluster.id]);
+  }, [pool, tab]);
 
   const classOpts = useMemo(() => distinct(inTab, (s) => s.resource_class), [inTab]);
   const modelOpts = useMemo(() => distinct(inTab, (s) => s.gpu_model), [inTab]);

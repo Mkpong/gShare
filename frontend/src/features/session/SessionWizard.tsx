@@ -154,7 +154,7 @@ export function SessionWizard() {
   const offerings = useOfferings().data ?? [];
   // The wizard lists public images only; private ones belong to the admin catalogue.
   const myId = useAuthStore((st) => (st.claims as { sub?: string }).sub);
-  const imagesRes = useImages({ public: true }).data as { data?: { id: string; name: string; registry?: string | null; owner_user_id?: string | null; supported_gpus?: string[]; cuda_version?: string | null }[] } | undefined;
+  const imagesRes = useImages({ public: true }).data as { data?: { id: string; name: string; registry?: string | null; owner_user_id?: string | null; supported_gpus?: string[]; cuda_version?: string | null; gpu_ready?: boolean }[] } | undefined;
   const images = imagesRes?.data ?? [];
   const wallet = useWallet().data as { id?: string } | undefined;
   // Real GPU inventory, i.e. the models of ready devices. The model list is restricted to these.
@@ -277,14 +277,17 @@ export function SessionWizard() {
   const fractionalOffered = modeServiceable('fractional');
 
   const offeringId = selectedOffering?.id;
-  // An image counts as GPU-only when it declares a CUDA version or a list of supported GPUs.
+  // An image ships CUDA when it declares a version or a list of supported GPUs.
   const isGpuImage = (im: { cuda_version?: string | null; supported_gpus?: string[] }) =>
     !!im.cuda_version || !!im.supported_gpus?.length;
-  // Image visibility: the CPU class lists CPU images only; the GPU class lists GPU images compatible
-  // with the selected model and its CUDA minimum.
+  // A bare OS base carries no toolkit but still runs on a card: the container runtime injects the
+  // driver, so the user installs the CUDA and framework build they want. It belongs in both lists.
+  const isBareBase = (im: { gpu_ready?: boolean }) => !!im.gpu_ready;
+  // Image visibility: the CPU class lists everything without a toolkit; the GPU class lists the
+  // toolkit images compatible with the chosen model, plus the bare bases.
   const availableImages = images.filter((im) => {
     if (!isGpu) return !isGpuImage(im);
-    if (!isGpuImage(im)) return false;
+    if (!isGpuImage(im)) return isBareBase(im);
     const modelOk = !im.supported_gpus?.length || im.supported_gpus.includes(selectedOffering?.gpu_model ?? '');
     const cudaOk = cudaCompatible(im.cuda_version, selectedOffering?.min_cuda);
     return modelOk && cudaOk;
@@ -898,10 +901,18 @@ export function SessionWizard() {
                           <Cube size={18} aria-hidden="true" className={`shrink-0 mt-0.5 ${imageId === im.id ? 'text-primary' : 'text-muted'}`} />
                           <div className="min-w-0">
                             <div className="font-bold text-sm break-all">{im.name}{im.owner_user_id === myId && <span className="gs-tag ml-1.5 align-middle">{t('images.myTag')}</span>}</div>
-                            {(im.cuda_version || im.supported_gpus?.length) ? (
+                            {(im.cuda_version || im.supported_gpus?.length || (isGpu && im.gpu_ready)) ? (
                               <div className="mt-1.5 flex items-center gap-1.5 flex-wrap">
                                 {im.cuda_version && <span className="gs-tag">{t('wizard.cudaTag', { version: im.cuda_version })}</span>}
                                 {im.supported_gpus?.length ? <span className="gs-tag">{t('wizard.imageGpuCount', { n: im.supported_gpus.length })}</span> : null}
+                                {/* A bare base on a GPU session: the card is there, the toolkit is
+                                    not. Saying so here avoids a session that starts fine and then
+                                    cannot import torch. */}
+                                {isGpu && im.gpu_ready && !im.cuda_version && (
+                                  <span className="gs-tag text-warn" title={t('wizard.bareBaseHint')}>
+                                    {t('wizard.bareBaseTag')}
+                                  </span>
+                                )}
                               </div>
                             ) : null}
                           </div>

@@ -31,12 +31,20 @@ log = get_logger(__name__)
 
 # The catalogue images: session bases published to Docker Hub under boanlab, registered
 # idempotently at startup. cuda_version is the real CUDA baked into the registry tag, which the
-# session wizard compares against the offering's min_cuda. There is no CPU-only image.
+# session wizard compares against the offering's min_cuda.
+#
+# `gpu_ready` marks a base that carries no CUDA toolkit but is still a valid choice for a GPU
+# session: the container runtime injects the driver, nvidia-smi and libcuda at start, so a plain
+# Ubuntu can hold a card and let the user install the toolkit and framework they actually want.
+# Without it such an image is filtered out of the GPU wizard entirely, which is what left people
+# unable to pick a bare OS for a GPU session.
 _BASE_IMAGES = [
     {"name": "PyTorch 2.6 (GPU)", "registry": "boanlab/gshare-session:pytorch2.6-cuda12.4-cudnn9", "cuda_version": "12.4"},
     {"name": "TensorFlow 2.18 (GPU)", "registry": "boanlab/gshare-session:tensorflow2.18-cuda12.5-cudnn9", "cuda_version": "12.5"},
     {"name": "ML Base (GPU)", "registry": "boanlab/gshare-session:ml-cuda12.4-cudnn9", "cuda_version": "12.4"},
-    {"name": "Ubuntu 24.04 (CPU)", "registry": "boanlab/gshare-session:ml-ubuntu24.04"},
+    # Bare OS bases: no CUDA preinstalled, usable for both CPU and GPU sessions.
+    {"name": "Ubuntu 24.04", "registry": "boanlab/gshare-session:ml-ubuntu24.04", "gpu_ready": True},
+    {"name": "Ubuntu 22.04", "registry": "boanlab/gshare-session:ml-ubuntu22.04", "gpu_ready": True},
     # Blackwell line (sm_120 needs CUDA >= 12.8). Built from build/images/ml/Dockerfile.* and
     # published by .github/workflows/publish-session-images.yml; a fleet of RTX PRO / RTX 50
     # cards cannot start a single session from the 12.4/12.5 images above.
@@ -264,10 +272,22 @@ async def seed_base_images() -> None:
                     if cuda and not (existing.tags or {}).get("cuda_version"):
                         existing.tags = {**(existing.tags or {}), "cuda_version": cuda}
                         log.info("base image cuda_version backfilled: %s -> %s", spec["registry"], cuda)
+                    # Same for gpu_ready, so an existing bare-OS row becomes selectable for GPU
+                    # sessions without an operator having to edit it by hand.
+                    if spec.get("gpu_ready") and not (existing.tags or {}).get("gpu_ready"):
+                        existing.tags = {**(existing.tags or {}), "gpu_ready": True}
+                        log.info("base image marked gpu_ready: %s", spec["registry"])
+                    # The catalogue name is the seed's to own; "(CPU)" was wrong once these
+                    # images became valid GPU choices too.
+                    if existing.name != spec["name"]:
+                        log.info("base image renamed: %r -> %r", existing.name, spec["name"])
+                        existing.name = spec["name"]
                     continue
                 tags: dict = {"supported_gpus": [], "base": True}
                 if spec.get("cuda_version"):
                     tags["cuda_version"] = spec["cuda_version"]
+                if spec.get("gpu_ready"):
+                    tags["gpu_ready"] = True
                 db.add(Image(
                     id=ids.new("image"),
                     name=spec["name"],

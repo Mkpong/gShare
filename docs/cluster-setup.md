@@ -1,3 +1,6 @@
+---
+sidebar_position: 2
+---
 # Building the GPU Kubernetes cluster
 
 > 📚 [Documentation home](./README.md)

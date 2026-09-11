@@ -70,7 +70,7 @@ class SessionCreate(BaseModel):
     billing_wallet_id: str | None = None              # NULL allowed for cpu (free)
     # Spot (preemptible) session: with no normal capacity free, it is admitted by borrowing a card a
     # resident yielded, and is reclaimed when that resident returns. Exclusive only.
-    # (See docs/paper/manuscript, §Design.)
+    #
     preemptible: bool = False
     # Privileged session: root inside the container (apt, system packages). Admitted only when the
     # effective resource policy grants allow_privileged; otherwise 403 privileged_not_allowed.
@@ -197,6 +197,8 @@ class QueueEntryView(BaseModel):
     session_name: str | None = None
     owner_name: str | None = None
     gpu_model: str | None = None
+    # Which cluster this entry is waiting for, so the queue can be read per cluster.
+    cluster_id: str | None = None
     # Why the scheduler last refused this entry (no_gpu_capacity | host_headroom). Without it a
     # position reads as "your turn is coming" even when nothing in the cluster can satisfy it.
     reason: str | None = None

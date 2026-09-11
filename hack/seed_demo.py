@@ -6,7 +6,7 @@ allocations down the hierarchy: system to organization to group to individual. O
 are already seeded at bootstrap and are not touched here; the GPU catalogue lives in
 hack/seed_resources.py.
 
-The scenario matches docs/screenshots/README.md. Organizations, groups, and users are idempotent —
+The scenario is the fictional company *Nexus AI Lab*. Organizations, groups, and users are idempotent —
 an existing one is looked up and reused. Step 5, the credit allocation, assumes a **fresh database
 and a single run**; running it again allocates again, so a clean demo means redeploying first.
 
@@ -39,17 +39,17 @@ ORG = "Nexus AI Lab"
 GROUPS = ["비전팀", "NLP팀"]
 # (email, name, group, initial_role). Jieun is promoted to org_admin separately, below.
 USERS = [
-    ("jieun@nexusai.dev",   "이지은", "비전팀", "member"),
-    ("minjun@nexusai.dev",  "박민준", "비전팀", "group_admin"),
-    ("haneul@nexusai.dev",  "정하늘", "NLP팀",  "group_admin"),
-    ("seoyeon@nexusai.dev", "김서연", "비전팀", "member"),
-    ("dohyun@nexusai.dev",  "이도현", "비전팀", "member"),
-    ("woojin@nexusai.dev",  "최우진", "NLP팀",  "member"),
+    ("jieun@example.com",   "이지은", "비전팀", "member"),
+    ("minjun@example.com",  "박민준", "비전팀", "group_admin"),
+    ("haneul@example.com",  "정하늘", "NLP팀",  "group_admin"),
+    ("seoyeon@example.com", "김서연", "비전팀", "member"),
+    ("dohyun@example.com",  "이도현", "비전팀", "member"),
+    ("woojin@example.com",  "최우진", "NLP팀",  "member"),
 ]
-ORG_ADMIN_EMAIL = "jieun@nexusai.dev"
+ORG_ADMIN_EMAIL = "jieun@example.com"
 ORG_TOPUP = 50000                                   # system to organization
 GROUP_ALLOC = {"비전팀": 20000, "NLP팀": 15000}        # organization to group
-USER_ALLOC = {"seoyeon@nexusai.dev": 3000, "dohyun@nexusai.dev": 2000, "woojin@nexusai.dev": 2500}  # group to individual
+USER_ALLOC = {"seoyeon@example.com": 3000, "dohyun@example.com": 2000, "woojin@example.com": 2500}  # group to individual
 
 
 def req(method: str, path: str, body: dict | None = None) -> tuple[int, dict | list]:

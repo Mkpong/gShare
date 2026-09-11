@@ -304,6 +304,13 @@ html, body { overflow: hidden; }   /* the html box is the real page scroller —
   .gs-btn-sm {
     @apply px-2.5 py-1 text-xs rounded-ctl;
   }
+  /* Toolbar size: a button standing next to a search box or a select. gs-btn-sm is built for a
+     table row, where it sits among text; beside a 38px field it read as a different, lesser kind
+     of control. This lands between the two so the row has one baseline without the button
+     shouting. */
+  .gs-btn-mid {
+    @apply px-3 py-1.5 text-sm rounded-ctl;
+  }
   .gs-btn-danger {
     @apply border-danger text-danger;
   }

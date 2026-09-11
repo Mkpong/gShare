@@ -11,6 +11,8 @@ export interface AuditFilter {
   action?: string;
   result?: string;
   target?: string;
+  /** One cluster's entries — sessions, nodes, cards, pools and the cluster itself. */
+  cluster_id?: string;
   'at[gte]'?: string;
   'at[lt]'?: string;
   page?: number;

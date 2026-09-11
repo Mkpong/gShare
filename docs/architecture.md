@@ -1,3 +1,6 @@
+---
+sidebar_position: 7
+---
 # Architecture and concepts
 
 > 📚 [Documentation home](./README.md) — this page is the system overview. For how to
@@ -53,7 +56,7 @@ about money and state are made only in the control plane.
 - **Offering** — the catalogue of GPU models. One row per full-card model, carrying the
   hourly credit rate. Chosen when a session is created.
 - **Preset** — the catalogue of session sizes: compute (CPU, memory, disk) plus a GPU
-  fraction tier (XL ½, L ¼, M ⅛, S 1/16, SS 1/32) or an exclusive full card. VRAM and
+  fraction tier (XL ½, L ¼, M ⅛, S 1/16) or an exclusive full card. VRAM and
   core limits are derived by applying the tier fraction to the offering's full-card VRAM.
 - **Session** — an interactive working environment, backed by a pod. Its mode is either
   **fractional** (a share of VRAM and cores) or **exclusive** (the whole card). MIG is a
@@ -74,8 +77,8 @@ about money and state are made only in the control plane.
   automatically by policy, which is how capacity is reclaimed.
 - **Queue and priority** — when capacity is exhausted a session enters the queue instead
   of failing, and is admitted in priority order as resources come back.
-- **Volumes and snapshots** — persistent personal or group storage, read-only or
-  read-write, shareable and snapshottable. **Not billed**: storage is bounded by the
+- **Volumes** — persistent personal or group storage, read-only or read-write, shareable.
+  Snapshots are not implemented yet (the API answers 501). **Not billed**: storage is bounded by the
   per-user and per-group quotas in the resource policy, not by credits.
 - **RBAC** — `super_admin` (everything), `org_admin` (one organization), `group_admin`
   (one group), and `member` / `guest`. The user console and the administrator console are
@@ -107,8 +110,7 @@ CPU-only sessions are free and skip the budget, hold, VRAM, queue, and GPU steps
 
 On top of a partitioning mechanism (HAMi), GShare combines occupancy-aware placement and
 billing, automatic reclamation of idle GPUs through pause, in-place GPU yield with
-preemptive lending (lossless hand-off and resume), and hierarchical limit management. The
-[design notes](paper/) cover the reasoning and the measurements.
+preemptive lending (lossless hand-off and resume), and hierarchical limit management.
 
 ## Namespaces
 

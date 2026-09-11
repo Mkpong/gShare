@@ -56,6 +56,7 @@ from app.db.models import (
 )
 from app.domain.audit_service import AuditService
 from app.domain.node_pools import assert_may_grant
+from app.domain.storage_pools import pool_bound_gb, pool_capacity_gb, usable_pools
 
 
 class _Conflict(DomainError):
@@ -164,18 +165,29 @@ def _node_out(
 async def list_nodes(
     status: str | None = Query(default=None),
     region: str | None = Query(default=None),
+    cluster_id: str | None = Query(default=None),
     principal: Principal = Depends(get_current_principal),
     db: AsyncSession = Depends(get_db),
 ):
+    """Nodes, optionally narrowed to one cluster.
+
+    The console filtered this list in the browser, which meant every screen fetched every
+    cluster's nodes to show one cluster's. `GpuNode.cluster_id` is indexed; the filter belongs here.
+    """
     principal.require(action="node.read")
     stmt = select(GpuNode)
     if status:
         stmt = stmt.where(GpuNode.status == status)
     if region:
         stmt = stmt.where(GpuNode.region == region)
+    if cluster_id:
+        stmt = stmt.where(GpuNode.cluster_id == cluster_id)
     nodes = (await db.execute(stmt)).scalars().all()
     # Aggregate device count and mode per node.
-    devs = (await db.execute(select(GpuDevice))).scalars().all()
+    dev_stmt = select(GpuDevice)
+    if cluster_id:
+        dev_stmt = dev_stmt.where(GpuDevice.cluster_id == cluster_id)
+    devs = (await db.execute(dev_stmt)).scalars().all()
     by_node: dict[str, list] = {}
     for d in devs:
         by_node.setdefault(d.node_id, []).append(d)
@@ -1004,6 +1016,7 @@ async def revoke_node_pool_grant(
 @router.get("/gpu-devices", response_model=GpuDeviceList)
 async def list_gpu_devices(
     node_id: str | None = Query(default=None),
+    cluster_id: str | None = Query(default=None),
     principal: Principal = Depends(get_current_principal),
     db: AsyncSession = Depends(get_db),
 ):
@@ -1011,6 +1024,8 @@ async def list_gpu_devices(
     stmt = select(GpuDevice)
     if node_id:
         stmt = stmt.where(GpuDevice.node_id == node_id)
+    if cluster_id:
+        stmt = stmt.where(GpuDevice.cluster_id == cluster_id)
     devs = (await db.execute(stmt)).scalars().all()
     # The node's liveness/cordon state rides along: a card on an offline or cordoned node keeps
     # its own status (its health is not in question) but cannot take placements, and the
@@ -1257,19 +1272,31 @@ async def set_pool_targets(
 @router.get("/metrics/cluster", response_model=ClusterMetrics)
 async def metrics_cluster(
     region: str | None = Query(default=None),
+    cluster_id: str | None = Query(default=None),
     principal: Principal = Depends(get_current_principal),
     db: AsyncSession = Depends(get_db),
 ):
+    """Fleet figures, or one cluster's when `cluster_id` is given.
+
+    Without the filter the console showed a cluster's card grid beside fleet-wide totals — eight
+    nodes and three cards while the panel below said one. Every aggregate here now narrows the
+    same way, so the numbers on one screen describe one thing.
+    """
     principal.require(action="node.read")
     node_stmt = select(GpuNode)
     if region:
         node_stmt = node_stmt.where(GpuNode.region == region)
+    if cluster_id:
+        node_stmt = node_stmt.where(GpuNode.cluster_id == cluster_id)
     nodes = (await db.execute(node_stmt)).scalars().all()
     n_total = len(nodes)
     n_cordoned = sum(1 for n in nodes if n.status == "cordoned")
     n_offline = sum(1 for n in nodes if n.status in ("offline", "down"))
 
-    devs = (await db.execute(select(GpuDevice))).scalars().all()
+    dev_stmt = select(GpuDevice)
+    if cluster_id:
+        dev_stmt = dev_stmt.where(GpuDevice.cluster_id == cluster_id)
+    devs = (await db.execute(dev_stmt)).scalars().all()
     # Node status models health (ready|cordoned|offline), never load, so the old residual formula
     # for "busy" was structurally 0. Derive it from the ledger instead: a ready node whose devices
     # hold any live VRAM/core reservation counts as busy, the rest stay ready.
@@ -1282,8 +1309,17 @@ async def metrics_cluster(
     cores_used = sum(d.used_cores or 0 for d in devs)
     empty = sum(1 for d in devs if (d.used_mem_mb or 0) == 0 and (d.used_cores or 0) == 0)
 
-    running = (await db.scalar(select(func.count()).select_from(Session).where(Session.status == "running"))) or 0
-    queued = (await db.scalar(select(func.count()).select_from(QueueEntry))) or 0
+    run_stmt = select(func.count()).select_from(Session).where(Session.status == "running")
+    if cluster_id:
+        run_stmt = run_stmt.where(Session.cluster_id == cluster_id)
+    running = (await db.scalar(run_stmt)) or 0
+    # A queue entry carries no cluster of its own; it inherits the one from its session.
+    q_stmt = select(func.count()).select_from(QueueEntry)
+    if cluster_id:
+        q_stmt = q_stmt.join(Session, Session.id == QueueEntry.session_id).where(
+            Session.cluster_id == cluster_id
+        )
+    queued = (await db.scalar(q_stmt)) or 0
 
     # Fleet host compute: node capacity vs what active sessions hold (cpu/mem/disk are
     # quota-governed rather than billed, so this is the number administrators watch).
@@ -1293,7 +1329,10 @@ async def metrics_cluster(
                 func.coalesce(func.sum(Session.cpu), 0),
                 func.coalesce(func.sum(Session.mem_gb), 0),
                 func.coalesce(func.sum(Session.disk_gb), 0),
-            ).where(Session.status.in_(("pending", "preparing", "running")))
+            ).where(
+                Session.status.in_(("pending", "preparing", "running")),
+                *([Session.cluster_id == cluster_id] if cluster_id else []),
+            )
         )
     ).one()
     # Sessions can only land on gpu/cpu nodes: master and the storage server were inflating the
@@ -1304,23 +1343,45 @@ async def metrics_cluster(
         "mem_gb": {"used": int(comp[1]), "total": sum(n.mem or 0 for n in placeable)},
         "disk_gb": {"used": int(comp[2]), "total": sum(n.disk or 0 for n in placeable)},
     }
-    # The storage server, separately: its disk backs volumes (ZFS pool), so "used" is the
-    # provisioned volume quota — the same allocation basis the volume-creation gate checks.
-    storage_nodes = [n for n in nodes if n.role == "storage"]
+    # The registered volume-backing pools, separately from host compute. "used" is the provisioned
+    # volume quota — the same allocation basis the volume-creation gate checks — and the capacity
+    # is what the CSI driver reported, never a sum across pools: a volume lives on exactly one.
+    pools = await usable_pools(db, cluster_id)
     vol_alloc = int(await db.scalar(
         select(func.coalesce(func.sum(StorageVolume.quota_gb), 0)).where(StorageVolume.deleted_at.is_(None))
     ) or 0)
+    pool_cluster_names = dict(
+        (await db.execute(select(Cluster.id, Cluster.name))).all()
+    ) if pools else {}
+    bound_gb, bound_source = await pool_bound_gb(db, cluster_id)
     storage = {
-        # The pool that actually backs volumes is not something the operator can see (it reports
-        # the node's root disk); an administrator states it once in the chart, otherwise the panel
-        # falls back to the storage nodes' disk and says so.
         "disk_gb": {
             "used": vol_alloc,
-            "total": settings.STORAGE_POOL_CAPACITY_GB or sum(n.disk or 0 for n in storage_nodes),
-            "source": "pool" if settings.STORAGE_POOL_CAPACITY_GB else "node_disk",
+            "total": bound_gb or 0,
+            # csi: measured by the driver. manual: an administrator's figure. node_disk: the
+            # storage node's system drive, which is not the pool — said out loud so a stand-in
+            # never reads as a measurement.
+            "source": bound_source or "unknown",
         },
-        "node_count": len(storage_nodes),
-    } if storage_nodes else None
+        "node_count": len(pools),
+        # A pool serving more than the cluster in view: the figure is not this cluster's own.
+        "shared": any(p.cluster_id != cluster_id for p in pools) if cluster_id else False,
+        "pools": [
+            {
+                "id": p.id,
+                "name": p.name,
+                "hostname": p.node_hostname,
+                "cluster_id": p.cluster_id,
+                "cluster_name": pool_cluster_names.get(p.cluster_id),
+                "storage_class": p.storage_class,
+                "share_scope": p.share_scope,
+                "capacity_gb": pool_capacity_gb(p)[0],
+                "capacity_source": pool_capacity_gb(p)[1],
+                "capacity_reported_at": p.capacity_reported_at,
+            }
+            for p in pools
+        ],
+    } if (pools or bound_gb) else None
 
     # ALLOCATION based, deliberately: this dashboard answers "how much of the fleet is handed out",
     # the same basis as vram_load_pct beside it. Measured utilisation (DCGM) is a different question
@@ -1329,13 +1390,21 @@ async def metrics_cluster(
     avg_util = round(cores_used / cores_total * 100, 1) if cores_total else 0.0
 
     since = datetime.now(UTC) - timedelta(hours=24)
-    consumed = (
-        await db.scalar(
-            select(func.coalesce(func.sum(CreditTransaction.amount), 0)).where(
-                CreditTransaction.type == "consume", CreditTransaction.created_at >= since
+    # Credit is attributed through the session that spent it: a transaction row names no cluster,
+    # but its `ref` is the session id.
+    cons_stmt = select(func.coalesce(func.sum(CreditTransaction.amount), 0)).where(
+        CreditTransaction.type == "consume", CreditTransaction.created_at >= since
+    )
+    if cluster_id:
+        cons_stmt = cons_stmt.where(
+            CreditTransaction.ref.in_(
+                select(Session.id).where(Session.cluster_id == cluster_id)
             )
         )
-    ) or 0
+    consumed = (await db.scalar(cons_stmt)) or 0
+    # Reservations live on the wallet, which belongs to a user rather than a cluster. Narrowing it
+    # would mean re-deriving holds from live sessions; the figure stays fleet-wide and the console
+    # labels it as such.
     holds = (await db.scalar(select(func.coalesce(func.sum(CreditWallet.reserved), 0)))) or 0
 
     return {

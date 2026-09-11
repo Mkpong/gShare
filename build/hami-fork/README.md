@@ -3,7 +3,7 @@
 Makes HAMi's scheduler-extender treat a **yielded** GPU (owner VRAM evicted, physically
 free per the GShare ledger) as **free capacity for preemptible (borrow) pods** — so borrow
 pods schedule through the standard HAMi path with proper 2D accounting, instead of the
-device-plugin bypass. Design + rationale: the manuscript, §Implementation ([`docs/paper/`](../../docs/paper/)).
+device-plugin bypass.
 
 ## Layout
 - HAMi source is a submodule pinned at **v2.9.0** (`third_party/hami`).

@@ -1,12 +1,15 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { api } from '@/api/client';
 
-// Poll the caller's queue every 5 seconds.
-export function useQueue() {
+// Poll the caller's queue every 5 seconds. `clusterId` narrows it the way the top bar narrows
+// every other list; positions stay global, because the queue is.
+export function useQueue(clusterId?: string) {
   return useQuery({
-    queryKey: ['queue', 'mine'],
+    queryKey: ['queue', 'mine', clusterId ?? ''],
     queryFn: async () => {
-      const { data } = await api.GET('/api/v1/queue/mine');
+      const { data } = await api.GET('/api/v1/queue/mine', {
+        params: { query: clusterId ? { cluster_id: clusterId } : {} },
+      });
       return data?.data ?? [];
     },
     refetchInterval: 5000,

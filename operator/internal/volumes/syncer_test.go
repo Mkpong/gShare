@@ -5,6 +5,7 @@ import (
 	"testing"
 
 	corev1 "k8s.io/api/core/v1"
+	storagev1 "k8s.io/api/storage/v1"
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	"k8s.io/apimachinery/pkg/api/resource"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
@@ -21,6 +22,8 @@ import (
 type fakeSoT struct {
 	got      []sot.VolumeObserved
 	sessions []sot.SessionDisk
+	pools    []sot.PoolCapacity
+	called   bool
 	answer   sot.VolumeSyncResult
 }
 
@@ -35,7 +38,9 @@ func (f *fakeSoT) ReportDrift(context.Context, string, int, int) error    { retu
 func (f *fakeSoT) CreateNodeHealthEvent(_ context.Context, ev sot.NodeHealthEvent) (sot.NodeHealthEvent, error) {
 	return ev, nil
 }
-func (f *fakeSoT) SyncVolumes(_ context.Context, v []sot.VolumeObserved, sess []sot.SessionDisk) (sot.VolumeSyncResult, error) {
+func (f *fakeSoT) SyncVolumes(_ context.Context, v []sot.VolumeObserved, sess []sot.SessionDisk, pools []sot.PoolCapacity) (sot.VolumeSyncResult, error) {
+	f.pools = pools
+	f.called = true
 	f.got = v
 	f.sessions = sess
 	return f.answer, nil
@@ -268,5 +273,69 @@ func TestTickIgnoresUnlabelledClaims(t *testing.T) {
 	}
 	if len(so.got) != 0 {
 		t.Errorf("reported %d claims, want none", len(so.got))
+	}
+}
+
+// An idle cluster is exactly when an administrator asks how much room the pool has left. The tick
+// used to return early the moment there were no session volumes and no scratch-disk readings,
+// which skipped the capacity report with everything else.
+func TestTickReportsPoolCapacityWithNothingElseToSay(t *testing.T) {
+	scheme := runtime.NewScheme()
+	if err := corev1.AddToScheme(scheme); err != nil {
+		t.Fatal(err)
+	}
+	if err := storagev1.AddToScheme(scheme); err != nil {
+		t.Fatal(err)
+	}
+	cap := resource.MustParse("1424Gi")
+	reader := fake.NewClientBuilder().WithScheme(scheme).WithObjects(
+		&storagev1.CSIStorageCapacity{
+			ObjectMeta:       metav1.ObjectMeta{Name: "csisc-1", Namespace: "gshare-storage"},
+			StorageClassName: "gshare-data",
+			Capacity:         &cap,
+		},
+		&storagev1.CSIStorageCapacity{ // another class: must not be picked up
+			ObjectMeta:       metav1.ObjectMeta{Name: "csisc-2", Namespace: "gshare-storage"},
+			StorageClassName: "other",
+			Capacity:         &cap,
+		},
+	).Build()
+	f := &fakeSoT{}
+	s := &Syncer{
+		Client:       fake.NewClientBuilder().WithScheme(scheme).Build(),
+		SoT:          f,
+		Namespace:    "gshare-sessions",
+		StorageClass: "gshare-data",
+		Reader:       reader,
+	}
+	if err := s.Tick(context.Background()); err != nil {
+		t.Fatalf("tick: %v", err)
+	}
+	if len(f.pools) != 1 || f.pools[0].StorageClass != "gshare-data" {
+		t.Fatalf("expected one gshare-data capacity, got %+v", f.pools)
+	}
+	if f.pools[0].CapacityBytes != cap.Value() {
+		t.Fatalf("capacity = %d, want %d", f.pools[0].CapacityBytes, cap.Value())
+	}
+}
+
+// No StorageClass configured, or no reader, means nothing to match against — and then an idle
+// cluster still skips the call entirely rather than posting an empty report every few minutes.
+func TestTickStaysQuietWithoutAStorageClass(t *testing.T) {
+	scheme := runtime.NewScheme()
+	if err := corev1.AddToScheme(scheme); err != nil {
+		t.Fatal(err)
+	}
+	f := &fakeSoT{}
+	s := &Syncer{
+		Client:    fake.NewClientBuilder().WithScheme(scheme).Build(),
+		SoT:       f,
+		Namespace: "gshare-sessions",
+	}
+	if err := s.Tick(context.Background()); err != nil {
+		t.Fatalf("tick: %v", err)
+	}
+	if f.called {
+		t.Fatal("expected no report")
 	}
 }

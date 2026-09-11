@@ -3,7 +3,7 @@ from __future__ import annotations
 
 from datetime import datetime
 
-from pydantic import BaseModel
+from pydantic import BaseModel, Field
 
 
 class OperatorStatusEvent(BaseModel):
@@ -110,6 +110,18 @@ class OperatorSessionDisk(BaseModel):
     ephemeral_limit_bytes: int
 
 
+class OperatorPoolCapacity(BaseModel):
+    """What the CSI driver says a StorageClass's backing pool holds.
+
+    Read from the CSIStorageCapacity objects the external-provisioner publishes. The control plane
+    cannot ask a CSI driver anything — it never touches the workload API — and the only figure it
+    could see on its own is the storage node's root disk, which is not the pool.
+    """
+
+    storage_class: str
+    capacity_bytes: int = Field(ge=0)
+
+
 class OperatorVolumeSync(BaseModel):
     """POST /internal/volumes/sync — the operator's periodic view of every session-volume PVC."""
 
@@ -117,6 +129,9 @@ class OperatorVolumeSync(BaseModel):
     cluster_id: str | None = None
     # Per-session scratch-disk usage, piggybacked on the same tick. Old operators omit it.
     sessions: list[OperatorSessionDisk] = []
+    # Measured pool capacity, same tick. Old operators omit it, and a driver that publishes no
+    # capacity sends an empty list — both leave the stored figure untouched.
+    pools: list[OperatorPoolCapacity] = []
 
 
 class VolumeSyncDirective(BaseModel):

@@ -77,8 +77,8 @@ export const router = createBrowserRouter(
             { path: 'clusters', element: <RequireRole role="super_admin">{lazyPage(() => import('@/features/admin/Clusters'), 'AdminClusters')}</RequireRole> },
             // org_admin reaches this page for the node-pools tab only (pool.read); the node inventory
             // itself is super_admin.
-            { path: 'nodes', element: <RequireRole min="org_admin">{lazyPage(() => import('@/features/admin/Nodes'), 'AdminNodes')}</RequireRole> },
-            { path: 'gpus', element: <RequireRole min="org_admin">{lazyPage(() => import('@/features/admin/Gpus'), 'AdminGpus')}</RequireRole> },
+            { path: 'nodes', element: <RequireRole role="super_admin">{lazyPage(() => import('@/features/admin/Nodes'), 'AdminNodes')}</RequireRole> },
+            { path: 'gpus', element: <RequireRole role="super_admin">{lazyPage(() => import('@/features/admin/Gpus'), 'AdminGpus')}</RequireRole> },
             { path: 'nodes/:nodeId/drain', element: <RequireRole role="super_admin">{lazyPage(() => import('@/features/admin/Nodes'), 'DrainNodePage')}</RequireRole> },
             { path: 'nodes/:nodeId/devices', element: <RequireRole role="super_admin">{lazyPage(() => import('@/features/admin/Nodes'), 'NodeDevicesPage')}</RequireRole> },
             { path: 'allocations', element: lazyPage(() => import('@/features/admin/CreditAllocation'), 'AdminCreditAllocation') }, // credit allocation and requests, group_admin and above

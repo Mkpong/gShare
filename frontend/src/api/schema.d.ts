@@ -1267,7 +1267,7 @@ export interface paths {
          *
          *     estimated_credit_per_hour = offering.credit_per_hour * occupancy;
          *     occupancy = max(gpu_mem_mb/device_total_mem_mb, gpu_cores/100);
-         *     hold_amount = estimated_credit_per_hour * (expected_runtime_min/60), default 2h horizon.
+         *     hold_amount = estimated_credit_per_hour — admission reserves one hour up front.
          *     CPU (free) sessions are always 0.
          */
         post: operations["preview_cost_api_v1_sessions_preview_cost_post"];
@@ -1973,6 +1973,52 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/storage/pools": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * List Pools
+         * @description Every registered pool; `cluster_id` narrows to the ones that cluster may use.
+         */
+        get: operations["list_pools_api_v1_storage_pools_get"];
+        put?: never;
+        /**
+         * Create Pool
+         * @description Register a pool. Capacity is left empty: the operator's next tick measures it.
+         */
+        post: operations["create_pool_api_v1_storage_pools_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/storage/pools/{pool_id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post?: never;
+        /**
+         * Delete Pool
+         * @description Deregister a pool. Nothing on the storage server is touched — this only stops gShare
+         *     counting it; the volumes already on it keep working through their StorageClass.
+         */
+        delete: operations["delete_pool_api_v1_storage_pools__pool_id__delete"];
+        options?: never;
+        head?: never;
+        /** Update Pool */
+        patch: operations["update_pool_api_v1_storage_pools__pool_id__patch"];
+        trace?: never;
+    };
     "/api/v1/clusters/summary": {
         parameters: {
             query?: never;
@@ -2446,7 +2492,13 @@ export interface paths {
             path?: never;
             cookie?: never;
         };
-        /** List Nodes */
+        /**
+         * List Nodes
+         * @description Nodes, optionally narrowed to one cluster.
+         *
+         *     The console filtered this list in the browser, which meant every screen fetched every
+         *     cluster's nodes to show one cluster's. `GpuNode.cluster_id` is indexed; the filter belongs here.
+         */
         get: operations["list_nodes_api_v1_nodes_get"];
         put?: never;
         /**
@@ -2780,7 +2832,14 @@ export interface paths {
             path?: never;
             cookie?: never;
         };
-        /** Metrics Cluster */
+        /**
+         * Metrics Cluster
+         * @description Fleet figures, or one cluster's when `cluster_id` is given.
+         *
+         *     Without the filter the console showed a cluster's card grid beside fleet-wide totals — eight
+         *     nodes and three cards while the panel below said one. Every aggregate here now narrows the
+         *     same way, so the numbers on one screen describe one thing.
+         */
         get: operations["metrics_cluster_api_v1_metrics_cluster_get"];
         put?: never;
         post?: never;
@@ -3409,6 +3468,8 @@ export interface components {
             actor_email?: string | null;
             /** Target Name */
             target_name?: string | null;
+            /** Cluster Id */
+            cluster_id?: string | null;
         };
         /**
          * AuditLogList
@@ -3688,6 +3749,8 @@ export interface components {
             name?: string | null;
             /** Role */
             role?: string | null;
+            /** Session Domain */
+            session_domain?: string | null;
         };
         /**
          * ClusterRead
@@ -3704,6 +3767,8 @@ export interface components {
             api_server?: string | null;
             /** Runtime */
             runtime?: string | null;
+            /** Session Domain */
+            session_domain?: string | null;
             /** Status */
             status: string;
             /** Node Count */
@@ -3721,6 +3786,8 @@ export interface components {
             role: string;
             /** Kubeconfig B64 */
             kubeconfig_b64: string;
+            /** Session Domain */
+            session_domain?: string | null;
         };
         /**
          * ClusterResource
@@ -3747,6 +3814,16 @@ export interface components {
              * @default 0
              */
             node_count: number;
+            /**
+             * Shared
+             * @default false
+             */
+            shared: boolean;
+            /**
+             * Pools
+             * @default []
+             */
+            pools: components["schemas"]["ClusterStoragePool"][];
         };
         /** ClusterStorageDisk */
         ClusterStorageDisk: {
@@ -3759,6 +3836,32 @@ export interface components {
              * @default node_disk
              */
             source: string;
+        };
+        /**
+         * ClusterStoragePool
+         * @description One registered volume-backing pool: what it is, where it sits, and who may use it.
+         */
+        ClusterStoragePool: {
+            /** Id */
+            id: string;
+            /** Name */
+            name?: string | null;
+            /** Hostname */
+            hostname?: string | null;
+            /** Cluster Id */
+            cluster_id?: string | null;
+            /** Cluster Name */
+            cluster_name?: string | null;
+            /** Storage Class */
+            storage_class?: string | null;
+            /** Share Scope */
+            share_scope?: string | null;
+            /** Capacity Gb */
+            capacity_gb?: number | null;
+            /** Capacity Source */
+            capacity_source?: string | null;
+            /** Capacity Reported At */
+            capacity_reported_at?: string | null;
         };
         /** ConnectionInfo */
         ConnectionInfo: {
@@ -4011,6 +4114,8 @@ export interface components {
             supported_gpus?: string[];
             /** Cuda Version */
             cuda_version?: string | null;
+            /** Gpu Ready */
+            gpu_ready?: boolean | null;
         };
         /** ImageImport */
         ImageImport: {
@@ -4034,6 +4139,8 @@ export interface components {
             supported_gpus?: string[];
             /** Cuda Version */
             cuda_version?: string | null;
+            /** Gpu Ready */
+            gpu_ready?: boolean | null;
         };
         /**
          * ImageList
@@ -4068,6 +4175,11 @@ export interface components {
             /** Cuda Version */
             cuda_version?: string | null;
             /**
+             * Gpu Ready
+             * @default false
+             */
+            gpu_ready: boolean;
+            /**
              * Public
              * @default true
              */
@@ -4091,6 +4203,8 @@ export interface components {
             cuda_version?: string | null;
             /** Supported Gpus */
             supported_gpus?: string[] | null;
+            /** Gpu Ready */
+            gpu_ready?: boolean | null;
         };
         /**
          * MeMembership
@@ -4435,6 +4549,20 @@ export interface components {
             role?: string | null;
         };
         /**
+         * OperatorPoolCapacity
+         * @description What the CSI driver says a StorageClass's backing pool holds.
+         *
+         *     Read from the CSIStorageCapacity objects the external-provisioner publishes. The control plane
+         *     cannot ask a CSI driver anything — it never touches the workload API — and the only figure it
+         *     could see on its own is the storage node's root disk, which is not the pool.
+         */
+        OperatorPoolCapacity: {
+            /** Storage Class */
+            storage_class: string;
+            /** Capacity Bytes */
+            capacity_bytes: number;
+        };
+        /**
          * OperatorSessionDisk
          * @description Ephemeral (scratch) disk usage of one session pod, read from kubelet /stats/summary.
          *
@@ -4517,6 +4645,11 @@ export interface components {
              * @default []
              */
             sessions: components["schemas"]["OperatorSessionDisk"][];
+            /**
+             * Pools
+             * @default []
+             */
+            pools: components["schemas"]["OperatorPoolCapacity"][];
         };
         /** OrgAdminCreate */
         OrgAdminCreate: {
@@ -4645,20 +4778,6 @@ export interface components {
                 [key: string]: unknown;
             } | null;
         };
-        /** PoolCreate */
-        PoolCreate: {
-            /** Cluster Id */
-            cluster_id: string;
-            /** Name */
-            name: string;
-            /** Description */
-            description?: string | null;
-            /**
-             * Kind
-             * @default dedicated
-             */
-            kind: string;
-        };
         /** PoolGrantCreate */
         PoolGrantCreate: {
             /** Scope */
@@ -4696,6 +4815,21 @@ export interface components {
             status: string;
             /** Device Count */
             device_count: number;
+        };
+        /** PoolPatch */
+        PoolPatch: {
+            /** Name */
+            name?: string | null;
+            /** Storage Class */
+            storage_class?: string | null;
+            /** Node Id */
+            node_id?: string | null;
+            /** Share Scope */
+            share_scope?: string | null;
+            /** Shared With */
+            shared_with?: string[] | null;
+            /** Manual Capacity Gb */
+            manual_capacity_gb?: number | null;
         };
         /** PoolRead */
         PoolRead: {
@@ -4895,6 +5029,8 @@ export interface components {
             owner_name?: string | null;
             /** Gpu Model */
             gpu_model?: string | null;
+            /** Cluster Id */
+            cluster_id?: string | null;
             /** Reason */
             reason?: string | null;
         };
@@ -5280,6 +5416,11 @@ export interface components {
             email?: string | null;
             /** Password */
             password?: string | null;
+            /**
+             * Force Password Reset
+             * @default false
+             */
+            force_password_reset: boolean;
         };
         /** ValidationError */
         ValidationError: {
@@ -5505,6 +5646,43 @@ export interface components {
             name: string;
             /** Password */
             password: string;
+        };
+        /** PoolCreate */
+        app__api__schemas__node_pool__PoolCreate: {
+            /** Cluster Id */
+            cluster_id: string;
+            /** Name */
+            name: string;
+            /** Description */
+            description?: string | null;
+            /**
+             * Kind
+             * @default dedicated
+             */
+            kind: string;
+        };
+        /** PoolCreate */
+        app__api__storage_pools_router__PoolCreate: {
+            /** Name */
+            name: string;
+            /** Cluster Id */
+            cluster_id: string;
+            /** Storage Class */
+            storage_class: string;
+            /** Node Id */
+            node_id?: string | null;
+            /**
+             * Share Scope
+             * @default all
+             */
+            share_scope: string;
+            /**
+             * Shared With
+             * @default []
+             */
+            shared_with: string[];
+            /** Manual Capacity Gb */
+            manual_capacity_gb?: number | null;
         };
     };
     responses: never;
@@ -8751,6 +8929,7 @@ export interface operations {
             query?: {
                 status?: string | null;
                 group_id?: string | null;
+                cluster_id?: string | null;
                 scope?: string;
                 page?: number;
                 size?: number;
@@ -9544,6 +9723,7 @@ export interface operations {
         parameters: {
             query?: {
                 group_id?: string | null;
+                cluster_id?: string | null;
                 page?: number;
                 size?: number;
                 /** @description Token fallback for clients that cannot set custom headers, such as EventSource (SSE) */
@@ -9581,6 +9761,7 @@ export interface operations {
     my_queue_api_v1_queue_mine_get: {
         parameters: {
             query?: {
+                cluster_id?: string | null;
                 /** @description Token fallback for clients that cannot set custom headers, such as EventSource (SSE) */
                 access_token?: string | null;
             };
@@ -10269,6 +10450,157 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content?: never;
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    list_pools_api_v1_storage_pools_get: {
+        parameters: {
+            query?: {
+                cluster_id?: string | null;
+                /** @description Token fallback for clients that cannot set custom headers, such as EventSource (SSE) */
+                access_token?: string | null;
+            };
+            header?: {
+                /** @description Bearer <jwt> */
+                authorization?: string | null;
+            };
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": unknown;
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    create_pool_api_v1_storage_pools_post: {
+        parameters: {
+            query?: {
+                /** @description Token fallback for clients that cannot set custom headers, such as EventSource (SSE) */
+                access_token?: string | null;
+            };
+            header?: {
+                /** @description Bearer <jwt> */
+                authorization?: string | null;
+            };
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["app__api__storage_pools_router__PoolCreate"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": unknown;
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    delete_pool_api_v1_storage_pools__pool_id__delete: {
+        parameters: {
+            query?: {
+                /** @description Token fallback for clients that cannot set custom headers, such as EventSource (SSE) */
+                access_token?: string | null;
+            };
+            header?: {
+                /** @description Bearer <jwt> */
+                authorization?: string | null;
+            };
+            path: {
+                pool_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    update_pool_api_v1_storage_pools__pool_id__patch: {
+        parameters: {
+            query?: {
+                /** @description Token fallback for clients that cannot set custom headers, such as EventSource (SSE) */
+                access_token?: string | null;
+            };
+            header?: {
+                /** @description Bearer <jwt> */
+                authorization?: string | null;
+            };
+            path: {
+                pool_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["PoolPatch"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": unknown;
+                };
             };
             /** @description Validation Error */
             422: {
@@ -11165,6 +11497,7 @@ export interface operations {
                 "at[gte]"?: string | null;
                 "at[lt]"?: string | null;
                 result?: string | null;
+                cluster_id?: string | null;
                 /** @description Token fallback for clients that cannot set custom headers, such as EventSource (SSE) */
                 access_token?: string | null;
             };
@@ -11205,6 +11538,7 @@ export interface operations {
                 "at[gte]"?: string | null;
                 "at[lt]"?: string | null;
                 result?: string | null;
+                cluster_id?: string | null;
                 sort?: string;
                 verify?: boolean;
                 page?: number;
@@ -11391,6 +11725,7 @@ export interface operations {
             query?: {
                 status?: string | null;
                 region?: string | null;
+                cluster_id?: string | null;
                 /** @description Token fallback for clients that cannot set custom headers, such as EventSource (SSE) */
                 access_token?: string | null;
             };
@@ -11667,7 +12002,7 @@ export interface operations {
         };
         requestBody: {
             content: {
-                "application/json": components["schemas"]["PoolCreate"];
+                "application/json": components["schemas"]["app__api__schemas__node_pool__PoolCreate"];
             };
         };
         responses: {
@@ -11889,6 +12224,7 @@ export interface operations {
         parameters: {
             query?: {
                 node_id?: string | null;
+                cluster_id?: string | null;
                 /** @description Token fallback for clients that cannot set custom headers, such as EventSource (SSE) */
                 access_token?: string | null;
             };
@@ -12089,6 +12425,7 @@ export interface operations {
         parameters: {
             query?: {
                 region?: string | null;
+                cluster_id?: string | null;
                 /** @description Token fallback for clients that cannot set custom headers, such as EventSource (SSE) */
                 access_token?: string | null;
             };

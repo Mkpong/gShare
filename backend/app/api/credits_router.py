@@ -12,6 +12,7 @@ from fastapi import APIRouter, Depends, Query, status
 from pydantic import BaseModel
 from pydantic import Field as PydField
 from sqlalchemy import and_, case, func, or_, select, tuple_
+from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.api.deps import Pagination, get_current_principal, idempotency_key, require_idem
@@ -98,6 +99,21 @@ async def _existing_txn(db: AsyncSession, key: str) -> CreditTransaction | None:
     ).one_or_none()
 
 
+async def _replay_after_conflict(db: AsyncSession, key: str) -> CreditTransaction:
+    """Recover the winner's transaction after losing the race on the idempotency key.
+
+    The pre-check above is a read, so two requests carrying the same key can both pass it and
+    both attempt the insert. The UNIQUE index settles it correctly — the money moves once — but
+    the loser's IntegrityError used to escape as a 500, telling an honest retry that the server
+    had failed. Roll the failed insert back and return what the winner wrote.
+    """
+    await db.rollback()
+    txn = await _existing_txn(db, key)
+    if txn is None:  # pragma: no cover - the constraint fired, so a row must exist
+        raise
+    return txn
+
+
 def _can_read_wallet(principal: Principal, wallet: CreditWallet) -> bool:
     """Owner (self / project member) or billing/super admin."""
     if principal.global_role == "super_admin":
@@ -130,6 +146,38 @@ async def list_wallets(
         stmt = stmt.where(CreditWallet.owner_type == owner_type)
     if owner_id is not None:
         stmt = stmt.where(CreditWallet.owner_id == owner_id)
+    # Scope to the caller's tenant. `wallet.read` says "you administer wallets somewhere", not
+    # "you may see every wallet on the platform" — without this filter the listing handed an
+    # administrator of one organization the balances and owner names of every other.
+    if "super_admin" not in principal.global_roles:
+        org_ids = list(principal.org_admin_orgs)
+        group_ids = {gid for gid, r in principal.memberships.items()
+                     if r in ("org_admin", "group_admin")}
+        if org_ids:
+            group_ids |= set(
+                (await db.scalars(
+                    select(Project.id).where(
+                        Project.org_id.in_(org_ids), Project.deleted_at.is_(None)
+                    )
+                )).all()
+            )
+        user_ids = set()
+        if group_ids:
+            user_ids = set(
+                (await db.scalars(
+                    select(Membership.user_id).where(Membership.group_id.in_(list(group_ids)))
+                )).all()
+            )
+        user_ids.add(principal.user_id)
+        stmt = stmt.where(
+            or_(
+                and_(CreditWallet.owner_type == "org", CreditWallet.owner_id.in_(org_ids or [""])),
+                and_(CreditWallet.owner_type == "group",
+                     CreditWallet.owner_id.in_(list(group_ids) or [""])),
+                and_(CreditWallet.owner_type == "user",
+                     CreditWallet.owner_id.in_(list(user_ids) or [""])),
+            )
+        )
     stmt = stmt.order_by(CreditWallet.created_at.desc()).limit(page.size).offset(page.offset)
     rows = (await db.scalars(stmt)).all()
     # Resolve owner names per type (user, group, organization) so the UI can show a name, not an id.
@@ -218,7 +266,12 @@ async def topup(
     wallet.version = wallet.version + 1
     txn = _make_txn(wallet, "topup", amount, key=idem, ref=body.note)
     db.add(txn)
-    await db.flush()
+    try:
+        await db.flush()
+    except IntegrityError:
+        replayed = await _replay_after_conflict(db, idem)
+        wallet = await _get_wallet(db, wallet_id)
+        return {"transaction": _txn_view(replayed), "wallet": _wallet_view(wallet)}
     await AuditService(db).record(
         actor=principal.user_id, action="credit.topup", target=wallet_id,
         amount=str(amount), txn_id=txn.id,

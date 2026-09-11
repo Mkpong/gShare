@@ -6,6 +6,8 @@ and FastAPI serialization does not 500. Money fields are stringified Decimals
 """
 from __future__ import annotations
 
+from datetime import datetime
+
 from pydantic import BaseModel
 
 
@@ -118,6 +120,21 @@ class ClusterCompute(BaseModel):
     disk_gb: ClusterResource
 
 
+class ClusterStoragePool(BaseModel):
+    """One registered volume-backing pool: what it is, where it sits, and who may use it."""
+
+    id: str
+    name: str | None = None
+    hostname: str | None = None
+    cluster_id: str | None = None
+    cluster_name: str | None = None
+    storage_class: str | None = None
+    share_scope: str | None = None          # all | selected
+    capacity_gb: int | None = None
+    capacity_source: str | None = None      # csi | manual
+    capacity_reported_at: datetime | None = None
+
+
 class ClusterStorageDisk(BaseModel):
     used: int   # provisioned volume quota (GiB) — allocation, not bytes on disk
     total: int  # configured pool capacity (GB) when known, else the storage nodes' host disk
@@ -127,6 +144,10 @@ class ClusterStorageDisk(BaseModel):
 class ClusterStorage(BaseModel):
     disk_gb: ClusterStorageDisk
     node_count: int = 0
+    # True under a cluster filter: the pool is fleet-wide, not this cluster's own.
+    shared: bool = False
+    # The registered pools, each with the cluster it belongs to.
+    pools: list[ClusterStoragePool] = []
 
 
 class ClusterMetrics(BaseModel):

@@ -20,6 +20,10 @@ export const monitorKeys = {
 
 export interface SessionMonitorFilter {
   status?: string;
+  /** Narrow to one cluster, server-side. Passed here rather than filtered after the fetch so the
+   *  screen never holds a fleet-wide array it could count by accident — which is how the tab badge
+   *  came to say 104 above a table of 12. */
+  cluster_id?: string;
   group_id?: string;
   owner_id?: string;
   node_id?: string;
@@ -42,7 +46,7 @@ export function useAllSessions(filter: SessionMonitorFilter = {}, livePaused = f
       const out: Session[] = [];
       for (let page = 1; page <= 20; page += 1) {
         const { data } = await api.GET('/api/v1/sessions', {
-          params: { query: { status: filter.status, group_id: filter.group_id, page, size: SIZE, scope: 'all' } },
+          params: { query: { status: filter.status, group_id: filter.group_id, cluster_id: filter.cluster_id, page, size: SIZE, scope: 'all' } },
         });
         const env = data as unknown as { data?: Session[]; pagination?: { total?: number } } | Session[] | undefined;
         const rows = Array.isArray(env) ? env : env?.data ?? [];
@@ -59,7 +63,7 @@ export function useAllSessions(filter: SessionMonitorFilter = {}, livePaused = f
 
 // GET /queue — the whole queue, with priorities and waiting times.
 export function useAdminQueue(
-  filter: { status?: string; group_id?: string; page?: number; size?: number } = {},
+  filter: { status?: string; group_id?: string; cluster_id?: string; page?: number; size?: number } = {},
   livePaused = false,
 ) {
   return useQuery({
@@ -67,7 +71,7 @@ export function useAdminQueue(
     queryFn: async () => {
       // The whole queue, not its first page: the tab badge and the heading count it, and a queue
       // deeper than one page would report and list 20. The server accepts only group_id.
-      const q = { group_id: filter.group_id };
+      const q = { group_id: filter.group_id, cluster_id: filter.cluster_id };
       const { data } = await api.GET('/api/v1/queue', { params: { query: { ...q, page: 1, size: PAGE_MAX } } });
       return await fetchRestOfPages('/api/v1/queue', q, data?.data ?? [], pageTotal(data));
     },
@@ -95,7 +99,7 @@ export function useNodes(filter: { status?: string; region?: string; gpu_mode?: 
 
 // GET /metrics/cluster — cluster-wide aggregates over GPUs, VRAM, nodes, and credits.
 // super_admin only.
-export function useClusterMetrics(query: { region?: string } = {}, opts?: { enabled?: boolean }) {
+export function useClusterMetrics(query: { region?: string; cluster_id?: string } = {}, opts?: { enabled?: boolean }) {
   return useQuery({
     queryKey: [...monitorKeys.cluster, query],
     enabled: opts?.enabled ?? true,

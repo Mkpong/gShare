@@ -74,6 +74,10 @@ spec:
               valueFrom: { secretKeyRef: { name: gshare-jwt-signing, key: private.pem } }
             - name: GSHARE_INTERNAL_JWT_KID
               valueFrom: { secretKeyRef: { name: gshare-jwt-signing, key: active_kid } }
+            # Encrypts a remote cluster's kubeconfig at rest. Without it a remote cluster cannot
+            # be registered at all — which is the intended failure, rather than storing it plainly.
+            - name: GSHARE_CLUSTER_CREDENTIAL_KEY
+              valueFrom: { secretKeyRef: { name: gshare-cluster-credential, key: key } }
             # Initial password for the bootstrap super_admin, whose account is ensured at startup.
             # The email and display name come from the ConfigMap.
             - name: GSHARE_BOOTSTRAP_ADMIN_PASSWORD

@@ -158,14 +158,17 @@ function NavRow({ item, onNavigate, end, count }: {
 function usePendingApprovals(isAdminConsole: boolean) {
   // The credit screen has TWO inboxes (allocation requests and top-up requests); the badge counts
   // what that screen actually asks the admin to decide.
-  const allocs = useAllocationRequests('incoming');
+  // These inboxes exist only in the admin console: fetched from the user console they were four
+  // 403s on every page load for a member, and noise in the audit trail.
+  const on = { enabled: isAdminConsole };
+  const allocs = useAllocationRequests('incoming', on);
   // 페이지의 요청 관리 탭과 같은 기준: super는 전체 수신함(scope=all)을 세야
   // 사이드바 배지와 탭 카운트가 일치한다 (기본 scope=mine은 본인 요청만 본다).
   const isSuperForInbox = useAuthStore((st) => st.claims.global_role === 'super_admin');
-  const topups = useTopupRequests({ status: 'pending', ...(isSuperForInbox ? { scope: 'all' as const } : {}) });
-  const quota = useResourceRequests('incoming');
+  const topups = useTopupRequests({ status: 'pending', ...(isSuperForInbox ? { scope: 'all' as const } : {}) }, on);
+  const quota = useResourceRequests('incoming', on);
   // Self-registered accounts waiting for a department and approval.
-  const signups = useUsers({ status: 'pending', size: 100 });
+  const signups = useUsers({ status: 'pending', size: 100 }, on);
   if (!isAdminConsole) return { credits: 0, quota: 0, signups: 0 };
   const pending = (rows: { status?: string }[] | undefined) =>
     (rows ?? []).filter((r) => (r.status ?? 'pending') === 'pending').length;
@@ -275,7 +278,6 @@ export function Layout({ children, variant = 'user' }: { children: ReactNode; va
   }, [location.pathname, openGroup]);
 
 
-  const pending = usePendingApprovals(isAdminConsole);
   const isSuperAdmin = claims.global_role === 'super_admin';
   const activeProject = memberships.find((m) => m.group_id === activeProjectId);
 
@@ -288,6 +290,10 @@ export function Layout({ children, variant = 'user' }: { children: ReactNode; va
       : atLeast(memRole, 'group_admin')
         ? 'group_admin'
         : null;
+  // The inbox counts need the admin console AND the authority to read those inboxes: a member who
+  // types /admin mounts this layout for the instant before the role guard redirects, and asking
+  // anyway put a 403 in the log for a page they never saw.
+  const pending = usePendingApprovals(isAdminConsole && adminRole !== null);
 
   return (
     <div className={`gs-shell grid h-full ${collapsed ? 'is-collapsed' : ''}`}>

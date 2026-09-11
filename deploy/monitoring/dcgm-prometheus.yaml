@@ -3,7 +3,7 @@
 # Deploys dcgm-exporter (DaemonSet on GPU nodes) which emits DCGM_FI_DEV_GPU_UTIL{UUID=...},
 # and a minimal Prometheus that scrapes it. Point the operator at this Prometheus to activate
 # workload-aware idle (Helm: operator.prometheusUrl=http://prometheus.monitoring.svc:9090).
-# Without it the reaper falls back to a wall-clock idle window. (docs/paper/idle-auto-pause.md)
+# Without it the reaper falls back to a wall-clock idle window.
 #
 #   kubectl apply -f deploy/monitoring/dcgm-prometheus.yaml
 #

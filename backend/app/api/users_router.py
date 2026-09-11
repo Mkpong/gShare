@@ -15,7 +15,7 @@ from typing import Any
 
 from fastapi import APIRouter, Depends, Query, Request, Response, status
 from jose import jwt
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, ConfigDict, Field
 from sqlalchemy import func, or_, select, text
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -29,6 +29,7 @@ from app.core.errors import DomainError, Forbidden, NotFound, Unauthenticated
 from app.core.passwords import hash_password_async, verify_password_async
 from app.core.ratelimit import check_rate
 from app.core.redis import get_redis
+from app.core.validation import DisplayName, OptionalDisplayName
 from app.db.base import get_db
 from app.db.models import (
     Allocation,
@@ -65,7 +66,7 @@ class _Validation(DomainError):
 class UserCreate(BaseModel):
     # Plain str + lightweight format check (avoids the optional email-validator dependency).
     email: str = Field(min_length=3, max_length=254)
-    name: str = Field(min_length=1, max_length=100)
+    name: DisplayName
     group_id: str                                          # group to join, required; the organization follows from it
     status: str = "active"
     initial_role: str = "member"
@@ -78,11 +79,17 @@ class ChangePasswordRequest(BaseModel):
 
 
 class UserPatch(BaseModel):
-    name: str | None = Field(default=None, min_length=1, max_length=100)
+    # Unknown fields are rejected rather than dropped. Accepting `{"global_role": "super_admin"}`
+    # with a 200 and silently ignoring it tells the caller their escalation worked.
+    model_config = ConfigDict(extra="forbid")
+
+    name: OptionalDisplayName = None
     status: str | None = None
     email: str | None = Field(default=None, min_length=3, max_length=254)
-    # Administrator password reset: set a new temporary password and force a change at next login.
+    # Only the user themselves may set their own password. An administrator uses
+    # force_password_reset, which clears the credential without choosing the replacement.
     password: str | None = Field(default=None, min_length=8, max_length=128)
+    force_password_reset: bool = False
 
 
 class UserDepartmentSet(BaseModel):
@@ -229,15 +236,18 @@ async def auth_login(body: _LoginRequest, request: Request, db: AsyncSession = D
         await _audit_login(db, actor=user.id, ok=False, ip=client_ip, email=email,
                            reason="account_pending")
         raise _SignupPending("account awaiting administrator approval")
-    # Password check: when a hash exists it must match. An account with no hash — bootstrap or
-    # legacy — is let through, but must_change_password is set so a password is chosen immediately.
-    if user.password_hash:
-        if not await verify_password_async(body.password or "", user.password_hash):
-            await _audit_login(db, actor=user.id, ok=False, ip=client_ip, email=email,
-                               reason="bad_password")
-            raise Unauthenticated("invalid credentials")
-    elif not user.must_change_password:
-        user.must_change_password = True
+    # Password check. An account with no hash cannot be authenticated at all: letting it through
+    # on any password turned "credential not set yet" into "no credential required", which is a
+    # login bypass for every bootstrap or legacy row. Such an account needs an administrator to
+    # issue one through force_password_reset.
+    if not user.password_hash:
+        await _audit_login(db, actor=user.id, ok=False, ip=client_ip, email=email,
+                           reason="no_credential")
+        raise Unauthenticated("invalid credentials")
+    if not await verify_password_async(body.password or "", user.password_hash):
+        await _audit_login(db, actor=user.id, ok=False, ip=client_ip, email=email,
+                           reason="bad_password")
+        raise Unauthenticated("invalid credentials")
     await _audit_login(db, actor=user.id, ok=True, ip=client_ip, email=email)
     return _issue_token(user)
 
@@ -560,6 +570,8 @@ async def create_user(
     group = await db.get(Project, body.group_id)
     if group is None or group.deleted_at is not None:
         raise NotFound("group", {"group_id": body.group_id})
+    await _assert_group_in_scope(db, principal, group)
+    _assert_grantable_role(principal, body.initial_role)
 
     # Pre-check uniqueness for a clean 409 (the UNIQUE index is the final defense).
     existing = await db.scalar(select(User.id).where(User.email == email))
@@ -679,6 +691,8 @@ async def bulk_create_users(
     group = await db.get(Project, body.group_id)
     if group is None or group.deleted_at is not None:
         raise NotFound("group", {"group_id": body.group_id})
+    await _assert_group_in_scope(db, principal, group)
+    _assert_grantable_role(principal, body.initial_role)
 
     # Validate + dedupe client-side rows first so hashing only runs for viable rows.
     seen: set[str] = set()
@@ -811,6 +825,7 @@ async def get_user(
     user = await db.get(User, user_id)
     if user is None or user.deleted_at is not None:
         raise NotFound("user", {"user_id": user_id})
+    await _assert_target_in_scope(db, principal, user_id)
 
     memberships = (
         await db.scalars(select(Membership).where(Membership.user_id == user_id))
@@ -839,6 +854,7 @@ async def get_user_usage(
     user = await db.get(User, user_id)
     if user is None or user.deleted_at is not None:
         raise NotFound("user", {"user_id": user_id})
+    await _assert_target_in_scope(db, principal, user_id)
 
     live = (
         await db.scalars(
@@ -916,6 +932,68 @@ async def get_user_usage(
     }
 
 
+async def _assert_group_in_scope(db: AsyncSession, principal: Principal, group: Project) -> None:
+    """The caller may enroll a user into this group only if they administer its tenant.
+
+    Without this an org_admin could hand themselves a foothold in any organization by creating a
+    user inside one of its groups — and, because the initial role was unrestricted, hand that
+    foothold org_admin rights over the victim organization.
+    """
+    if "super_admin" in principal.global_roles:
+        return
+    if group.org_id and group.org_id in principal.org_admin_orgs:
+        return
+    if principal.memberships.get(group.id) in ("org_admin", "group_admin"):
+        return
+    raise Forbidden("not permitted: group out of scope")
+
+
+def _assert_grantable_role(principal: Principal, role: str) -> None:
+    """No caller may mint a membership that outranks their own authority.
+
+    `org_admin` is deliberately absent from what a non-super_admin may grant: the principal
+    resolver promotes a group-scoped org_admin row into authority over that group's whole
+    organization, so granting it is equivalent to handing over the organization.
+    """
+    if "super_admin" in principal.global_roles:
+        return
+    if role == "org_admin":
+        raise Forbidden("not permitted: cannot grant org_admin")
+
+
+async def _assert_target_in_scope(db: AsyncSession, principal: Principal, user_id: str) -> None:
+    """The caller may act on this user only if they share a tenant with them.
+
+    `principal.require(action=...)` answers "do you hold this rank *anywhere*" — with no group
+    bound it cannot answer "in THIS tenant". Every handler that takes a user id and then acts on
+    it has to re-scope by hand; the ones that did not let an administrator of one organization
+    read and delete users belonging to another.
+
+    super_admin is global. An org_admin reaches the users of every group in the organizations
+    they administer; a group_admin only their own groups' members. A user with no membership at
+    all is reachable by super_admin only, since there is no tenant to share.
+    """
+    if principal.user_id == user_id or "super_admin" in principal.global_roles:
+        return
+    tgt_groups = await _target_group_ids(db, user_id)
+    if not tgt_groups:
+        raise Forbidden("not permitted: user out of scope")
+    # Groups the caller administers directly, plus every group of an organization they administer.
+    reachable = {gid for gid, r in principal.memberships.items() if r in ("org_admin", "group_admin")}
+    if principal.org_admin_orgs:
+        org_groups = (
+            await db.scalars(
+                select(Project.id).where(
+                    Project.org_id.in_(list(principal.org_admin_orgs)),
+                    Project.deleted_at.is_(None),
+                )
+            )
+        ).all()
+        reachable |= set(org_groups)
+    if not (reachable & tgt_groups):
+        raise Forbidden("not permitted: user out of scope")
+
+
 async def _target_group_ids(db: AsyncSession, user_id: str) -> set[str]:
     """The set of group ids the target user belongs to."""
     rows = (
@@ -954,6 +1032,7 @@ async def update_user(
         gid for gid, r in principal.memberships.items() if r in ("org_admin", "group_admin")
     }
     tgt_groups = await _target_group_ids(db, user_id)
+    target_global_roles = list(user.global_roles or []) + ([user.global_role] if user.global_role else [])
     shares_admin_scope = is_super or bool(admin_group_ids & tgt_groups)
     is_org_admin_of_target = is_super or any(
         principal.memberships.get(g) == "org_admin" for g in tgt_groups
@@ -991,13 +1070,32 @@ async def update_user(
             raise _Validation("invalid status", {"status": body.status})
         changes["status"] = {"from": user.status, "to": body.status}
         user.status = body.status
-    # Password reset: super_admin, or an org_admin or group_admin sharing scope with the target.
+    # Password: only the user themselves may choose one. An administrator resetting someone
+    # else's password to a value they picked is account takeover, not a reset — they can simply
+    # log in as the target before the forced change fires. Administrators clear the credential
+    # instead and the user sets a new one through the forced-change flow at next login.
     if body.password is not None:
+        if is_self:
+            user.password_hash = await hash_password_async(body.password)
+            user.must_change_password = False
+            changes["password"] = {"from": "***", "to": "changed"}
+        else:
+            if not shares_admin_scope:
+                raise Forbidden("not permitted: user.reset_password")
+            # No caller may act on someone who outranks them, even inside a shared group.
+            if not is_super and "super_admin" in (target_global_roles or []):
+                raise Forbidden("not permitted: target outranks caller")
+            raise Forbidden(
+                "not permitted: set a password for another user; use force_password_reset"
+            )
+    # Force a reset without choosing the secret: the target's next login must set a new password.
+    if getattr(body, "force_password_reset", False):
         if not shares_admin_scope:
             raise Forbidden("not permitted: user.reset_password")
-        user.password_hash = await hash_password_async(body.password)
+        if not is_super and "super_admin" in (target_global_roles or []):
+            raise Forbidden("not permitted: target outranks caller")
         user.must_change_password = True
-        changes["password"] = {"from": "***", "to": "reset"}
+        changes["password"] = {"from": "***", "to": "reset_required"}
 
     if changes:
         try:
@@ -1117,6 +1215,7 @@ async def delete_user(
     user = await db.get(User, user_id)
     if user is None or user.deleted_at is not None:
         raise NotFound("user", {"user_id": user_id})
+    await _assert_target_in_scope(db, principal, user_id)
 
     # Live sessions: the delete screen promises "running sessions are terminated and settled",
     # so the soft path does exactly that — terminate (settle + refund the hold) each non-terminal
@@ -1176,9 +1275,17 @@ async def delete_user(
         user.deleted_at = func.now()
         action = "user.delete.soft"
 
+    # File the row under the DELETED user's tenant, not the caller's, so the organization that
+    # lost a member can see it in their own audit log.
+    tgt_group = next(iter(await _target_group_ids(db, user_id)), None)
+    tgt_org = (
+        await db.scalar(select(Project.org_id).where(Project.id == tgt_group))
+        if tgt_group else None
+    )
     await AuditService(db).record(
         actor=principal.user_id, action=action, target=user_id, result="ok",
         name=snap_name, email=snap_email,
+        target_group_id=tgt_group, target_org_id=tgt_org,
     )
     await db.commit()
     return Response(status_code=status.HTTP_204_NO_CONTENT)

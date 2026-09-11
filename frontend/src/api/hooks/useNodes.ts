@@ -78,10 +78,16 @@ export function useNode(id?: string) {
 }
 
 // GET /nodes — node.read is super_admin only, so other callers pass enabled=false.
-export function useNodes(filter: { status?: NodeStatus; region?: string } = {}, opts?: { enabled?: boolean }) {
+export function useNodes(
+  filter: { status?: NodeStatus; region?: string; cluster_id?: string } = {},
+  opts?: { enabled?: boolean },
+) {
   const query: Record<string, unknown> = { page: 1, size: 100 };
   if (filter.status) query.status = filter.status;
   if (filter.region) query.region = filter.region;
+  // Server-side, so the screen holds only the rows it is showing: the fleet counters above a node
+  // table have to be counting the same nodes the table lists.
+  if (filter.cluster_id) query.cluster_id = filter.cluster_id;
   return useQuery({
     queryKey: [...nodeKeys.all, filter],
     enabled: opts?.enabled ?? true,
@@ -126,12 +132,13 @@ export function useSetPoolTargets() {
 }
 
 // GET /gpu-devices — the devices on each node, with their VRAM and core occupancy.
-export function useGpuDevices(nodeId?: string, opts?: { enabled?: boolean }) {
+export function useGpuDevices(nodeId?: string, opts?: { enabled?: boolean; cluster_id?: string }) {
   const query: Record<string, unknown> = { page: 1, size: 200 };
   if (nodeId) query.node_id = nodeId;
+  if (opts?.cluster_id) query.cluster_id = opts.cluster_id;
   return useQuery({
     enabled: opts?.enabled ?? true,
-    queryKey: nodeKeys.devices(nodeId),
+    queryKey: [...nodeKeys.devices(nodeId), opts?.cluster_id ?? ''],
     queryFn: async () => {
       const { data } = await raw.GET('/api/v1/gpu-devices', { params: { query } });
       return (data as { data?: GpuDevice[] } | undefined)?.data ?? [];

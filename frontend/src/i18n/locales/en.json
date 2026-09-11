@@ -334,6 +334,8 @@
     },
     "clusters": {
       "colApiServer": "API server",
+      "colSessionDomain": "Session domain",
+      "sessionDomainUnset": "not set - falls back to the control plane",
       "colRole": "Role",
       "colGpus": "GPUs",
       "colRunning": "Running",
@@ -516,10 +518,21 @@
       "nodeStateBar": "Node states",
       "fleetTitle": "Fleet",
       "gpuUtilBasis": "allocated · usage on Monitoring",
-      "storageSubShort": "{{count}} node · provisioned volume quota",
+      "storageSubShort": "Provisioned volume quota",
+      "storageSubShared": "Shared across clusters · provisioned volume quota",
+      "storageNoneCluster": "No storage is attached to this cluster.",
+      "storageNone": "No storage server is attached.",
       "allClusters": "All clusters",
       "deviceUnavailable": "Unavailable",
-      "devicePage": "Page {{page}}"
+      "devicePage": "Page {{page}}",
+      "storageShareAll": "shared",
+      "storageCapacityUnknown": "not measured",
+      "storageSource": {
+        "csi": "measured by the CSI driver",
+        "manual": "stated by an administrator",
+        "node_disk": "the storage node's system disk, not the pool",
+        "unknown": "no measurement"
+      }
     },
     "groups": {
       "add": "Group",
@@ -706,7 +719,7 @@
       "sessionsHeading": "Sessions ({{count}})",
       "subtitle": "Every session and the queue, live",
       "terminateRequested": "{{session}}: force termination requested; settlement is running.",
-      "terminateSelected": "Force-terminate {{count}} selected",
+      "terminateSelected": "Force-terminate ({{count}})",
       "terminateTitle": "Force-terminate session",
       "terminateWarning": "This terminates the session immediately, without the owner's consent, and runs the normal settlement path: releasing the hold, confirming consumption, and refunding the remainder.",
       "terminating": "Terminating…",
@@ -728,7 +741,11 @@
       "selectErrored": "Select {{count}} errored",
       "confirmCleanupTitle": "Clean up {{count}} sessions?",
       "confirmCleanupBody": "These sessions already stopped. Cleaning up reclaims the remaining reservation and resources and files them as terminated. Their error reasons are kept.",
-      "bulkCleaned": "Cleaned up {{count}} sessions."
+      "bulkCleaned": "Cleaned up {{count}} sessions.",
+      "cleanupBulk": "Clean up ({{count}})",
+      "cleanupNothing": "No errored sessions to clean up",
+      "terminateSelectedHint": "Tick the sessions to terminate",
+      "cleanupPick": "Tick the errored sessions to clean up"
     },
     "nodes": {
       "availGpus": "Available GPUs",
@@ -846,7 +863,8 @@
       "title": "Nodes",
       "uncordon": "Uncordon",
       "uncordonedToast": "{{name}} uncordoned.",
-      "allClusters": "All clusters"
+      "allClusters": "All clusters",
+      "mixedModeHint": "This node holds cards in more than one mode."
     },
     "orgs": {
       "add": "Organization",
@@ -1585,7 +1603,8 @@
     "deviceMode": {
       "fractional": "Fractional",
       "exclusive": "Exclusive",
-      "mig": "MIG"
+      "mig": "MIG",
+      "mixed": "Mixed"
     },
     "statusReason": {
       "idle": "auto-paused: idle GPU",
@@ -2251,7 +2270,9 @@
     "privilegedHint": "The container runs as root so you can install system packages (apt). Granted to you by the resource policy.",
     "cluster": "Cluster",
     "clusterAuto": "Automatic (the scheduler picks)",
-    "clusterHint": "Preset from the cluster chosen in the top bar. Automatic places the session where capacity is free."
+    "clusterHint": "Preset from the cluster chosen in the top bar. Automatic places the session where capacity is free.",
+    "bareBaseTag": "No CUDA toolkit",
+    "bareBaseHint": "The GPU driver is provided, but this image ships no CUDA toolkit or framework. Install what you need inside the session."
   },
   "notif": {
     "cluster_health": {

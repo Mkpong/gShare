@@ -30,7 +30,7 @@ from app.api.schemas.internal import (
 from app.core.config import settings
 from app.core.logging import get_logger
 from app.core.redis import get_redis
-from app.db.models import Session, StorageVolume
+from app.db.models import Session, StoragePool, StorageVolume
 from app.domain.notification_service import NotificationService
 
 log = get_logger(__name__)
@@ -49,6 +49,8 @@ class VolumeSync:
         self.now = now or datetime.now(UTC)
 
     async def sync(self, report: OperatorVolumeSync) -> VolumeSyncResponse:
+        if report.pools and report.cluster_id:
+            await self._apply_pool_capacity(report.pools, report.cluster_id)
         if report.sessions:
             await self._apply_session_disk(report.sessions, cluster_id=report.cluster_id)
         if not report.volumes:
@@ -157,3 +159,33 @@ class VolumeSync:
         # shrinks, so after the owner cuts the quota the dataset still admits writes up to the old
         # refquota — and storage bills max(quota, used), which needs the true figure here.
         row.used_gb = int(round((obs.used_bytes or 0) / _GIB))
+
+
+    async def _apply_pool_capacity(self, pools, cluster_id: str) -> None:
+        """Record what the CSI driver says each pool holds.
+
+        Matched on (cluster, StorageClass) — the pair the operator is configured with. A pool the
+        administrator has not registered is not invented here: capacity without a registered pool
+        has no owner, no sharing rule and nothing to show it against, and silently creating one
+        would decide those for them. The reading is stamped so a stale figure is visible as stale
+        rather than passing for current.
+        """
+        now = datetime.now(UTC)
+        for p in pools:
+            if p.capacity_bytes <= 0:
+                continue
+            row = (await self.db.execute(
+                select(StoragePool).where(
+                    StoragePool.cluster_id == cluster_id,
+                    StoragePool.storage_class == p.storage_class,
+                    StoragePool.deleted_at.is_(None),
+                )
+            )).scalar_one_or_none()
+            if row is None:
+                log.debug("pool capacity for unregistered class %s on %s ignored",
+                          p.storage_class, cluster_id)
+                continue
+            row.capacity_bytes = int(p.capacity_bytes)
+            row.capacity_source = "csi"
+            row.capacity_reported_at = now
+        await self.db.flush()

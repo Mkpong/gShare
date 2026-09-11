@@ -39,6 +39,8 @@ jobs:
             context: backend
           - image: gshare-operator
             context: operator
+          - image: gshare-agent
+            context: agent
           - image: gshare-frontend
             context: frontend
     steps:

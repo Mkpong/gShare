@@ -1,0 +1,58 @@
+{
+  "version.label": {
+    "message": "Next",
+    "description": "The label for version current"
+  },
+  "sidebar.admin.category.Tenant administration": {
+    "message": "테넌트 관리",
+    "description": "The label for category 'Tenant administration' in sidebar 'admin'"
+  },
+  "sidebar.admin.category.Platform administration": {
+    "message": "플랫폼 관리",
+    "description": "The label for category 'Platform administration' in sidebar 'admin'"
+  },
+  "sidebar.operations.category.Clusters": {
+    "message": "클러스터",
+    "description": "The label for category 'Clusters' in sidebar 'operations'"
+  },
+  "sidebar.operations.category.Running the platform": {
+    "message": "플랫폼 운영",
+    "description": "The label for category 'Running the platform' in sidebar 'operations'"
+  },
+  "sidebar.user.category.Sessions": {
+    "message": "세션",
+    "description": "The label for category 'Sessions' in sidebar 'user'"
+  },
+  "sidebar.user.category.Data and volumes": {
+    "message": "데이터와 볼륨",
+    "description": "The label for category 'Data and volumes' in sidebar 'user'"
+  },
+  "sidebar.user.category.Wallet and credits": {
+    "message": "지갑과 크레딧",
+    "description": "The label for category 'Wallet and credits' in sidebar 'user'"
+  },
+  "sidebar.user.category.Account": {
+    "message": "계정",
+    "description": "The label for category 'Account' in sidebar 'user'"
+  },
+  "sidebar.admin.category.Users": {
+    "message": "사용자",
+    "description": "The label for category 'Users' in sidebar 'admin'"
+  },
+  "sidebar.admin.category.Credits": {
+    "message": "크레딧",
+    "description": "The label for category 'Credits' in sidebar 'admin'"
+  },
+  "sidebar.admin.category.Session monitoring": {
+    "message": "세션 관제",
+    "description": "The label for category 'Session monitoring' in sidebar 'admin'"
+  },
+  "sidebar.admin.category.Resources and policy": {
+    "message": "자원과 정책",
+    "description": "The label for category 'Resources and policy' in sidebar 'admin'"
+  },
+  "sidebar.admin.category.Clusters and nodes": {
+    "message": "클러스터와 노드",
+    "description": "The label for category 'Clusters and nodes' in sidebar 'admin'"
+  }
+}

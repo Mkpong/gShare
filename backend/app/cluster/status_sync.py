@@ -63,6 +63,16 @@ class StatusSync:
         self.credit = CreditEngine(db)
         self.sessions = SessionService(db)
 
+    async def cluster_of(self, session_id: str) -> str | None:
+        """The cluster of the session a callback addresses, by id or CR name.
+
+        Callers need this *before* on_status to check the reporting operator is entitled to speak
+        for the session, so it opens and closes its own transaction — on_status begins its own.
+        """
+        async with self.db.begin():
+            sess = await self._load_session(session_id)
+            return sess.cluster_id if sess is not None else None
+
     async def on_status(self, session_id: str, ev: OperatorStatusEvent) -> None:
         """Apply an operator status event idempotently.
 
@@ -143,7 +153,7 @@ class StatusSync:
                         # lendable (lend_state=yielded). The idle-yield reservation marker is armed
                         # so host RAM cannot be held indefinitely: past the TTL, grace_enforcer
                         # demotes to durable. This has nothing to do with credits and never resumes
-                        # automatically. (docs/paper/manuscript, §Design)
+                        # automatically.
                         dev = await self._resolve_device(sess, ev)
                         if dev is not None:
                             dev.lend_state = "yielded"
@@ -193,6 +203,19 @@ class StatusSync:
                 if self._crash_looping(sess, ev):
                     ev.message = ev.message or "crash loop"
                     await self._on_error(sess, ev, reason="crash_loop")
+                    return
+                # A heartbeat only ever comes from a live pod. A session still waiting to start
+                # therefore missed its Running report: the operator writes the phase to the CR
+                # first and drops the callback's error, so it never re-sends a phase it has
+                # already recorded. One failed callback used to strand a session in `pending`
+                # forever — pod running, no billing, no connect URL, no way back. The heartbeat
+                # carries the same binding facts, so the transition is applied from here.
+                if sess.status in ("pending", "preparing"):
+                    log.warning(
+                        "heartbeat for %s still %s: applying the missed running transition",
+                        sess.id, sess.status,
+                    )
+                    await self._on_running(sess, ev)
                 return
             if phase == "running":
                 await self._on_running(sess, ev)
@@ -260,6 +283,13 @@ class StatusSync:
             sess.node_hostname = ev.node_name
         if sess.started_at is None:
             sess.started_at = now
+        if sess.status in ("terminated", "error"):
+            # A settled session must not come back. Its hold was released and its settle key is
+            # spent, so a resurrected row would bill against no reservation and never settle
+            # again. A late `running` for a finished session is a stale report, not a transition.
+            log.info("ignoring running report for finished session=%s status=%s",
+                     sess.id, sess.status)
+            return
         if sess.status != "running":
             # preparing/pending -> running (allowed by the lifecycle SM).
             sess.status = "running"
@@ -284,6 +314,7 @@ class StatusSync:
     # ── terminated: end allocation + settle ──
     async def _on_terminated(self, sess: Session, ev: OperatorStatusEvent) -> None:
         now = self._event_ts(ev)
+        prior_status = sess.status
         was_terminal = sess.status in ("terminated", "error")
         await self._release_allocation(sess, now)
         if sess.status not in ("terminated", "error"):
@@ -300,7 +331,12 @@ class StatusSync:
         await self.db.flush()
         # Finalize remaining consume + release/refund the hold (idempotent settle:{ses}).
         if sess.billing_wallet_id and sess.credit_per_hour_snapshot:
-            await self.credit.settle(sess, f"settle:{sess.id}")
+            # A session that was PAUSED was already trued up by stop(); recomputing owed from
+            # started_at would bill the whole paused interval, in which nothing ran. Only a run
+            # that was actually running gets a final consume.
+            await self.credit.settle(
+                sess, f"settle:{sess.id}", final_consume=(prior_status == "running")
+            )
         await publish_session_event(sess.id, {"phase": "terminated", "status": sess.status})
         if not was_terminal:
             record_session_event(self.db, sess.id, "terminated",
@@ -331,6 +367,7 @@ class StatusSync:
     # ── error: session error + refund hold ──
     async def _on_error(self, sess: Session, ev: OperatorStatusEvent, *, reason: str | None = None) -> None:
         now = self._event_ts(ev)
+        prior_status = sess.status
         was_terminal = sess.status in ("terminated", "error")
         await self._release_allocation(sess, now)
         if sess.status not in ("terminated", "error"):
@@ -342,7 +379,12 @@ class StatusSync:
         await self.db.flush()
         # Settle releases any remaining hold (release/refund) idempotently — money only moves here.
         if sess.billing_wallet_id and sess.credit_per_hour_snapshot:
-            await self.credit.settle(sess, f"settle:{sess.id}")
+            # A session that was PAUSED was already trued up by stop(); recomputing owed from
+            # started_at would bill the whole paused interval, in which nothing ran. Only a run
+            # that was actually running gets a final consume.
+            await self.credit.settle(
+                sess, f"settle:{sess.id}", final_consume=(prior_status == "running")
+            )
         if not was_terminal:
             record_session_event(self.db, sess.id, "error",
                                  reason=sess.status_reason, message=getattr(ev, "message", None))

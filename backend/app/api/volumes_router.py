@@ -28,7 +28,6 @@ from app.core.errors import (
 )
 from app.db.base import get_db
 from app.db.models import (
-    GpuNode,
     Project,
     Session,
     StorageFolder,
@@ -39,6 +38,7 @@ from app.db.models import (
     VolumeSnapshot,
 )
 from app.domain.audit_service import AuditService
+from app.domain.storage_pools import pool_bound_gb
 
 router = APIRouter(prefix="/storage/volumes", tags=["volumes"])
 
@@ -130,12 +130,20 @@ class StorageCapacityExceeded(DomainError):
 async def _physical_storage(db: AsyncSession) -> tuple[int | None, int]:
     """(capacity_gb, allocated_gb) of the volume-backing storage pool.
 
-    Capacity is the storage-role nodes' host disk (operator inventory) with a 5% safety margin —
-    ZFS/CSI need working space and a 100%-provisioned pool ends in ENOSPC for everyone. Allocation
-    is the provisioned quota of every live volume. None = no storage node reported (no gate)."""
-    cap = await db.scalar(
-        select(func.coalesce(func.sum(GpuNode.disk), 0)).where(GpuNode.role == "storage")
-    )
+    Capacity is what a volume can actually be created on, with a 5% safety margin — ZFS/CSI need
+    working space and a 100%-provisioned pool ends in ENOSPC for everyone. Allocation is the
+    provisioned quota of every live volume. None = no storage node reported (no gate).
+
+    A volume lives on ONE pool: the StorageClass its PVC names decides where, and gShare picks
+    nothing. So several storage servers are not one big pool, and adding their disks up licensed
+    volumes no single server could hold — the bound is the largest pool a placement could use.
+    The figure comes from `app.domain.storage_pools`, the same resolution the dashboard reads, so
+    the gate and the panel cannot disagree: the CSI driver's measurement first, the administrator's
+    configured capacity next, the storage node's root disk last.
+
+    Volumes carry no cluster of their own, so the bound here is fleet-wide.
+    """
+    cap, _source = await pool_bound_gb(db)
     if not cap:
         return None, 0
     allocated = int(await db.scalar(

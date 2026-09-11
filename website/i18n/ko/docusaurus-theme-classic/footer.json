@@ -1,0 +1,11 @@
+{
+  "link.title.Docs": { "message": "문서", "description": "The title of the footer links column with title=Docs in the footer" },
+  "link.title.Project": { "message": "프로젝트", "description": "The title of the footer links column with title=Project in the footer" },
+  "link.item.label.User guide": { "message": "사용자 가이드", "description": "The label of footer link with label=User guide linking to /docs/user-manual" },
+  "link.item.label.Administrator guide": { "message": "관리자 가이드", "description": "The label of footer link with label=Administrator guide linking to /docs/admin-manual" },
+  "link.item.label.Operations": { "message": "운영", "description": "The label of footer link with label=Operations linking to /docs/getting-started" },
+  "link.item.label.Reference": { "message": "레퍼런스", "description": "The label of footer link with label=Reference linking to /docs/architecture" },
+  "link.item.label.GitHub": { "message": "GitHub", "description": "The label of footer link with label=GitHub linking to https://github.com/boanlab/gshare" },
+  "link.item.label.Helm chart": { "message": "Helm 차트", "description": "The label of footer link with label=Helm chart linking to https://github.com/boanlab/gshare/tree/main/charts/gshare" },
+  "copyright": { "message": "Copyright © 2026 gShare authors. Apache License 2.0.", "description": "The footer copyright" }
+}

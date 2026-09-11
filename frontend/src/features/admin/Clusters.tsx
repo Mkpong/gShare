@@ -83,6 +83,21 @@ export function AdminClusters() {
     { key: 'name', header: t('admin.clusters.colCluster'), sortBy: (c) => c.name, render: (c) => <b>{c.name}</b> },
     { key: 'role', header: t('admin.clusters.colRole'), sortBy: (c) => c.role, hideOnMobile: true, render: (c) => <span className="gs-tag">{c.role}</span> },
     {
+      // Where this cluster serves its sessions. A cluster registered without one advertises them
+      // under the control plane's own hostname, which has no route to them — visible here before
+      // a user meets it as a connect button that goes nowhere.
+      key: 'session_domain',
+      header: t('admin.clusters.colSessionDomain'),
+      sortBy: (c) => (c as { session_domain?: string | null }).session_domain ?? '',
+      hideOnMobile: true,
+      truncate: true,
+      render: (c) => {
+        const d = (c as { session_domain?: string | null }).session_domain;
+        return d ? <span className="font-mono text-xs">{d}</span>
+                 : <span className="text-muted text-xs">{t('admin.clusters.sessionDomainUnset')}</span>;
+      },
+    },
+    {
       key: 'status',
       header: t('common.status'),
       sortBy: (c) => c.status,

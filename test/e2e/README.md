@@ -28,7 +28,7 @@ test/e2e/
     ├── audit.js, audits.js, flows.js   # driver, DOM audits, interaction probes
     ├── personas.js, routes.js          # eight personas, every screen
     ├── seed.js, fixture.sql            # content and a synthetic data plane to audit against
-    └── screenshots.js                  # the captures in docs/screenshots
+    └── screenshots.js                  # captures every console screen
 ```
 
 > Two suites need no GPU and no cluster, only `docker compose up`:

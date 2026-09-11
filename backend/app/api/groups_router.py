@@ -13,7 +13,7 @@ from decimal import Decimal, InvalidOperation
 from typing import Any
 
 from fastapi import APIRouter, Depends, Query, Response, status
-from pydantic import BaseModel, Field
+from pydantic import BaseModel
 from sqlalchemy import func, select
 from sqlalchemy import update as sa_update
 from sqlalchemy.exc import IntegrityError
@@ -23,6 +23,7 @@ from app.api.deps import Pagination, get_current_principal
 from app.auth.rbac import Principal
 from app.core import ids
 from app.core.errors import DomainError, Forbidden, InsufficientCredit, NotFound
+from app.core.validation import DisplayName, OptionalDisplayName
 from app.db.base import get_db
 from app.db.models import (
     AuditLog,
@@ -89,20 +90,20 @@ class _Validation(DomainError):
 
 # ── request bodies ──
 class OrgCreate(BaseModel):
-    name: str = Field(min_length=1, max_length=80)
+    name: DisplayName
     status: str | None = None
     # Also create a dedicated node pool named after the organization, granted to it.
     create_node_pool: bool = False
 
 
 class OrgUpdate(BaseModel):
-    name: str | None = Field(default=None, min_length=1, max_length=80)
+    name: OptionalDisplayName = None
     status: str | None = None
 
 
 class ProjectCreate(BaseModel):
     org_id: str
-    name: str = Field(min_length=1, max_length=80)
+    name: DisplayName
     status: str | None = None
     create_project_wallet: bool = True
     # Credits minted into each new member's personal wallet on first join (0 = off).
@@ -112,7 +113,7 @@ class ProjectCreate(BaseModel):
 
 
 class ProjectPatch(BaseModel):
-    name: str | None = Field(default=None, min_length=1, max_length=80)
+    name: OptionalDisplayName = None
     status: str | None = None
     default_member_credit: str | None = None
 

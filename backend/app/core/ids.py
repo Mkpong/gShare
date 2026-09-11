@@ -15,6 +15,7 @@ PREFIXES = {
     "session": "ses", "allocation": "alc", "queue": "que",
     "cluster": "clu", "node": "nod", "device": "dev", "pool": "npl", "pool_grant": "pgr",
     "volume": "vol", "folder": "fld", "snapshot": "snp", "permission": "vpm",
+    "storage_pool": "stp", "storage_pool_share": "sps",
     "budget": "bdg", "alert": "alr",
     "notification": "ntf", "connection": "cnx",
     "webhook": "wbh", "delivery": "wbd", "audit": "aud",

@@ -28,7 +28,7 @@ export const PERSONAS = [
     id: 'org-admin',
     // Owns the organization budget: allocations, top-up decisions, group creation.
     role: 'org_admin',
-    email: env('UX_ORGADMIN_EMAIL', 'jieun@nexusai.dev'),
+    email: env('UX_ORGADMIN_EMAIL', 'jieun@example.com'),
     password: env('UX_ORGADMIN_PASSWORD', 'Nexus2026!'),
     viewport: 'laptop',
     locale: 'ko',
@@ -38,7 +38,7 @@ export const PERSONAS = [
     id: 'team-lead',
     // Group admin: adds members, sets quotas, watches who is burning credits.
     role: 'group_admin',
-    email: env('UX_LEAD_EMAIL', 'minjun@nexusai.dev'),
+    email: env('UX_LEAD_EMAIL', 'minjun@example.com'),
     password: env('UX_LEAD_PASSWORD', 'Nexus2026!'),
     viewport: 'laptop',
     locale: 'ko',
@@ -48,7 +48,7 @@ export const PERSONAS = [
     id: 'researcher',
     // The everyday user: launches sessions, mounts data, reconnects to a notebook.
     role: 'member',
-    email: env('UX_USER_EMAIL', 'haneul@nexusai.dev'),
+    email: env('UX_USER_EMAIL', 'haneul@example.com'),
     password: env('UX_USER_PASSWORD', 'Nexus2026!'),
     viewport: 'laptop',
     locale: 'en',
@@ -58,7 +58,7 @@ export const PERSONAS = [
     id: 'newcomer',
     // First sign-in: forced password change, no sessions, no volumes, no credit history.
     role: 'member',
-    email: env('UX_NEW_EMAIL', 'woojin@nexusai.dev'),
+    email: env('UX_NEW_EMAIL', 'woojin@example.com'),
     password: env('UX_NEW_PASSWORD', 'Nexus2026!'),
     firstLogin: true,
     viewport: 'laptop',
@@ -69,7 +69,7 @@ export const PERSONAS = [
     id: 'mobile-user',
     // Checks on a running job from a phone; never creates anything.
     role: 'member',
-    email: env('UX_MOBILE_EMAIL', 'seoyeon@nexusai.dev'),
+    email: env('UX_MOBILE_EMAIL', 'seoyeon@example.com'),
     password: env('UX_MOBILE_PASSWORD', 'Nexus2026!'),
     viewport: 'phone',
     locale: 'ko',
@@ -79,7 +79,7 @@ export const PERSONAS = [
     id: 'keyboard-user',
     // Keyboard only; the focus and tab-order audits run here.
     role: 'member',
-    email: env('UX_KBD_EMAIL', 'dohyun@nexusai.dev'),
+    email: env('UX_KBD_EMAIL', 'dohyun@example.com'),
     password: env('UX_KBD_PASSWORD', 'Nexus2026!'),
     viewport: 'laptop',
     locale: 'en',
@@ -90,7 +90,7 @@ export const PERSONAS = [
     id: 'tablet-lead',
     // A lead reviewing allocations on a tablet in a standup.
     role: 'group_admin',
-    email: env('UX_LEAD_EMAIL', 'minjun@nexusai.dev'),
+    email: env('UX_LEAD_EMAIL', 'minjun@example.com'),
     password: env('UX_LEAD_PASSWORD', 'Nexus2026!'),
     viewport: 'tablet',
     locale: 'en',

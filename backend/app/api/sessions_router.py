@@ -42,6 +42,9 @@ from app.core.metrics import SSE_STREAMS
 from app.core.redis import get_redis
 from app.db.base import get_db, get_sessionmaker
 from app.db.models import (
+    Cluster as ClusterModel,
+)
+from app.db.models import (
     CreditTransaction,
     GpuDevice,
     GpuNode,
@@ -61,6 +64,7 @@ from app.domain.placement import placeable_device_clauses
 from app.domain.pricing import round_credit
 from app.domain.scheduler import SchedulerService
 from app.domain.session_service import SessionService
+from app.domain.tenancy import managed_owner_filter, session_is_managed
 
 router = APIRouter(tags=["sessions"])
 
@@ -188,7 +192,7 @@ async def preview_cost(
 
     estimated_credit_per_hour = offering.credit_per_hour * occupancy;
     occupancy = max(gpu_mem_mb/device_total_mem_mb, gpu_cores/100);
-    hold_amount = estimated_credit_per_hour * (expected_runtime_min/60), default 2h horizon.
+    hold_amount = estimated_credit_per_hour — admission reserves one hour up front.
     CPU (free) sessions are always 0.
     """
     principal.require(action="session.create", group_id=body.group_id)
@@ -226,8 +230,9 @@ async def preview_cost(
     # as the full card, 1.0.
     occ = 1.0 if body.mode == "exclusive" else _occupancy(body.gpu_mem_mb, body.gpu_cores, total_mem_mb)
     per_hour = round_credit(Decimal(offering.credit_per_hour) * Decimal(str(occ)))   # whole credits
-    # SessionCreate has no expected_runtime_min field; use a 2h default reservation horizon.
-    hold = round_credit(per_hour * Decimal("2"))
+    # The hold admission actually takes is ONE hour (scheduler._estimate). Quoting a two-hour
+    # horizon here told the user to fund twice what the wizard would reserve.
+    hold = per_hour
     return PreviewCostResponse(
         estimated_credit_per_hour=float(per_hour),
         occupancy=occ,
@@ -281,6 +286,7 @@ async def list_sessions(
     page: Pagination = Depends(),
     status_filter: str | None = Query(default=None, alias="status"),
     group_id: str | None = Query(default=None),
+    cluster_id: str | None = Query(default=None),
     scope: str = Query(default="mine", pattern="^(mine|all)$"),
     principal: Principal = Depends(get_current_principal),
     db: AsyncSession = Depends(get_db),
@@ -296,27 +302,23 @@ async def list_sessions(
     escalate. """
     stmt = select(Session).where(Session.deleted_at.is_(None))
 
-    if scope == "all" and principal.global_role in ("super_admin", "org_admin"):
-        pass  # global visibility, for monitoring
-    elif scope == "all" and (
-        admin_projects := [
-            pid for pid, role in principal.memberships.items()
-            if role in ("group_admin", "org_admin")
-        ]
-    ):
-        # group_admin: their own sessions plus those of the groups they administer.
-        stmt = stmt.where(
-            (Session.owner_user_id == principal.user_id)
-            | (Session.group_id.in_(admin_projects))
-        )
+    if scope == "all":
+        # Tenant scope follows the session's OWNER, not Session.group_id: a session may be created
+        # without a group, and the owner's membership is what puts it in an org_admin's or
+        # group_admin's tenancy. managed_owner_filter is the same predicate the administrator
+        # dashboard counts with, so the two screens agree; a plain member gets their own sessions.
+        pred = managed_owner_filter(principal, "managed")
+        if pred is not None:
+            stmt = stmt.where(pred)
     else:
-        # scope=mine, or an unauthorised scope=all, resolves to the caller's own sessions.
         stmt = stmt.where(Session.owner_user_id == principal.user_id)
 
     if status_filter is not None:
         stmt = stmt.where(Session.status == status_filter)
     if group_id is not None:
         stmt = stmt.where(Session.group_id == group_id)
+    if cluster_id is not None:
+        stmt = stmt.where(Session.cluster_id == cluster_id)
 
     total = int(await db.scalar(select(func.count()).select_from(stmt.subquery())) or 0)
     stmt = stmt.order_by(Session.created_at.desc()).offset(page.offset).limit(page.size)
@@ -550,10 +552,21 @@ async def get_session(
     if node_host is None and sess.node_hostname:
         node_host = sess.node_hostname
         node_id = await db.scalar(select(GpuNode.id).where(GpuNode.hostname == node_host))
+    # Why a waiting session is waiting — the same reading the list gives. Without it the detail
+    # screen was the one place that showed a queued session with no explanation for the wait.
+    queued_reason = None
+    if sess.status == "pending":
+        queued_reason = (await db.execute(
+            select(SessionEvent.reason)
+            .where(SessionEvent.session_id == sess.id, SessionEvent.kind == "queued",
+                   SessionEvent.reason.is_not(None))
+            .order_by(SessionEvent.created_at.desc())
+            .limit(1)
+        )).scalar_one_or_none()
     read = _session_read(
         sess, gpu_model=gpu_model, node_hostname=node_host, node_id=node_id,
         image_name=img[0] if img else None, image_ref=img[1] if img else None,
-        gpu_alias=gpu_alias,
+        gpu_alias=gpu_alias, queued_reason=queued_reason,
     )
     # Mounted volumes, joined with their names — the detail screens list what the session sees.
     from app.api.schemas.session import SessionMountRead
@@ -684,6 +697,10 @@ async def force_terminate(
     the session's status_reason stays the typed `admin_stopped` the console maps to a message."""
     sess = await _load_session(db, session_id)
     principal.require(action="session.force_terminate", group_id=sess.group_id)
+    # The role check above is by Session.group_id, which a session may not carry; the owner's
+    # tenancy is what decides whether this administrator may end it.
+    if not await session_is_managed(db, principal, session_id):
+        raise Forbidden("not permitted: session.force_terminate")
     await SessionService(db).terminate(session_id, forced=True, reason="admin_stopped")
     # terminate() has committed and reloaded the row, which leaves the session with an autobegun
     # transaction; wrapping the audit write in db.begin() here raised "A transaction is already
@@ -712,8 +729,10 @@ async def bulk_terminate(
             failed += 1
             results.append({"session_id": sid, "status": "failed", "error": "not_found"})
             continue
-        # scope guard per target: 403 if any out-of-scope
+        # scope guard per target: 403 if any out-of-scope (by role, then by the owner's tenancy)
         principal.require(action="session.force_terminate", group_id=sess.group_id)
+        if not await session_is_managed(db, principal, sid):
+            raise Forbidden("not permitted: session.force_terminate")
         if sess.status == "terminated":
             skipped += 1
             results.append({"session_id": sid, "status": "skipped"})
@@ -774,7 +793,16 @@ async def session_connections(
     # the console domain. The custom resource name is RFC 1123 (lower-cased, '_' to '-'), the same
     # transformation the operator applies to its custom resource and Ingress names.
     cr_name = session_id.lower().replace("_", "-")
-    host_base = f"{_settings.SESSION_URL_SCHEME}://{_settings.SESSION_DOMAIN}/proxy/{cr_name}"
+    # The hostname follows the CLUSTER the session runs on. Each cluster terminates its own
+    # ingress, and the operator creates the /proxy/{cr} Ingress there — so advertising every
+    # session under one global domain sent users to a cluster that has no such route. The global
+    # setting remains the fallback, which is what a single-cluster install uses.
+    session_host = _settings.SESSION_DOMAIN
+    if sess.cluster_id:
+        cluster = await db.get(ClusterModel, sess.cluster_id)
+        if cluster is not None and cluster.session_domain:
+            session_host = cluster.session_domain
+    host_base = f"{_settings.SESSION_URL_SCHEME}://{session_host}/proxy/{cr_name}"
     kinds = {
         # code-server lives at the /code subpath, with the ingress stripping the prefix. The
         # trailing slash is required so relative assets such as ./_static resolve against

@@ -107,6 +107,15 @@ type VolumeObserved struct {
 	Mounted    bool   `json:"mounted"`
 }
 
+// PoolCapacity is what the CSI driver says the volume-backing pool holds, read from the
+// CSIStorageCapacity objects the external-provisioner publishes for a StorageClass. It rides
+// along on POST /internal/volumes/sync: the control plane cannot ask the CSI driver itself, and
+// the node's root disk — all it could see before — is not the pool.
+type PoolCapacity struct {
+	StorageClass  string `json:"storage_class"`
+	CapacityBytes int64  `json:"capacity_bytes"`
+}
+
 // SessionDisk is one session pod's ephemeral-storage (scratch disk) reading, riding along on
 // POST /internal/volumes/sync so the control plane can warn before the kubelet evicts on overuse.
 type SessionDisk struct {
@@ -148,7 +157,7 @@ type Reporter interface {
 	// SyncVolumes reports every session-volume PVC (plus each session pod's scratch-disk
 	// reading) and returns, per claim, the quota to grow to and whether it may be reclaimed.
 	// The operator never decides either on its own.
-	SyncVolumes(ctx context.Context, vols []VolumeObserved, sessions []SessionDisk) (VolumeSyncResult, error)
+	SyncVolumes(ctx context.Context, vols []VolumeObserved, sessions []SessionDisk, pools []PoolCapacity) (VolumeSyncResult, error)
 }
 
 // Client is the HTTP implementation of Reporter.
@@ -403,17 +412,21 @@ func (c *Client) UpsertNode(ctx context.Context, n Node) error {
 
 // SyncVolumes posts the observed PVCs (and session scratch-disk readings) and decodes the
 // directives.
-func (c *Client) SyncVolumes(ctx context.Context, vols []VolumeObserved, sessions []SessionDisk) (VolumeSyncResult, error) {
+func (c *Client) SyncVolumes(ctx context.Context, vols []VolumeObserved, sessions []SessionDisk, pools []PoolCapacity) (VolumeSyncResult, error) {
 	body := struct {
 		Volumes   []VolumeObserved `json:"volumes"`
 		Sessions  []SessionDisk    `json:"sessions"`
+		Pools     []PoolCapacity   `json:"pools"`
 		ClusterID string           `json:"cluster_id,omitempty"`
-	}{Volumes: vols, Sessions: sessions, ClusterID: c.cfg.ClusterID}
+	}{Volumes: vols, Sessions: sessions, Pools: pools, ClusterID: c.cfg.ClusterID}
 	if body.Volumes == nil {
 		body.Volumes = []VolumeObserved{}
 	}
 	if body.Sessions == nil {
 		body.Sessions = []SessionDisk{}
+	}
+	if body.Pools == nil {
+		body.Pools = []PoolCapacity{}
 	}
 	raw, err := c.doJSON(ctx, volumeSyncPath, body, "")
 	if err != nil {

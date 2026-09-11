@@ -81,6 +81,9 @@ class ImageCreate(BaseModel):
     tags: dict[str, Any] = Field(default_factory=dict)
     supported_gpus: list[str] = Field(default_factory=list)   # supported GPU models; empty means all
     cuda_version: str | None = None                            # the image's CUDA version, e.g. '12.4'; empty means unspecified
+    # A base with no CUDA toolkit that may still run on a GPU: the runtime injects the driver, so
+    # the user installs the toolkit and framework themselves.
+    gpu_ready: bool | None = None
 
 
 class ImageImport(BaseModel):
@@ -92,6 +95,9 @@ class ImageImport(BaseModel):
     tags: dict[str, Any] = Field(default_factory=dict)
     supported_gpus: list[str] = Field(default_factory=list)   # supported GPU models; empty means all
     cuda_version: str | None = None                            # the image's CUDA version, e.g. '12.4'; empty means unspecified
+    # A base with no CUDA toolkit that may still run on a GPU: the runtime injects the driver, so
+    # the user installs the toolkit and framework themselves.
+    gpu_ready: bool | None = None
 
 
 class BuildCreate(BaseModel):
@@ -119,6 +125,7 @@ def _serialize_image(img: Image) -> dict[str, Any]:
         # The image's CUDA version, compared against an offering's min_cuda to filter compatible
         # GPUs.
         "cuda_version": (img.tags or {}).get("cuda_version"),
+        "gpu_ready": bool((img.tags or {}).get("gpu_ready", False)),
         # A private image is hidden from the session wizard, though the admin catalogue always lists
         # it.
         "public": getattr(img, "public", True),
@@ -233,6 +240,8 @@ async def create_image(
         img_tags["supported_gpus"] = body.supported_gpus
     if body.cuda_version and body.cuda_version.strip():
         img_tags["cuda_version"] = body.cuda_version.strip()
+    if body.gpu_ready:
+        img_tags["gpu_ready"] = True
     img = Image(
         id=ids.new("image"),
         name=body.name,
@@ -275,6 +284,8 @@ class ImageUpdate(BaseModel):
     registry: str | None = None                # full image reference; sessions already created keep their spec
     cuda_version: str | None = None            # '' or null clears it
     supported_gpus: list[str] | None = None
+    # None leaves it as-is; true marks a bare base usable for GPU sessions, false clears it.
+    gpu_ready: bool | None = None
 
 
 @router.patch("/images/{image_id}")
@@ -317,6 +328,12 @@ async def update_image(
         if body.supported_gpus != tags.get("supported_gpus", []):
             changes["supported_gpus"] = {"from": tags.get("supported_gpus", []), "to": body.supported_gpus}
         tags["supported_gpus"] = body.supported_gpus
+    if body.gpu_ready is not None and bool(body.gpu_ready) != bool(tags.get("gpu_ready", False)):
+        changes["gpu_ready"] = {"from": bool(tags.get("gpu_ready", False)), "to": bool(body.gpu_ready)}
+        if body.gpu_ready:
+            tags["gpu_ready"] = True
+        else:
+            tags.pop("gpu_ready", None)
     img.tags = tags
 
     await db.flush()
