@@ -23,8 +23,12 @@ const config: Config = {
   markdown: {
     // .md is CommonMark (the existing docs), .mdx is MDX (site-only pages with components).
     format: 'detect',
+    mermaid: true,
     hooks: { onBrokenMarkdownLinks: 'warn' },
   },
+  // ```mermaid fences render as diagrams: the session lifecycle is a state machine, and a
+  // picture of it saves a paragraph on every page that touches pause, resume or terminate.
+  themes: ['@docusaurus/theme-mermaid'],
 
   i18n: {
     defaultLocale: 'en',

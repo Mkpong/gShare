@@ -11,7 +11,12 @@ screens you use to run sessions, keep data, and manage credits.
 
 - [Signing in](./user/signing-in.md) — first login, language, theme, the cluster selector.
 - [Dashboard](./user/dashboard.md) — balance, burn rate, allocation, availability.
-- [Sessions](./user/sessions.md) — creating, connecting, pause/resume, the queue.
+- [Sessions](./user/sessions.md) — what a session is, its states, the list screen.
+  - [Creating a session](./user/sessions-create.md) — the five-step wizard, field by field.
+  - [Connecting](./user/sessions-connect.md) — VS Code, JupyterLab, the web terminal.
+  - [Managing a session](./user/sessions-manage.md) — pause, resume, restart, live usage.
+  - [Waiting in the queue](./user/sessions-queue.md) — why a session waits and what to do.
+  - [Ending a session](./user/sessions-end.md) — terminating, billing, what survives.
 - [Wallet and credits](./user/wallet.md) — how billing works, requesting credits.
 - [Data and volumes](./user/data.md) — persistent storage, mounting, sharing.
 - [Account](./user/account.md) — membership, password, notifications.

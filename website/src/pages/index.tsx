@@ -5,6 +5,7 @@ import useDocusaurusContext from '@docusaurus/useDocusaurusContext';
 import Layout from '@theme/Layout';
 import HomepageFeatures from '@site/src/components/HomepageFeatures';
 import Heading from '@theme/Heading';
+import Translate from '@docusaurus/Translate';
 
 import styles from './index.module.css';
 
@@ -14,13 +15,13 @@ function HomepageHeader() {
     <header className={clsx('hero hero--primary', styles.heroBanner)}>
       <div className="container">
         <Heading as="h1" className="hero__title">{siteConfig.title}</Heading>
-        <p className="hero__subtitle">{siteConfig.tagline}</p>
+        <p className="hero__subtitle"><Translate id="home.tagline">{siteConfig.tagline}</Translate></p>
         <div className={styles.buttons}>
           <Link className="button button--secondary button--lg" to="/docs/getting-started">
-            Get started
+            <Translate id="home.getStarted">Get started</Translate>
           </Link>
           <Link className="button button--outline button--secondary button--lg" to="/docs/user-manual">
-            User manual
+            <Translate id="home.userManual">User manual</Translate>
           </Link>
         </div>
       </div>

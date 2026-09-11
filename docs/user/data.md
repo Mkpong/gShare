@@ -1,5 +1,5 @@
 ---
-sidebar_position: 5
+sidebar_position: 10
 title: Data and volumes
 ---
 
@@ -24,7 +24,7 @@ itself is provisioned lazily: the first session that mounts the volume creates i
 
 ## Mounting
 
-Volumes are mounted from the [session wizard](./sessions.md#creating-a-session): pick the volume,
+Volumes are mounted from the [session wizard](./sessions-create.md): pick the volume,
 the mode (read-only or read-write), and the mount path. A session's detail page lists what it has
 mounted.
 

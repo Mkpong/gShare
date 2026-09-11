@@ -1,0 +1,26 @@
+{
+  "version.label": {
+    "message": "Next",
+    "description": "The label for version current"
+  },
+  "sidebar.admin.category.Tenant administration": {
+    "message": "테넌트 관리",
+    "description": "The label for category 'Tenant administration' in sidebar 'admin'"
+  },
+  "sidebar.admin.category.Platform administration": {
+    "message": "플랫폼 관리",
+    "description": "The label for category 'Platform administration' in sidebar 'admin'"
+  },
+  "sidebar.operations.category.Clusters": {
+    "message": "클러스터",
+    "description": "The label for category 'Clusters' in sidebar 'operations'"
+  },
+  "sidebar.operations.category.Running the platform": {
+    "message": "플랫폼 운영",
+    "description": "The label for category 'Running the platform' in sidebar 'operations'"
+  },
+  "sidebar.user.category.Sessions": {
+    "message": "세션",
+    "description": "The label for category 'Sessions' in sidebar 'user'"
+  }
+}

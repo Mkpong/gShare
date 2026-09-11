@@ -7,7 +7,21 @@ const sidebars: SidebarsConfig = {
   // Students and researchers: what you can do from the console, screen by screen.
   user: [
     'user-manual',
-    'user/signing-in', 'user/dashboard', 'user/sessions', 'user/wallet', 'user/data', 'user/account',
+    'user/signing-in',
+    'user/dashboard',
+    {
+      // Sessions are what the console is for, and they have a life: created, connected to,
+      // paused, queued, ended. One page each, under a heading that stays open.
+      type: 'category',
+      label: 'Sessions',
+      link: { type: 'doc', id: 'user/sessions' },
+      collapsed: false,
+      items: [
+        'user/sessions-create', 'user/sessions-connect', 'user/sessions-manage',
+        'user/sessions-queue', 'user/sessions-end',
+      ],
+    },
+    'user/wallet', 'user/data', 'user/account',
   ],
 
   // Administrators. Tenant administration is what an organization or group administrator does

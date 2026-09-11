@@ -33,7 +33,7 @@ reviews.
 ## Availability by model
 
 Each card is one GPU model in the fleet you can use, with its VRAM and whether a slice is free
-now. This is the same information the [session wizard](./sessions.md#creating-a-session) uses
+now. This is the same information the [session wizard](./sessions-create.md) uses
 when it estimates whether your session starts at once or waits in the queue.
 
 ## Active and recent sessions

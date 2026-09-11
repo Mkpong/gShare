@@ -1,0 +1,9 @@
+{
+  "title": { "message": "gShare", "description": "The title in the navbar" },
+  "logo.alt": { "message": "gShare", "description": "The alt text of navbar logo" },
+  "item.label.User guide": { "message": "사용자 가이드", "description": "Navbar item with label User guide" },
+  "item.label.Administrator guide": { "message": "관리자 가이드", "description": "Navbar item with label Administrator guide" },
+  "item.label.Operations": { "message": "운영", "description": "Navbar item with label Operations" },
+  "item.label.Reference": { "message": "레퍼런스", "description": "Navbar item with label Reference" },
+  "item.label.GitHub": { "message": "GitHub", "description": "Navbar item with label GitHub" }
+}
