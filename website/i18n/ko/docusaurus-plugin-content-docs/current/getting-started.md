@@ -174,9 +174,9 @@ kubectl get secret -n gshare-system gshare-bootstrap-admin -o jsonpath='{.data.p
   콘솔에서 조정하세요.
 - **이미지**는 세션 컨테이너 이미지. gShare 세션 이미지는 JupyterLab, 웹 터미널, code-server를
   포함합니다.
-- 사용자는 공용 카탈로그에 묶이지 않습니다. **내 이미지 / My images**에서 구성원 누구나 이미지를
-  빌드(인라인 Dockerfile 또는 공개 git 저장소)하거나 공개 레지스트리 참조를 가져올 수 있습니다. 그
-  행은 소유자에게만 보이고, 한 구성원당 최대 20개입니다.
+- 사용자는 공용 카탈로그에 묶이지 않습니다. 구성원은 API로 자기 이미지를 등록할 수 있습니다
+  (`POST /api/v1/images/import`로 공개 레지스트리 참조, `POST /api/v1/image-builds`로 빌드). 그 행은
+  소유자에게만 보이고 마법사에서 **내 이미지** 태그가 붙으며, 한 구성원당 최대 20개입니다.
 
 오퍼레이터가 GPU 인벤토리를 자동 보고하므로 노드와 디바이스(예: RTX 4090)는 추가 설정 없이 인프라
 화면에 나타납니다.

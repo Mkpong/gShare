@@ -55,8 +55,6 @@ export const ROUTES = [
   { path: '/admin/clusters/new', id: 'admin-cluster-new', role: 'super_admin', kind: 'form', title: 'Register cluster' },
   { path: '/admin/nodes', id: 'admin-nodes', role: 'super_admin', kind: 'list', title: 'Nodes' },
   { path: '/admin/images', id: 'admin-images', role: 'super_admin', kind: 'list', title: 'Images' },
-  { path: '/admin/images/import', id: 'admin-image-import', role: 'super_admin', kind: 'form', title: 'Import image' },
-  { path: '/admin/images/build', id: 'admin-image-build', role: 'super_admin', kind: 'form', title: 'Build image' },
 ];
 
 const RANK = ['member', 'group_admin', 'org_admin', 'super_admin'];

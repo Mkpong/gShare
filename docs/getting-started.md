@@ -182,9 +182,10 @@ an administrator you only edit and extend it, from the console or through
   The seeded rates are suggestions — adjust them in the console.
 - An **image** is the session container image. The GShare session images ship JupyterLab,
   a web terminal, and code-server.
-- Users are not limited to the shared catalogue: from **내 이미지 / My images** any member can
-  build an image (an inline Dockerfile or a public git repository) or import a public registry
-  reference. Those rows are private to their owner, and one member may hold at most 20 of them.
+- Users are not limited to the shared catalogue: a member can register images of their own
+  through the API (`POST /api/v1/images/import` for a public registry reference,
+  `POST /api/v1/image-builds` for a build). Those rows are private to their owner, tagged
+  **My image** in the wizard, and one member may hold at most 20 of them.
 
 The operator reports GPU inventory automatically, so nodes and devices (for example
 RTX 4090) appear on the infrastructure screens without further setup.

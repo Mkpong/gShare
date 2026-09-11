@@ -26,10 +26,10 @@ the group each belongs to.
 | **Created** | When the account was made |
 | **Actions** | Approve (pending accounts), edit, suspend/activate, delete |
 
-Roles are **granted elsewhere** — the list only shows them: global roles under
-[System](./system.md), organization administrators on the
+Roles are **granted elsewhere** — the list only shows them: organization administrators on the
 [organization](./organizations.md#organization-administrators), group roles on the
-[group](./groups.md#group-administrators).
+[group](./groups.md#group-administrators). The global role (super_admin) has no console
+control; it is set through the API (`PUT /api/v1/users/{id}/global-role`).
 
 ![Filters](/img/screens/admin-users-toolbar.png)
 

@@ -38,17 +38,19 @@ Two things decide whether it will actually run:
   image built for 12.4 does not make it work on a Blackwell card — it makes the failure happen
   later and less clearly.
 
-## Building
+## Builds
 
-![Build](/img/screens/admin-image-build.png)
+![Builds tab](/img/screens/admin-image-build.png)
 
-**Build image** starts a console-driven build from an inline Dockerfile or a public git
-repository, pushes the result to `api.buildRegistry`, and registers it automatically.
+The **Builds** tab follows image builds run through the platform:
+`queued → building → pushing → scanning → succeeded`, with the log of each.
 
-The build runs asynchronously and the page follows it:
-`queued → building → pushing → scanning → succeeded`. A failure keeps the log for you to read.
+A build is started through the API (`POST /api/v1/image-builds`, from an inline Dockerfile or a
+public git repository); the console has no form for it. It also needs the chart's
+`operator.kanikoImage` to be set — without it the operator fails builds immediately. The result
+is pushed to `api.buildRegistry` and registered automatically.
 
-Members can also build their own images (up to 20 each); those are private to the owner and
+Images a member imported or built themselves are private to that member (up to 20 each) and
 tagged **My image** in the wizard.
 
 ## Seeded images

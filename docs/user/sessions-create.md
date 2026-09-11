@@ -165,7 +165,7 @@ The tags on each tile tell you what you are getting:
   and `import torch` then fails. Pick a CUDA image unless you intend to install the toolkit
   yourself.
 
-Images marked **My image** are ones you built or imported yourself; see
+Images marked **My image** are ones registered for you alone rather than for everyone; see
 [Images](../admin/images.md) for how the catalogue is filled.
 
 ---

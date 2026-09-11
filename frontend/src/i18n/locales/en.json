@@ -1151,7 +1151,7 @@
       "resetPassword": "Reset password",
       "resetPasswordHint": "only changed when filled in",
       "resetPasswordPlaceholder": "New temporary password (at least 8 characters)",
-      "rolesNote": "Roles: Super Admin is global; Organization Admin covers one organization; Group Admin, Member, and Guest belong to a group. Global roles are granted in system settings, organization admins under Organizations, and group roles under Groups.",
+      "rolesNote": "Roles: super admin (global) / organization admin (organization) / group admin, member, guest (group). Organization admins are appointed under Organizations, group roles under Groups. The super admin is the bootstrap account set at install.",
       "saving": "Saving…",
       "searchPlaceholder": "Search by name or email",
       "selectGroup": "Select a group",

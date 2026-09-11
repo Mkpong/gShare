@@ -39,15 +39,16 @@ title: 이미지
 
 ## 빌드
 
-![이미지 빌드](/img/screens/admin-image-build.png)
+![빌드 탭](/img/screens/admin-image-build.png)
 
-**이미지 빌드**는 인라인 Dockerfile 또는 공개 git 저장소로 콘솔 주도 빌드를 시작해 결과를
-`api.buildRegistry`에 푸시하고 자동으로 등록합니다.
+**빌드** 탭은 플랫폼으로 실행한 이미지 빌드를 따라갑니다:
+`queued → building → pushing → scanning → succeeded`, 각각의 로그와 함께.
 
-빌드는 비동기로 진행되고 페이지가 따라갑니다:
-`queued → building → pushing → scanning → succeeded`. 실패하면 로그가 남아 읽을 수 있습니다.
+빌드 시작은 API(`POST /api/v1/image-builds`, 인라인 Dockerfile 또는 공개 git 저장소)로 하며, 콘솔에는
+시작 폼이 없습니다. 또한 차트의 `operator.kanikoImage`가 설정되어 있어야 합니다. 없으면
+오퍼레이터가 빌드를 즉시 실패시킵니다. 결과는 `api.buildRegistry`에 푸시되고 자동 등록됩니다.
 
-구성원도 자기 이미지를 빌드할 수 있습니다(1인당 최대 20개). 소유자에게만 보이고 마법사에서
+구성원이 직접 가져오거나 빌드한 이미지는 그 구성원에게만 보이고(1인당 최대 20개) 마법사에서
 **내 이미지** 태그가 붙습니다.
 
 ## 시드 이미지
