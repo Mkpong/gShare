@@ -1,39 +1,65 @@
 ---
-sidebar_position: 11
+sidebar_position: 24
 title: Storage
 ---
 
-# Storage pools and volumes
+# Storage
 
-**Resources → Volumes** (super_admin) has two concerns: the **pools** that back user volumes, and
-the **volumes** themselves.
-
-![Volumes](/img/screens/admin-volumes.png)
+Two things live here: the **pools** that back user volumes, and the **volumes** themselves.
 
 ## Storage pools
 
-A **pool** is one storage server, registered as an object: the cluster it sits in, the
-StorageClass that provisions from it, and its sharing scope — **all** clusters in the fleet, or
-**selected** ones. The dashboard's storage tile and the capacity gate that admits new volumes both
-read the registered pools.
+A pool is a registered object, not something inferred from node roles: the cluster its server
+sits in, the StorageClass that provisions from it, and its sharing scope (**all** clusters, or
+**selected** ones). Pools are registered through the API (`/api/v1/storage/pools`); the console
+shows them on the dashboard's storage tile.
 
-The pool's **capacity** comes, in order, from:
+The dashboard's storage tile and the capacity gate that admits new volumes both read the
+registered pools. Capacity comes, in order, from:
 
-1. **csi** — the driver's own `GetCapacity`, published as `CSIStorageCapacity` objects and read by
-   the operator. The only automatic source.
-2. **manual** — the figure stated on the pool. Set it when the driver does not publish capacity.
-3. **node disk** — the storage node's system drive, labelled as a stand-in.
+1. **csi** — the driver's own `GetCapacity`, published as `CSIStorageCapacity` and read by the
+   operator. The only automatic source.
+2. **manual** — the figure stated on the pool. Set it when the driver publishes nothing.
+3. **node disk** — the storage node's system drive, labelled as the stand-in it is.
 
-Several servers are several pools. A volume lives on exactly one, so the bound the dashboard shows
-is the **largest** usable pool, never the sum. Details for operators are in
+Several servers are several pools. A volume lives on exactly one, so the bound is the
+**largest** usable pool, never the sum. The operator-side detail — driver flags, NFS
+prerequisites, attaching a second cluster — is in
 [Operations → Storage](../operations/storage.md).
 
 ## Volumes
 
-The volume list shows every volume in the fleet with owner, quota, what is stored, the cluster it
-is pinned to, and whether a session has it mounted. An administrator can raise a quota, lock a
-volume, or delete it (typing its name); deleted volumes are reclaimed after the grace period
-configured in the chart (`api.volumeReclaimGraceHours`).
+![All volumes](/img/screens/admin-volumes.png)
 
-Volumes are **free** for users. The lever is the volume quota in the
-[resource policy](./resources.md#resource-policies).
+Every volume in the fleet, with owner, scope, type, access mode, usage against quota, and the
+cluster it is pinned to.
+
+| Action | Effect |
+|---|---|
+| **Change quota** | Raise a volume's quota — within the owner's storage limit; to go beyond it, raise their [policy](./resources-policies.md) first |
+| **Lock** | Refuse new mounts while keeping running sessions |
+| **Delete** | Normal deletion — refused while a session has it mounted |
+| **Force delete** | Terminates the sessions holding it, then deletes |
+
+![Force delete](/img/screens/admin-volume-force-delete.png)
+
+Force delete is the sharpest tool in the console: it ends other people's running sessions to
+remove a volume. The dialog names the owner and says so, and the audit entry records which
+sessions were cut. Reserve it for a storage server that is genuinely full and an owner who
+cannot be reached.
+
+## Running out of space
+
+When the pool fills, the useful order is:
+
+1. **Find the big ones** — sort by usage; a handful of forgotten scratch volumes is the usual
+   cause.
+2. **Ask the owners** — deleted-by-owner is always better than deleted-by-admin, and the console
+   shows you exactly who.
+3. **Lock rather than delete** while you wait: it stops the volume growing without destroying
+   anything.
+4. **Tighten the storage limit** in the [policy](./resources-policies.md) so the next round does
+   not happen, rather than repeating the cleanup.
+
+Deleted volumes are reclaimed after `api.volumeReclaimGraceHours` (24h by default) — within that
+window the data can still be recovered by an operator.

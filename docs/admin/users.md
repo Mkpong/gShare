@@ -5,28 +5,58 @@ title: Users
 
 # Users
 
+**Organization → Users** lists every account within your scope, with the role each holds and
+the group each belongs to.
+
+| Page | What it covers |
+|---|---|
+| [Adding users](./users-add.md) | One at a time, in bulk from CSV, and approving self sign-ups |
+| [Managing an account](./users-manage.md) | Editing, roles, password resets, deactivation, deletion |
+
 ![Users](/img/screens/admin-users.png)
 
-The list shows every user within your scope with their status, memberships, and roles. Search by
-name or email; open a row to edit the display name, reset the password (the user is forced to
-choose a new one at the next sign-in), change memberships, or disable the account. A disabled
-user is signed out at once and cannot sign in again until re-enabled.
+## What the list shows
 
-## Adding users
+| Column | Meaning |
+|---|---|
+| **User** | Name and email (with a copy button). Email is the sign-in identity |
+| **Organization / group** | Membership. A user may belong to several groups |
+| **Role** | Every role held, each tagged with its scope — *org admin · Nexus AI Lab*, *member · Vision* |
+| **Status** | *active*, *pending* (waiting for approval), or *suspended* |
+| **Created** | When the account was made |
+| **Actions** | Approve (pending accounts), edit, suspend/activate, delete |
 
-**New user** creates one account with an email, display name, initial password, and group
-membership. The user must change the password on first sign-in.
+Roles are **granted elsewhere** — the list only shows them: global roles under
+[System](./system.md), organization administrators on the
+[organization](./organizations.md#organization-administrators), group roles on the
+[group](./groups.md#group-administrators).
 
-## Bulk import
+![Filters](/img/screens/admin-users-toolbar.png)
 
-![Bulk import](/img/screens/admin-users-bulk.png)
+Search matches name and email; the filters narrow by organization, group, and status. As with
+every list in the console, the filter lives in the address bar, so a view can be shared.
 
-**Bulk** accepts a CSV of `email,name,group,role` and creates the accounts in one go, reporting
-per row what was created, what already existed, and what was rejected. Use it when onboarding a
-class or a new team.
+## Scope
 
-## Deleting
+- A **group_admin** sees the members of the groups they administer.
+- An **org_admin** sees every user in their organization.
+- A **super_admin** sees everyone, including accounts with no group yet — newly approved
+  sign-ups land there.
 
-Deleting a user asks for the email to be typed. Their sessions are terminated and settled, their
-personal volumes are scheduled for reclamation after the site's grace period, and their audit
-history is kept.
+You can never see or edit a user outside your scope, and the API refuses it independently of
+what the console offers.
+
+## What a user's membership decides
+
+Membership is not a label. It decides:
+
+- **which credit pool** funds them — allocations flow organization → group → user
+  ([Credits](./credits.md));
+- **which resource policy** applies — user → group → organization → global
+  ([Policies](./resources-policies.md));
+- **which node pools** they may be placed on ([Node pools](./node-pools.md));
+- **who can see their sessions** in [monitoring](./monitoring.md) and the
+  [audit log](./audit.md).
+
+A user with no group has no credits and no pool access — which is exactly why the approval
+dialog asks for a group.

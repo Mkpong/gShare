@@ -16,7 +16,7 @@ after each one.
 |---|---|
 | **When** | Timestamp; hover for the exact value. A usage row shows the period it covers. |
 | **Type** | What the row is — see below |
-| **Amount** | Negative for charges, positive for credits received or refunded |
+| **Amount** | Negative for charges, positive for credits received or refunded; a hold row shows the amount reserved |
 | **Balance after** | The wallet's balance once this row was applied |
 | **Reference** | The session, request, or reason behind it — session names link to the session |
 
@@ -24,12 +24,15 @@ after each one.
 
 | Type | What it is |
 |---|---|
-| **Allocation** | Credits handed down to you by a group or organization administrator, or a monthly refill |
 | **Hold** | Reserved when a session started. It is not a charge; it is money set aside |
 | **Usage** | The actual charge for a period of a session's runtime |
 | **Settlement** | The final reckoning when a session ends |
 | **Refund** | The unused part of a hold, returned |
-| **Reclaim** | Credits an administrator took back from your wallet |
+| **Adjustment** | Credits moved by an administrator: an allocation to you (`allocate-in`), an approved request (`alloc-req`), a monthly refill, or a reclaim back to the pool |
+| **Top-up** | Credits issued at the system tier — you will rarely see one on a personal wallet |
+
+The **Reference** column names what the row came from: the session, or a marker such as
+*welcome credit* or *top-up approval*.
 
 Two tags appear on usage rows:
 

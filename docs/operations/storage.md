@@ -28,8 +28,9 @@ node of the cluster can mount.
 
 ## Registering a pool
 
-A pool is a registered object, not something inferred from node roles. Register it in the console
-(**Resources → Volumes → Pools**) or with `POST /api/v1/storage/pools`:
+A pool is a registered object, not something inferred from node roles. There is no console
+screen for it yet: register it with `POST /api/v1/storage/pools` (the dashboard's storage tile
+then shows it):
 
 | Field | Meaning |
 |---|---|

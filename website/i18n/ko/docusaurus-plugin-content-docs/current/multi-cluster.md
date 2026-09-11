@@ -158,8 +158,8 @@ helm -n gshare-storage get values gshare-storage > csi-values.yaml && chmod 600 
 
 ### 풀 등록
 
-풀은 노드 역할에서 추론하는 것이 아니라 등록하는 객체입니다. 콘솔(또는
-`POST /api/v1/storage/pools`)에서 다음으로 등록합니다.
+풀은 노드 역할에서 추론하는 것이 아니라 등록하는 객체입니다. `POST /api/v1/storage/pools`로
+(아직 콘솔 화면은 없습니다) 다음 값과 함께 등록합니다.
 
 - **클러스터** — 스토리지 서버가 있는 클러스터;
 - **스토리지 클래스** — 거기서 프로비저닝하는 클래스. 오퍼레이터에 `--volume-storage-class`로 준

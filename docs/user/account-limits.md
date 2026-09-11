@@ -13,8 +13,9 @@ Two different things bound what you can run: **credits** (money, in your
 ## The policy that applies to you
 
 The card lists the effective ceilings, already resolved. Policies can be set per user, per
-group, per organization, and globally, and the **most specific one wins** — you see the result,
-not the four candidates.
+group, per organization, and globally, and they resolve **field by field**: for each limit the
+most specific policy that sets it wins, and a blank falls through to the next scope. You see the
+result, not the four candidates.
 
 | Limit | What it caps |
 |---|---|

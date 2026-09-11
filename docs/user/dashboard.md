@@ -36,6 +36,12 @@ Each card is one GPU model in the fleet you can use, with its VRAM and whether a
 now. This is the same information the [session wizard](./sessions-create.md) uses
 when it estimates whether your session starts at once or waits in the queue.
 
+## Waiting sessions
+
+When one of your sessions is in the queue, a panel lists it with its position, the reason it is
+waiting, and how long it has waited — the same information as the [queue page](./sessions-queue.md),
+one click closer.
+
 ## Active and recent sessions
 
 The bottom of the page lists your active sessions (with a link to each) and your recent

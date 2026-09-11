@@ -11,8 +11,7 @@ title: Password
 type: at least eight characters, and the two new entries must match. The button stays disabled,
 with the reason, until they do.
 
-Changing the password does not sign you out of other devices, and it does not affect running
-sessions.
+Changing the password does not affect running sessions.
 
 ## First sign-in
 

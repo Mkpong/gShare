@@ -163,8 +163,8 @@ when the attach is done.
 
 ### Registering a pool
 
-A pool is a registered object, not something inferred from node roles. Register it in the console
-(or `POST /api/v1/storage/pools`) with:
+A pool is a registered object, not something inferred from node roles. Register it with
+`POST /api/v1/storage/pools` (there is no console screen for pools yet) with:
 
 - **cluster** — the one its storage server sits in;
 - **storage class** — the class that provisions from it, the same name the operator is given as

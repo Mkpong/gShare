@@ -54,8 +54,8 @@ sessions. A balance never falls while no GPU session is running.
 
 ![Spend chart](/img/screens/wallet-spend.png)
 
-The chart totals consumption per day over the last 7, 30, or 90 days, with the daily maximum
-called out. It answers "where did this month go" faster than the ledger does.
+The chart totals consumption per day — the last 30 days, a chosen month, or a custom range —
+with the daily maximum called out. It answers "where did this month go" faster than the ledger does.
 
 Below it, **Billing now** lists the sessions charging right now with what they have consumed so
 far — the live version of the burn rate, per session.

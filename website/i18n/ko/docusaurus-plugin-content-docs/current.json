@@ -34,5 +34,25 @@
   "sidebar.user.category.Account": {
     "message": "계정",
     "description": "The label for category 'Account' in sidebar 'user'"
+  },
+  "sidebar.admin.category.Users": {
+    "message": "사용자",
+    "description": "The label for category 'Users' in sidebar 'admin'"
+  },
+  "sidebar.admin.category.Credits": {
+    "message": "크레딧",
+    "description": "The label for category 'Credits' in sidebar 'admin'"
+  },
+  "sidebar.admin.category.Session monitoring": {
+    "message": "세션 관제",
+    "description": "The label for category 'Session monitoring' in sidebar 'admin'"
+  },
+  "sidebar.admin.category.Resources and policy": {
+    "message": "자원과 정책",
+    "description": "The label for category 'Resources and policy' in sidebar 'admin'"
+  },
+  "sidebar.admin.category.Clusters and nodes": {
+    "message": "클러스터와 노드",
+    "description": "The label for category 'Clusters and nodes' in sidebar 'admin'"
   }
 }

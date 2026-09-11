@@ -37,5 +37,5 @@ days ago, and it agrees with the session's own [event log](./sessions-manage.md#
 ## No email
 
 gShare does not send email. Notifications live in the console, which is also where the action
-they are about lives. If your site needs outbound alerts, administrators can configure
-[webhooks](../reference/api.md#resource-groups) per organization.
+they are about lives. If your site needs outbound alerts, administrators can register
+[webhooks](../reference/api.md#resource-groups) per organization through the API.

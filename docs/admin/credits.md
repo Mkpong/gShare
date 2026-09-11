@@ -1,37 +1,56 @@
 ---
-sidebar_position: 8
+sidebar_position: 9
 title: Credits
 ---
 
-# Credit allocation
+# Credits
 
-Credits are allocated **down the hierarchy** — platform → organization → group → user — and no
-level can hand out more than it received.
+Credits are how GPU time is rationed. They flow **down one level at a time** and no level can
+hand out more than it holds.
 
-![Credit allocation](/img/screens/admin-allocations.png)
+| Page | What it covers |
+|---|---|
+| [Allocating](./credits-allocate.md) | Pools, handing credits down, reclaiming, monthly refills |
+| [Requests](./credits-requests.md) | The request chain, approving and rejecting |
+| [Settlement report](./credits-settlement.md) | What was actually consumed, per tenant |
 
-- A **super_admin** tops up an organization's pool.
-- An **org_admin** allocates from the organization to its groups.
-- A **group_admin** allocates from the group's pool to individual members — one at a time, or
-  **to everyone** at once — and can reclaim unspent credits.
+## The hierarchy
 
-![Group administrator view](/img/screens/admin-allocations-group.png)
+```mermaid
+flowchart TD
+    S[System pool<br/>super_admin issues] -->|allocate| O[Organization pool<br/>org_admin]
+    O -->|allocate| G[Group pool<br/>group_admin]
+    G -->|allocate| U[User wallet<br/>the only wallet sessions bill to]
+    U -.->|request| G
+    G -.->|request| O
+    O -.->|top-up request| S
+```
 
-## Monthly refill
+Solid arrows are money moving; dashed arrows are **asking** for it. Nobody skips a level: a
+group administrator cannot mint credits, and a user's session is billed **only to their own
+personal wallet**.
 
-Each user (or all members of a group) can carry a **monthly refill**: at the start of the month
-the wallet is topped up to that amount from the group's pool. It replaces the manual routine of
-handing out the same allowance every month.
-
-## Requests
-
-The **Requests** tab lists members' credit requests with amount and reason. Approving one moves
-the credits from your pool to the member's wallet and notifies them; rejecting asks for a reason
-that is shown to the requester.
+| Tier | Who manages it | Can issue? |
+|---|---|---|
+| **System** | super_admin | Yes — this is where credits come into existence |
+| **Organization** | org_admin | No; allocates what the system issued |
+| **Group** | group_admin | No; allocates what the organization gave |
+| **User** | the user | Spends only |
 
 ## What is billed
 
-Wallets are charged for **GPU session time only**: rate × occupancy × runtime, with a hold at
-start and a refund of the unused part at the end. CPU sessions and volumes cost nothing and are
-bounded by [resource policies](./resources.md) instead. Every movement is a ledger row that the
-[audit log](./audit.md) and the user's wallet history both show.
+Only **GPU session time**: `rate × occupancy × runtime`, where the rate belongs to the
+[offering](./resources-offerings.md) and occupancy is the larger of the VRAM and core
+fractions. A session **holds** credits when it starts, consumes as it runs, and **settles**
+when it ends, refunding the unused part.
+
+CPU sessions, volumes, and queued sessions that never started cost nothing. They are bounded by
+[resource policies](./resources-policies.md) instead — if someone is running too much *free*
+work, the lever is quota, not credits.
+
+## Where to start
+
+- Your pools and the people under them: [Allocating](./credits-allocate.md).
+- Someone is asking for more: [Requests](./credits-requests.md).
+- "Where did the month go": [Settlement report](./credits-settlement.md), or the
+  [audit log](./audit.md) for who changed what.

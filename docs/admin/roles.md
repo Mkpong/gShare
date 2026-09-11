@@ -31,9 +31,24 @@ organization sees nothing of another. A person can hold different roles in diffe
 ## Two kinds of administrator
 
 The [Tenant administration](./dashboard.md) pages are what an org_admin or group_admin works
-with day to day: people, credits, what is running, what happened. The
+with day to day: [people](./users.md), [credits](./credits.md), what is
+[running](./monitoring.md), [what happened](./audit.md). The
 [Platform administration](./resources.md) pages are super_admin only and describe the machine
-side: the GPU catalogue, clusters and nodes, storage pools, images.
+side: the [GPU catalogue](./resources-offerings.md), [clusters](./clusters.md) and
+[nodes](./nodes.md), [storage](./storage.md), [images](./images.md),
+[system settings](./system.md).
+
+## Who does what, in practice
+
+| Situation | Who handles it |
+|---|---|
+| "I need more credits" | The user's group_admin — [credit requests](./credits-requests.md) |
+| "I need a bigger quota" | Whoever owns the policy: group_admin for their group, super_admin for the global one — [resource requests](./resources-policies.md#quota-requests) |
+| "Someone is holding a GPU they are not using" | Any administrator in scope — [intervening](./monitoring-control.md), or fix the idle timeout |
+| "A new person joined" | group_admin or org_admin — [adding users](./users-add.md) |
+| "A node needs maintenance" | super_admin — [draining](./nodes.md#draining) |
+| "The storage pool is full" | super_admin — [storage](./storage.md) |
+| "Sessions fail with *unserviceable*" | super_admin — the [offering](./resources-offerings.md) does not match the card |
 
 ## Irreversible actions
 

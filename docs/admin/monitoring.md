@@ -1,55 +1,69 @@
 ---
-sidebar_position: 3
+sidebar_position: 13
 title: Session monitoring
 ---
 
 # Session monitoring
 
-**Operations → Session monitor** is the live view of every session and every queue entry within
-your scope, updated over a server-sent event stream (the *LIVE* indicator).
+**Operations → Session monitor** is the live view of everything running within your scope,
+updated over a server-sent event stream — the *LIVE* badge tells you the stream is connected
+(it falls back to polling silently if not).
+
+| Page | What it covers |
+|---|---|
+| [Intervening](./monitoring-control.md) | Force-terminating, bulk clean-up, the queue |
 
 ![Session monitor](/img/screens/admin-monitor.png)
 
-Each row shows the session, its state, owner, organization, group, resources (class, mode, VRAM,
-core share), and last transition. Sort any column; search by session name, id, or owner; filter
-by state, organization, and group. An organization administrator sees only their organization's
-sessions and a group administrator only their group's — scope follows the **owner** of the
-session, so a session created without a group still belongs to its owner's tenancy.
+## The table
 
-## Force-terminate
+| Column | Meaning |
+|---|---|
+| **Session** | Name and id. Clicking the row opens its timeline |
+| **State** | running, pending (waiting), paused, terminated |
+| **User / organization / group** | Whose it is — the scope columns an administrator sorts by |
+| **Resources** | Class, mode, VRAM, core share |
+| **Node / cluster** | Where it actually runs |
+| **Last change** | When it last transitioned |
 
-**Force terminate** on a row ends a session without the owner's consent: the bill is settled
-like an owner-initiated stop, the GPU is released, and the owner is notified. The reason you
-type lands in the audit log.
+Search matches session name, id, and owner. The filters narrow by state, organization, and
+group; the cluster selector in the top bar narrows by cluster.
 
-Tick several rows and the fixed toolbar buttons become active — **Force terminate (N)** and
-**Bulk clean-up (N)**. A bulk termination asks for the count to be typed, since the sessions
-belong to other people.
+## Scope
 
-## The queue tab
+Scope follows the **owner** of the session, not a label on it:
 
-The **Queue** tab lists sessions waiting for capacity, with their position, priority, and the
-reason they wait. An administrator can cancel an entry or raise its priority.
+- a **group_admin** sees the sessions of the members of their groups;
+- an **org_admin** sees every session in their organization;
+- a **super_admin** sees the fleet.
 
-## Session liveness
+![Group administrator's view](/img/screens/admin-monitor-group.png)
 
-The operator re-reports every running session once a minute, and the control plane acts on what
-it hears, never on what it assumes:
+A session created without an explicit group still belongs to its owner's tenancy, so it appears
+for the right administrators — and only for them.
 
-- **Crash loop** — a container that has restarted three times and sits in `CrashLoopBackOff`
-  ends the session (`crash_loop`), settled and notified, instead of billing an endless restart
-  cycle.
-- **Pod lost** — a session whose heartbeat has been silent for five minutes while the operator is
-  otherwise alive is settled (`pod_lost`). If the operator itself is silent, nothing is touched:
-  an operator outage must never turn into mass termination.
-- **Node offline** — a node whose kubelet stops answering goes offline at once and its running
-  sessions end (`node_offline`); paused sessions are left to resume elsewhere.
-- A pod deleted by hand (or evicted) while the session is still wanted is simply rebuilt.
+## The session timeline
 
-## Monitoring page
+![One session](/img/screens/admin-monitor-detail.png)
 
-![Monitoring](/img/screens/admin-monitoring.png)
+Opening a row shows that session's full event timeline: queued (and how long it waited),
+started, paused, resumed, terminated — each with the reason recorded at the time. It is the
+first place to look when a user asks "why did my session stop".
 
-**Operations → Monitoring** (super_admin) charts GPU utilisation, VRAM, and host metrics per node
-and per card from Prometheus, when the [monitoring stack](../operations/observability.md) is
-deployed.
+## Session liveness — what ends a session by itself
+
+The operator re-reports every running session once a minute. The control plane acts on what it
+hears, never on what it assumes:
+
+| Rule | Trigger | Result |
+|---|---|---|
+| **Crash loop** | A container restarted 3 times and sits in `CrashLoopBackOff` | Session ends (`crash_loop`), settled, owner notified |
+| **Pod lost** | No heartbeat for 5 minutes *while the operator is otherwise alive* | Session settled (`pod_lost`) |
+| **Operator silence** | Every node of a cluster goes stale at once | **Nothing is touched** — an operator outage must never become mass termination |
+| **Node offline** | A node's kubelet stops answering | Its running sessions end (`node_offline`); paused ones resume elsewhere |
+| **Idle** | A GPU idle past the policy's idle timeout | Session is **paused**, card returned |
+| **Max runtime** | Past the policy's cap | Session terminated |
+| **Manual pod deletion** | Someone deletes the pod but the session is still wanted | Pod is simply rebuilt; the bill and reservation are untouched |
+
+Every one of these is visible in the session's timeline and in the owner's notifications, so
+nothing ends silently.

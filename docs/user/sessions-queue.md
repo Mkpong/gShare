@@ -35,7 +35,7 @@ queued sessions are admitted in **priority order**, and within the same priority
 they joined. Administrators can raise the priority of an entry; you cannot raise your own.
 
 Your [resource policy](../admin/resources.md) also caps how many sessions you may have waiting
-at once (three, in the default catalogue).
+at once (two, in the default catalogue).
 
 ## While you wait
 

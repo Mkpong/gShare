@@ -41,8 +41,7 @@ It is there for two jobs:
 
 ![Delete confirmation](/img/screens/data-delete-confirm.png)
 
-**Delete** asks you to confirm, naming what is lost: the data stored in it, and any snapshots
-taken of it. The volume must have **no active mounts** — with one, the delete is refused and the
+**Delete** asks you to confirm, naming what is lost: the data stored in it. The volume must have **no active mounts** — with one, the delete is refused and the
 [expansion row](./data-mount.md#who-has-it-open) shows which session to end first.
 
 What happens next:

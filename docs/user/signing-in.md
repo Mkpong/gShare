@@ -6,8 +6,12 @@ title: Signing in
 # Signing in
 
 Open the console URL your administrator gave you and sign in with your **email address and
-password**. Accounts are created by an administrator — there is no self-service sign-up unless
-your site has enabled it.
+password**. Accounts are normally created by an administrator.
+
+If your site allows it, the sign-in screen also has a **Sign up** tab: name, email (from an
+allowed domain) and a password of at least eight characters. Depending on the site's policy the
+account is usable at once, or sits as *pending* until an administrator approves it and assigns
+you to a group — you cannot run anything until then.
 
 ![Sign-in screen](/img/screens/login.png)
 
