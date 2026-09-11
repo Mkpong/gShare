@@ -1,0 +1,104 @@
+/**
+ * The console's own palette, so the docs and the product read as one thing. Light primary is
+ * the console's deep teal; dark mode uses its brighter teal on the same near-black surfaces the
+ * console draws on, rather than Docusaurus's default green on grey.
+ */
+
+:root {
+  --ifm-color-primary: #0a6a8c;
+  --ifm-color-primary-dark: #095f7e;
+  --ifm-color-primary-darker: #085a77;
+  --ifm-color-primary-darkest: #074a62;
+  --ifm-color-primary-light: #0b759a;
+  --ifm-color-primary-lighter: #0c7aa1;
+  --ifm-color-primary-lightest: #0e8ab6;
+
+  --ifm-background-color: #ffffff;
+  --ifm-background-surface-color: #f3f5f7;
+  --ifm-color-emphasis-200: #e9edf1;
+  --ifm-color-emphasis-300: #d7dde3;
+  --ifm-font-color-base: #171a1f;
+  --ifm-color-content-secondary: #5b6470;
+
+  --ifm-code-font-size: 92%;
+  --ifm-font-family-base: 'IBM Plex Sans KR', 'IBM Plex Sans', -apple-system, BlinkMacSystemFont,
+    'Segoe UI', Roboto, sans-serif;
+  --ifm-font-family-monospace: 'IBM Plex Mono', ui-monospace, SFMono-Regular, Menlo, monospace;
+  --ifm-heading-font-weight: 600;
+  --ifm-navbar-shadow: 0 1px 0 var(--ifm-color-emphasis-300);
+  --docusaurus-highlighted-code-line-bg: rgba(10, 106, 140, 0.08);
+}
+
+[data-theme='dark'] {
+  --ifm-color-primary: #45c4e8;
+  --ifm-color-primary-dark: #2bbbe4;
+  --ifm-color-primary-darker: #1eb6e1;
+  --ifm-color-primary-darkest: #1897bb;
+  --ifm-color-primary-light: #5fcdec;
+  --ifm-color-primary-lighter: #6cd1ee;
+  --ifm-color-primary-lightest: #93ddf2;
+
+  --ifm-background-color: #0c0e11;
+  --ifm-background-surface-color: #14171c;
+  --ifm-color-emphasis-200: #1b1f26;
+  --ifm-color-emphasis-300: #262b33;
+  --ifm-font-color-base: #e7eaee;
+  --ifm-color-content-secondary: #8d95a2;
+  --ifm-navbar-shadow: 0 1px 0 #262b33;
+  --docusaurus-highlighted-code-line-bg: rgba(69, 196, 232, 0.12);
+}
+
+/* Hero: the console's dark surface with the teal reserved for the call to action, instead of a
+   solid block of primary colour. */
+.hero.hero--primary {
+  --ifm-hero-background-color: #14171c;
+  --ifm-hero-text-color: #e7eaee;
+  border-bottom: 1px solid #262b33;
+}
+[data-theme='dark'] .hero.hero--primary {
+  --ifm-hero-background-color: #0c0e11;
+}
+.hero .button--secondary {
+  --ifm-button-background-color: var(--ifm-color-primary);
+  --ifm-button-border-color: var(--ifm-color-primary);
+  color: #fff;
+}
+.hero .button--outline.button--secondary {
+  --ifm-button-background-color: transparent;
+  color: #e7eaee;
+  border-color: #3a414b;
+}
+.hero .button--outline.button--secondary:hover {
+  background: #1b1f26;
+}
+
+/* Sidebar: quieter category rows, a clear active mark. */
+.menu__link {
+  font-size: 0.92rem;
+}
+.menu__link--active:not(.menu__link--sublist) {
+  background: var(--ifm-color-emphasis-200);
+  font-weight: 600;
+}
+.menu__list-item-collapsible .menu__link {
+  font-weight: 600;
+}
+
+/* Tables and code blocks on the console's surface tone. */
+table thead tr {
+  background: var(--ifm-background-surface-color);
+}
+.theme-code-block {
+  box-shadow: none;
+  border: 1px solid var(--ifm-color-emphasis-300);
+}
+
+/* Dark mode: the bright teal needs dark text on it, and the footer sits on the console's surface
+   instead of Docusaurus's slate, so the page is one ground from top to bottom. */
+[data-theme='dark'] .hero .button--secondary:not(.button--outline) {
+  color: #0c0e11;
+}
+.footer--dark {
+  --ifm-footer-background-color: #14171c;
+  border-top: 1px solid #262b33;
+}

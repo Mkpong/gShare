@@ -18,47 +18,14 @@ from app.db.models import (
     GpuDevice,
     GpuNode,
     Membership,
-    Project,
     Session,
     StorageVolume,
 )
 from app.domain.node_pools import resolve_pool_access
 from app.domain.policy import resolve_effective_policy
+from app.domain.tenancy import managed_owner_filter  # noqa: F401  (re-exported for callers/tests)
 
 router = APIRouter(tags=["dashboard"])
-
-
-def managed_owner_filter(principal: Principal, scope: str):
-    """The session-owner predicate for the summary.
-
-    ``mine`` (default) is the caller's own sessions. ``managed`` widens it to the people the caller
-    administers — every user in the groups they are group_admin of, every group of the organizations
-    they are org_admin of, or everyone for a super_admin. A plain member asking for ``managed`` gets
-    ``mine``: there is nothing wider to show, and the answer must never leak beyond their tenancy.
-    """
-    if scope != "managed":
-        return Session.owner_user_id == principal.user_id
-    if principal.global_role == "super_admin":
-        return None
-    group_ids = {g for g, role in principal.memberships.items() if role in ("group_admin", "org_admin")}
-    org_groups = None
-    if principal.org_admin_orgs:
-        org_groups = select(Project.id).where(
-            Project.org_id.in_(list(principal.org_admin_orgs)), Project.deleted_at.is_(None)
-        )
-    if not group_ids and org_groups is None:
-        return Session.owner_user_id == principal.user_id
-    members = select(Membership.user_id).where(Membership.group_id.is_not(None))
-    if group_ids and org_groups is not None:
-        members = members.where(
-            or_(Membership.group_id.in_(list(group_ids)), Membership.group_id.in_(org_groups))
-        )
-    elif group_ids:
-        members = members.where(Membership.group_id.in_(list(group_ids)))
-    else:
-        members = members.where(Membership.group_id.in_(org_groups))
-    # The admin's own sessions count too — they are part of what they run.
-    return or_(Session.owner_user_id.in_(members), Session.owner_user_id == principal.user_id)
 
 
 def _where(stmt, pred):

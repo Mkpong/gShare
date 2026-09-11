@@ -91,9 +91,9 @@ if (vols[0]) {
 // ── credit requests from members, so the approvals queue is not empty ──
 console.log('credit and top-up requests');
 const requesters = [
-  { email: 'haneul@nexusai.dev', amount: 500, note: 'Fine-tuning run through the weekend.' },
-  { email: 'dohyun@nexusai.dev', amount: 1200, note: 'Ablation sweep, 8 configurations.' },
-  { email: 'seoyeon@nexusai.dev', amount: 300, note: 'Ran out mid-epoch.' },
+  { email: 'haneul@example.com', amount: 500, note: 'Fine-tuning run through the weekend.' },
+  { email: 'dohyun@example.com', amount: 1200, note: 'Ablation sweep, 8 configurations.' },
+  { email: 'seoyeon@example.com', amount: 300, note: 'Ran out mid-epoch.' },
 ];
 for (const r of requesters) {
   try {
@@ -109,7 +109,7 @@ log(`${topup.ok ? '+' : '!'} top-up request -> ${topup.status} ${topup.ok ? '' :
 // Re-asserted rather than assumed: the probes exercise the removal path.
 console.log('organization admin');
 if (org) {
-  const jieun = users.find((u) => u.email === 'jieun@nexusai.dev');
+  const jieun = users.find((u) => u.email === 'jieun@example.com');
   if (jieun) {
     const current = await list(`/organizations/${org.id}/admins`);
     if (current.some((a) => a.user_id === jieun.id)) {
@@ -119,7 +119,7 @@ if (org) {
       log(`${r.ok ? '+' : '!'} org_admin ${jieun.email} -> ${r.status}`);
     }
   } else {
-    log('! jieun@nexusai.dev not found; run hack/seed_demo.py first');
+    log('! jieun@example.com not found; run hack/seed_demo.py first');
   }
 }
 

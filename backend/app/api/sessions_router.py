@@ -64,6 +64,7 @@ from app.domain.placement import placeable_device_clauses
 from app.domain.pricing import round_credit
 from app.domain.scheduler import SchedulerService
 from app.domain.session_service import SessionService
+from app.domain.tenancy import managed_owner_filter, session_is_managed
 
 router = APIRouter(tags=["sessions"])
 
@@ -301,21 +302,15 @@ async def list_sessions(
     escalate. """
     stmt = select(Session).where(Session.deleted_at.is_(None))
 
-    if scope == "all" and principal.global_role in ("super_admin", "org_admin"):
-        pass  # global visibility, for monitoring
-    elif scope == "all" and (
-        admin_projects := [
-            pid for pid, role in principal.memberships.items()
-            if role in ("group_admin", "org_admin")
-        ]
-    ):
-        # group_admin: their own sessions plus those of the groups they administer.
-        stmt = stmt.where(
-            (Session.owner_user_id == principal.user_id)
-            | (Session.group_id.in_(admin_projects))
-        )
+    if scope == "all":
+        # Tenant scope follows the session's OWNER, not Session.group_id: a session may be created
+        # without a group, and the owner's membership is what puts it in an org_admin's or
+        # group_admin's tenancy. managed_owner_filter is the same predicate the administrator
+        # dashboard counts with, so the two screens agree; a plain member gets their own sessions.
+        pred = managed_owner_filter(principal, "managed")
+        if pred is not None:
+            stmt = stmt.where(pred)
     else:
-        # scope=mine, or an unauthorised scope=all, resolves to the caller's own sessions.
         stmt = stmt.where(Session.owner_user_id == principal.user_id)
 
     if status_filter is not None:
@@ -702,6 +697,10 @@ async def force_terminate(
     the session's status_reason stays the typed `admin_stopped` the console maps to a message."""
     sess = await _load_session(db, session_id)
     principal.require(action="session.force_terminate", group_id=sess.group_id)
+    # The role check above is by Session.group_id, which a session may not carry; the owner's
+    # tenancy is what decides whether this administrator may end it.
+    if not await session_is_managed(db, principal, session_id):
+        raise Forbidden("not permitted: session.force_terminate")
     await SessionService(db).terminate(session_id, forced=True, reason="admin_stopped")
     # terminate() has committed and reloaded the row, which leaves the session with an autobegun
     # transaction; wrapping the audit write in db.begin() here raised "A transaction is already
@@ -730,8 +729,10 @@ async def bulk_terminate(
             failed += 1
             results.append({"session_id": sid, "status": "failed", "error": "not_found"})
             continue
-        # scope guard per target: 403 if any out-of-scope
+        # scope guard per target: 403 if any out-of-scope (by role, then by the owner's tenancy)
         principal.require(action="session.force_terminate", group_id=sess.group_id)
+        if not await session_is_managed(db, principal, sid):
+            raise Forbidden("not permitted: session.force_terminate")
         if sess.status == "terminated":
             skipped += 1
             results.append({"session_id": sid, "status": "skipped"})

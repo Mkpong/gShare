@@ -1,3 +1,6 @@
+---
+sidebar_position: 3
+---
 # Connecting a cluster
 
 > **Attaching a SECOND cluster?** Use [multi-cluster.md](multi-cluster.md) and

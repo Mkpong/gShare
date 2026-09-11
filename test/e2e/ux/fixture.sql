@@ -65,7 +65,7 @@ FROM (VALUES
   ('ses_ux0000000000000000000007', 'ocr-pipeline',     'exclusive',  81920, 100, NULL,            'terminated',18.00, 81920, 16, 128, 200, false, 'cold', false, 0, now() - interval '30 days',   now() - interval '29 days',  now() - interval '30 days'),
   ('ses_ux0000000000000000000008', 'stale-loader',     'fractional', 12288,  20, NULL,            'error',      2.25, NULL,  4,  32,  50, false, 'cold', false, 0, NULL,                          now() - interval '11 hours', now() - interval '12 hours')
 ) AS s(id, name, mode, gpu_mem_mb, gpu_cores, gpu_uuid, status, rate, dev_mem, cpu, mem_gb, disk_gb, lossless, pause_mode, preemptible, priority, started_at, terminated_at, created_at)
-CROSS JOIN LATERAL (SELECT id FROM "user" WHERE email = 'haneul@nexusai.dev' LIMIT 1) u
+CROSS JOIN LATERAL (SELECT id FROM "user" WHERE email = 'haneul@example.com' LIMIT 1) u
 CROSS JOIN LATERAL (SELECT group_id FROM membership WHERE user_id = u.id AND group_id IS NOT NULL LIMIT 1) m
 CROSS JOIN LATERAL (SELECT id FROM offering WHERE status = 'active' ORDER BY created_at LIMIT 1) o
 CROSS JOIN LATERAL (SELECT id FROM image ORDER BY created_at LIMIT 1) i
@@ -82,4 +82,4 @@ COMMIT;
 UPDATE "user"
    SET deleted_at = NULL, status = 'active'
  WHERE deleted_at IS NOT NULL
-   AND email LIKE '%@nexusai.dev';
+   AND email LIKE '%@example.com';

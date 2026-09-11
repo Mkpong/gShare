@@ -1,3 +1,6 @@
+---
+sidebar_position: 4
+---
 # Running gShare across several clusters
 
 One control plane, many GPU clusters. The control plane holds the users, the money and the

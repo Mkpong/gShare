@@ -1,3 +1,8 @@
+---
+sidebar_position: 0
+slug: /
+title: Overview
+---
 # GShare documentation
 
 GShare lets several organizations, groups, and users share a Kubernetes GPU cluster —

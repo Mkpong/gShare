@@ -1,3 +1,6 @@
+---
+sidebar_position: 8
+---
 # Console UX standards
 
 What every screen in the console is expected to do, and the components that make it cheap to do.

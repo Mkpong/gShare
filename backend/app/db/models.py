@@ -83,7 +83,13 @@ class Notification(Base, TimestampMixin):
 class Organization(Base, TimestampMixin, SoftDeleteMixin):
     __tablename__ = "organization"
     id: Mapped[str] = mapped_column(String, primary_key=True)            # org_ULID
-    name: Mapped[str] = mapped_column(String, unique=True)
+    # Unique among LIVE organizations only: a deleted one is soft-deleted, and a plain UNIQUE
+    # kept its name reserved forever — re-creating it hit a row nobody could see.
+    name: Mapped[str] = mapped_column(String)
+    __table_args__ = (
+        Index("uq_organization_name_live", "name", unique=True,
+              postgresql_where=text("deleted_at IS NULL"), sqlite_where=text("deleted_at IS NULL")),
+    )
     status: Mapped[str] = mapped_column(String, default="active")
     timezone: Mapped[str] = mapped_column(String, default="Asia/Seoul")
 

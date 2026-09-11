@@ -1,3 +1,6 @@
+---
+sidebar_position: 7
+---
 # Architecture and concepts
 
 > 📚 [Documentation home](./README.md) — this page is the system overview. For how to
