@@ -89,13 +89,34 @@ class VolumeSync:
                 if deleted_at.tzinfo is None:
                     deleted_at = deleted_at.replace(tzinfo=UTC)
                 d.reclaim = self.now - deleted_at >= grace
-            elif obs.used_bytes is not None:
-                self._apply_usage(row, obs)
+            else:
+                self._apply_placement(row, obs, report.cluster_id)
+                if obs.used_bytes is not None:
+                    self._apply_usage(row, obs)
             out.append(d)
         await self.db.commit()
         if orphans:
             log.warning("volume_sync: %d PVC(s) without a ledger row; left untouched", orphans)
         return VolumeSyncResponse(volumes=out, orphans=orphans)
+
+    def _apply_placement(self, row: StorageVolume, obs: OperatorVolumeObserved, cluster_id: str | None) -> None:
+        """Pin the volume to the cluster (and StorageClass) whose operator reports its PVC.
+
+        Written once, on the first report: the PVC exists on exactly one cluster and the data is
+        there. A report of the same PVC name from another cluster afterwards is the double-
+        provisioning bug the placement rule exists to prevent, so it is logged, not adopted.
+        """
+        if not cluster_id:
+            return
+        if row.cluster_id is None:
+            row.cluster_id = cluster_id
+            row.storage_class = obs.storage_class or None
+            row.provisioned_at = self.now
+        elif row.cluster_id != cluster_id:
+            log.warning("volume_sync: %s reported from %s but its data lives on %s; ignoring",
+                        row.id, cluster_id, row.cluster_id)
+        elif row.storage_class is None and obs.storage_class:
+            row.storage_class = obs.storage_class
 
     # Scratch-disk pre-warning knobs: warn at 80% of the ephemeral-storage limit (kubelet evicts
     # at 100%), keep the gauge reading for 15 min (refreshed every ~5-min sync tick), and re-warn

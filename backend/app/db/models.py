@@ -655,6 +655,15 @@ class StorageVolume(Base, TimestampMixin, SoftDeleteMixin):
     # Owner's lock: no NEW session may mount the volume while set (existing mounts keep running),
     # so a shared volume can be drained and deleted without a race against fresh mounts.
     mount_locked: Mapped[bool] = mapped_column(Boolean, default=False, server_default=text("false"))
+    # Where the data physically lives, learned from the operator's first report of the PVC: the
+    # cluster whose operator provisioned it and the StorageClass the claim names. Together they
+    # identify the storage pool (cluster, class). NULL until a session has mounted the volume —
+    # the PVC is created lazily — and never moved afterwards: the data is on that server.
+    cluster_id: Mapped[str | None] = mapped_column(
+        ForeignKey("cluster.id", ondelete="SET NULL"), default=None, index=True,
+    )
+    storage_class: Mapped[str | None] = mapped_column(String, default=None)
+    provisioned_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), default=None)
     # Partial unique index including the name, excluding soft-deleted rows, so one scope can hold
     # several volumes as long as their names differ.
     __table_args__ = (

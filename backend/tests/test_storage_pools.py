@@ -152,3 +152,61 @@ async def test_deregistering_a_cluster_retires_its_pools_and_shares(db):
     # Its share of someone else's pool goes too, and the fleet bound follows.
     assert {p.id for p in await usable_pools(db, "clu_stays")} == {living_id}
     assert (await pool_bound_gb(db))[0] == 500
+
+
+# ── the volume list names the pool a volume sits on ──────────────────────────────────────
+
+@pytest.mark.asyncio
+async def test_volume_list_names_the_pool_its_data_lives_on(db):
+    from app.api.deps import Pagination
+    from app.api.volumes_router import list_volumes
+    from app.auth.rbac import Principal
+    from app.db.models import StorageVolume
+    await _cluster(db, "clu_p")
+    pool = await _pool(db, cluster_id="clu_p", name="nas-01 (ZFS tank)", storage_class="gshare-data")
+    placed = StorageVolume(id=ids.new("volume"), scope="user", scope_id="u_1", type="home", name="home",
+                           access_mode="RWX", quota_gb=5, used_gb=0, cluster_id="clu_p", storage_class="gshare-data")
+    fresh = StorageVolume(id=ids.new("volume"), scope="user", scope_id="u_1", type="home", name="new",
+                          access_mode="RWX", quota_gb=5, used_gb=0)
+    async with db.begin():
+        db.add_all([placed, fresh])
+    rows = await list_volumes(scope=None, scope_id=None, type=None, access_mode=None, all_scopes=True,
+                              page=Pagination(1, 50), principal=Principal(user_id="root", global_roles={"super_admin"}), db=db)
+    by = {r.id: r for r in rows}
+    assert (by[placed.id].pool_id, by[placed.id].pool_name, by[placed.id].cluster_name) == (pool.id, "nas-01 (ZFS tank)", "clu_p")
+    assert by[fresh.id].pool_name is None and by[fresh.id].cluster_id is None
+
+
+# ── a pool is known by its server's hostname ─────────────────────────────────────────────
+
+@pytest.mark.asyncio
+async def test_a_pool_with_a_node_is_named_after_the_hostname(db):
+    from app.api.storage_pools_router import PoolCreate, PoolPatch, create_pool, update_pool
+    from app.auth.rbac import Principal
+    from app.db.models import GpuNode
+    await _cluster(db, "clu_n")
+    node = GpuNode(id=ids.new("node"), cluster_id="clu_n", hostname="nas-01", status="ready")
+    async with db.begin():
+        db.add(node)
+    root = Principal(user_id="root", global_roles={"super_admin"})
+    made = await create_pool(PoolCreate(name="nickname", cluster_id="clu_n", storage_class="gshare-data", node_id=node.id),
+                             principal=root, db=db)
+    assert made["name"] == "nas-01"
+    await db.commit()   # the handler's read-back leaves an autobegun transaction; close it like a request would
+    # a typed name never overrides the hostname while the node is linked
+    edited = await update_pool(made["id"], PoolPatch(name="other"), principal=root, db=db)
+    assert edited["name"] == "nas-01"
+
+
+@pytest.mark.asyncio
+async def test_a_pool_without_a_node_needs_a_typed_name(db):
+    from app.api.storage_pools_router import PoolCreate, create_pool
+    from app.auth.rbac import Principal
+    from app.core.errors import DomainError
+    await _cluster(db, "clu_x")
+    root = Principal(user_id="root", global_roles={"super_admin"})
+    with pytest.raises(DomainError):
+        await create_pool(PoolCreate(cluster_id="clu_x", storage_class="gshare-data"), principal=root, db=db)
+    await db.rollback()
+    made = await create_pool(PoolCreate(name="appliance-1", cluster_id="clu_x", storage_class="gshare-data"), principal=root, db=db)
+    assert made["name"] == "appliance-1"

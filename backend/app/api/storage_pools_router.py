@@ -34,7 +34,11 @@ class _Validation(DomainError):
 
 
 class PoolCreate(BaseModel):
-    name: str = Field(min_length=1, max_length=80)
+    # The display name is the linked node's hostname whenever a node is given — a storage server
+    # is known by its hostname everywhere else in the console, and a second server must not be
+    # told apart by a nickname someone typed. A name is only required for a pool with no node
+    # (an external appliance the cluster never sees as a node).
+    name: str | None = Field(default=None, min_length=1, max_length=80)
     cluster_id: str                       # the cluster whose storage server this is
     storage_class: str = Field(min_length=1, max_length=200)
     node_id: str | None = None
@@ -157,8 +161,11 @@ async def create_pool(
                 raise _Validation("that node is in another cluster",
                                   {"node_id": body.node_id, "cluster_id": node.cluster_id})
             hostname = node.hostname
+        name = hostname or (body.name or "").strip()
+        if not name:
+            raise _Validation("a pool without a node needs a name", {"name": body.name})
         pool = StoragePool(
-            id=ids.new("storage_pool"), name=body.name.strip(), cluster_id=body.cluster_id,
+            id=ids.new("storage_pool"), name=name, cluster_id=body.cluster_id,
             node_id=body.node_id, node_hostname=hostname, storage_class=body.storage_class.strip(),
             share_scope=body.share_scope, manual_capacity_gb=body.manual_capacity_gb,
             capacity_source="manual" if body.manual_capacity_gb else None,
@@ -186,9 +193,6 @@ async def update_pool(
     async with db.begin():
         pool = await _load(db, pool_id)
         changes: dict[str, Any] = {}
-        if body.name is not None and body.name.strip() != pool.name:
-            changes["name"] = {"from": pool.name, "to": body.name.strip()}
-            pool.name = body.name.strip()
         if body.storage_class is not None and body.storage_class.strip() != pool.storage_class:
             # The class is the join key for the operator's capacity report; a changed class means
             # the stored measurement describes something else.
@@ -207,6 +211,11 @@ async def update_pool(
             changes["node_id"] = {"from": pool.node_id, "to": body.node_id or None}
             pool.node_id = body.node_id or None
             pool.node_hostname = node.hostname if node is not None else None
+        # Name: the node's hostname while a node is linked; otherwise whatever was sent.
+        wanted = pool.node_hostname or (body.name.strip() if body.name is not None else pool.name)
+        if wanted and wanted != pool.name:
+            changes["name"] = {"from": pool.name, "to": wanted}
+            pool.name = wanted
         if body.manual_capacity_gb is not None and body.manual_capacity_gb != pool.manual_capacity_gb:
             changes["manual_capacity_gb"] = {"from": pool.manual_capacity_gb, "to": body.manual_capacity_gb}
             pool.manual_capacity_gb = body.manual_capacity_gb or None

@@ -137,6 +137,10 @@ func TestTickReportsUsageForMountedClaimsOnly(t *testing.T) {
 	if b.Mounted || b.UsedBytes != nil || b.CapacityGb != 5 {
 		t.Errorf("vol-b observed wrong: %+v", b)
 	}
+	// The class travels with every claim: it is what names the pool on the control plane.
+	if a.StorageClass != s.StorageClass || b.StorageClass != s.StorageClass {
+		t.Errorf("storage class not reported: a=%q b=%q want %q", a.StorageClass, b.StorageClass, s.StorageClass)
+	}
 	if len(so.sessions) != 1 {
 		t.Fatalf("sessions = %+v, want exactly one", so.sessions)
 	}

@@ -105,6 +105,9 @@ type VolumeObserved struct {
 	CapacityGb int    `json:"capacity_gb"`          // the claim's current request
 	UsedBytes  *int64 `json:"used_bytes,omitempty"` // kubelet volume stats; nil when not mounted anywhere
 	Mounted    bool   `json:"mounted"`
+	// The claim's StorageClass. With the reporting cluster it names the storage pool the data
+	// lives on, which is what the control plane records on the volume.
+	StorageClass string `json:"storage_class,omitempty"`
 }
 
 // PoolCapacity is what the CSI driver says the volume-backing pool holds, read from the

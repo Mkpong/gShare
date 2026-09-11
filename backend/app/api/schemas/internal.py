@@ -97,6 +97,7 @@ class OperatorVolumeObserved(BaseModel):
     capacity_gb: int = 0                # the claim's current size
     used_bytes: int | None = None       # kubelet volume stats; None when nothing has it mounted
     mounted: bool = False               # some pod currently mounts it
+    storage_class: str | None = None    # the claim's StorageClass — with the cluster, the pool
 
 
 class OperatorSessionDisk(BaseModel):

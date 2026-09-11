@@ -4630,6 +4630,8 @@ export interface components {
              * @default false
              */
             mounted: boolean;
+            /** Storage Class */
+            storage_class?: string | null;
         };
         /**
          * OperatorVolumeSync
@@ -5509,6 +5511,16 @@ export interface components {
              * @default 0
              */
             shared_count: number;
+            /** Cluster Id */
+            cluster_id?: string | null;
+            /** Cluster Name */
+            cluster_name?: string | null;
+            /** Storage Class */
+            storage_class?: string | null;
+            /** Pool Id */
+            pool_id?: string | null;
+            /** Pool Name */
+            pool_name?: string | null;
             /** Active Mounts */
             active_mounts?: {
                 [key: string]: unknown;
@@ -5664,7 +5676,7 @@ export interface components {
         /** PoolCreate */
         app__api__storage_pools_router__PoolCreate: {
             /** Name */
-            name: string;
+            name?: string | null;
             /** Cluster Id */
             cluster_id: string;
             /** Storage Class */

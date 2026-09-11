@@ -266,8 +266,16 @@ export function VolumeMountsPanel({ vol }: { vol: { id: string; name?: string | 
   }) | undefined;
   const myId = useAuthStore((st) => (st.claims as { sub?: string }).sub);
   const mounts = detail?.active_mounts ?? [];
+  const placed = detail as (typeof detail) & { cluster_id?: string | null; cluster_name?: string | null; storage_class?: string | null; pool_name?: string | null } | undefined;
   return (
     <div className="mt-1 rounded-card bg-surface-2/60 px-4 py-3">
+      {/* Where the data lives — set once the first session has mounted it and the PVC exists. */}
+      <p className="text-xs text-muted mb-2">
+        <span className="font-semibold">{t('volume.storageLabel')}</span>{' '}
+        {placed?.cluster_id
+          ? <>{placed.pool_name ?? <code className="font-mono">{placed.storage_class ?? '-'}</code>}{placed.cluster_name && <span className="gs-tag ml-1.5">{placed.cluster_name}</span>}</>
+          : t('volume.storageUnprovisioned')}
+      </p>
       <h3 className="text-xs font-semibold text-muted mb-2">{t('volume.mountsPanelTitle', { name: vol.name || vol.id })} <span className="font-normal">{mounts.length}</span></h3>
       {mounts.length === 0 ? (
         <p className="text-muted text-sm">{t('volume.mountsPanelEmpty')}</p>

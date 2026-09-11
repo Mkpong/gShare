@@ -1194,7 +1194,10 @@
       "forceDeleteBody": "Sessions are still mounting this volume. Force-deleting terminates every one of them, then deletes the volume. The audit log records which sessions were cut off.",
       "forceDeleteConsequence": "Every session mounting this volume is terminated immediately; unsaved work in them is lost.",
       "forceDelete": "Terminate sessions and delete",
-      "forceDeleted": "Sessions terminated and volume deleted"
+      "forceDeleted": "Sessions terminated and volume deleted",
+      "tabVolumes": "Volumes",
+      "tabPools": "Storage pools",
+      "colStorage": "Storage"
     },
     "gpus": {
       "aliasBody": "Up to 32 characters, unique within the cluster. Leave empty to remove the name; the card then shows as model and position again.",
@@ -1317,6 +1320,57 @@
         "appliesNote": "Applies from the next placement. Running sessions keep the card they are on.",
         "saved": "Placement policy saved"
       }
+    },
+    "storagePools": {
+      "title": "Storage pools",
+      "register": "Register pool",
+      "registerTitle": "Register a storage pool",
+      "editTitle": "Edit pool",
+      "colPool": "Pool",
+      "colClass": "StorageClass",
+      "colNode": "Node",
+      "colShare": "Shared with",
+      "colCapacity": "Capacity",
+      "shareAll": "All clusters",
+      "shareSelected": "Selected clusters only",
+      "shareNone": "No cluster selected",
+      "source": {
+        "csi": "CSI",
+        "manual": "manual",
+        "node_disk": "node disk",
+        "none": "unknown"
+      },
+      "reportedAt": "Last capacity report from the CSI driver",
+      "empty": "No storage pool registered",
+      "emptyDescription": "Volumes cannot be admitted against capacity until a pool is registered. Label the storage node (gshare.io/role=storage), install the CSI driver, then register the pool.",
+      "name": "Pool name",
+      "nameHint": "Only for a server the cluster never sees as a node (an external appliance). Link a node instead when there is one.",
+      "namePlaceholder": "e.g. nas-01",
+      "clusterHint": "The cluster the storage server sits in.",
+      "clusterFixed": "A pool stays in the cluster its server sits in.",
+      "storageClass": "StorageClass",
+      "storageClassHint": "The class that provisions from this server — the same name the operator was given as --volume-storage-class.",
+      "node": "Storage node",
+      "nodeHint": "Optional. Links the node labelled gshare.io/role=storage; its disk is the fallback capacity.",
+      "nodeNone": "(none)",
+      "nodeStorageTag": "storage",
+      "manualCapacity": "Stated capacity (GB)",
+      "manualCapacityHint": "The pool's real size, used until the CSI driver publishes one. Leave empty to fall back to the node's disk.",
+      "manualCapacityPlaceholder": "e.g. 4000",
+      "share": "Sharing",
+      "shareHint": "all: every cluster in the fleet may place volumes here (one NFS export to all). selected: only the clusters ticked below, plus this one.",
+      "sharedWith": "Clusters allowed to use this pool",
+      "noOtherClusters": "There is no other cluster to share with.",
+      "blockerSharedWith": "Tick at least one cluster",
+      "blockerCapacity": "Capacity must be a whole number of GB",
+      "registered": "Pool {{name}} registered.",
+      "updated": "Pool {{name}} updated.",
+      "deleted": "Pool {{name}} removed.",
+      "confirmDeleteTitle": "Remove pool {{name}}?",
+      "confirmDeleteBody": "The server stops being counted. Nothing on the storage itself is touched.",
+      "consequenceVolumes": "Volumes already on it keep working through their StorageClass.",
+      "consequenceGate": "The capacity gate and the dashboard forget this server until it is registered again.",
+      "nameFromNode": "The linked node's hostname — the server's name everywhere in the console."
     }
   },
   "auth": {
@@ -2059,7 +2113,9 @@
     "lockedTag": "Locked",
     "lockedTitle": "No new session can mount this volume until it is unlocked.",
     "quotaNoShrink": "A quota cannot be reduced below its current {{current}} — storage only grows. To use less, create a smaller volume, move the data, and delete this one.",
-    "quotaNoShrinkShort": "cannot be reduced"
+    "quotaNoShrinkShort": "cannot be reduced",
+    "storageLabel": "Storage",
+    "storageUnprovisioned": "not provisioned yet — created when a session first mounts it"
   },
   "wallet": {
     "amountHint": "In credits. Your administrators see this alongside the reason.",

@@ -1194,7 +1194,10 @@
       "forceDeleteBody": "아직 이 볼륨을 마운트한 세션이 있습니다. 강제 삭제하면 해당 세션을 모두 종료한 뒤 볼륨을 삭제합니다. 어떤 세션을 끊었는지 감사 로그에 남습니다.",
       "forceDeleteConsequence": "이 볼륨을 마운트한 모든 세션이 즉시 종료되며, 저장하지 않은 작업은 사라집니다.",
       "forceDelete": "세션 종료 후 삭제",
-      "forceDeleted": "세션을 종료하고 볼륨을 삭제했습니다"
+      "forceDeleted": "세션을 종료하고 볼륨을 삭제했습니다",
+      "tabVolumes": "볼륨",
+      "tabPools": "스토리지 풀",
+      "colStorage": "저장 위치"
     },
     "gpus": {
       "aliasBody": "32자 이내, 클러스터 안에서 중복 불가. 비우면 이름이 지워지고 다시 모델명과 순번으로 표시됩니다.",
@@ -1317,6 +1320,57 @@
         "appliesNote": "다음 배치부터 적용됩니다. 실행 중인 세션은 지금 카드에 그대로 남습니다.",
         "saved": "배치 정책을 저장했습니다"
       }
+    },
+    "storagePools": {
+      "title": "스토리지 풀",
+      "register": "풀 등록",
+      "registerTitle": "스토리지 풀 등록",
+      "editTitle": "풀 편집",
+      "colPool": "풀",
+      "colClass": "StorageClass",
+      "colNode": "노드",
+      "colShare": "공유",
+      "colCapacity": "용량",
+      "shareAll": "전체 클러스터",
+      "shareSelected": "선택한 클러스터만",
+      "shareNone": "선택된 클러스터 없음",
+      "source": {
+        "csi": "CSI",
+        "manual": "수동",
+        "node_disk": "노드 디스크",
+        "none": "미확인"
+      },
+      "reportedAt": "CSI 드라이버의 마지막 용량 보고",
+      "empty": "등록된 스토리지 풀이 없습니다",
+      "emptyDescription": "풀이 등록되기 전에는 볼륨이 용량 기준으로 승인되지 않습니다. 스토리지 노드에 라벨(gshare.io/role=storage)을 달고 CSI 드라이버를 설치한 뒤 풀을 등록하세요.",
+      "name": "풀 이름",
+      "nameHint": "클러스터에 노드로 보이지 않는 서버(외부 어플라이언스)일 때만 적습니다. 노드가 있으면 노드를 연결하세요.",
+      "namePlaceholder": "예: nas-01",
+      "clusterHint": "스토리지 서버가 속한 클러스터.",
+      "clusterFixed": "풀은 서버가 속한 클러스터에 고정됩니다.",
+      "storageClass": "StorageClass",
+      "storageClassHint": "이 서버에서 프로비저닝하는 클래스 — 오퍼레이터에 --volume-storage-class로 준 것과 같은 이름.",
+      "node": "스토리지 노드",
+      "nodeHint": "선택. gshare.io/role=storage 라벨을 단 노드를 연결합니다. 그 노드의 디스크가 대체 용량이 됩니다.",
+      "nodeNone": "(없음)",
+      "nodeStorageTag": "storage",
+      "manualCapacity": "수동 용량 (GB)",
+      "manualCapacityHint": "CSI 드라이버가 용량을 발행할 때까지 쓰는 실제 풀 크기. 비우면 노드 디스크로 대체합니다.",
+      "manualCapacityPlaceholder": "예: 4000",
+      "share": "공유 범위",
+      "shareHint": "전체: 플릿의 모든 클러스터가 여기에 볼륨을 둘 수 있음(NFS 서버 하나를 전체에 내보내는 형태). 선택: 아래에서 고른 클러스터와 이 클러스터만.",
+      "sharedWith": "이 풀을 쓸 수 있는 클러스터",
+      "noOtherClusters": "공유할 다른 클러스터가 없습니다.",
+      "blockerSharedWith": "클러스터를 하나 이상 선택",
+      "blockerCapacity": "용량은 GB 단위 정수",
+      "registered": "{{name}} 풀을 등록했습니다.",
+      "updated": "{{name}} 풀을 수정했습니다.",
+      "deleted": "{{name}} 풀을 제거했습니다.",
+      "confirmDeleteTitle": "{{name}} 풀을 제거할까요?",
+      "confirmDeleteBody": "서버가 더 이상 계산되지 않습니다. 스토리지 자체는 건드리지 않습니다.",
+      "consequenceVolumes": "이미 그 위에 있는 볼륨은 StorageClass를 통해 계속 동작합니다.",
+      "consequenceGate": "다시 등록하기 전까지 용량 게이트와 대시보드가 이 서버를 잊습니다.",
+      "nameFromNode": "연결한 노드의 호스트명 — 콘솔 어디서나 이 이름으로 표시됩니다."
     }
   },
   "auth": {
@@ -2059,7 +2113,9 @@
     "lockedTag": "잠김",
     "lockedTitle": "잠금을 해제하기 전까지 새 세션은 이 볼륨을 마운트할 수 없습니다.",
     "quotaNoShrink": "현재 용량 {{current}}보다 줄일 수 없습니다. 스토리지는 늘리기만 됩니다. 줄이려면 작은 볼륨을 새로 만들어 데이터를 옮긴 뒤 이 볼륨을 삭제하세요.",
-    "quotaNoShrinkShort": "줄일 수 없음"
+    "quotaNoShrinkShort": "줄일 수 없음",
+    "storageLabel": "저장 위치",
+    "storageUnprovisioned": "아직 미생성 — 세션이 처음 마운트할 때 만들어집니다"
   },
   "wallet": {
     "amountHint": "크레딧 단위 · 관리자에게 사유와 함께 표시",

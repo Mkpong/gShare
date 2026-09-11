@@ -28,9 +28,11 @@ from app.core.errors import (
 )
 from app.db.base import get_db
 from app.db.models import (
+    Cluster,
     Project,
     Session,
     StorageFolder,
+    StoragePool,
     StorageVolume,
     User,
     VolumeMount,
@@ -282,6 +284,7 @@ async def list_volumes(
             (await db.execute(select(Project.id, Project.name).where(Project.id.in_(group_owner_ids)))).all()
         )
         owner_names.update(gnames)
+    placement = await _placement_of(db, vols)
     return [
         VolumeRead.model_validate(v).model_copy(
             update={
@@ -289,10 +292,36 @@ async def list_volumes(
                 "owner_id": _owner_key(v),
                 "owner_name": owner_names.get(_owner_key(v)),
                 "shared_count": int(shared_counts.get(v.id, 0)),
+                **placement.get(v.id, {}),
             }
         )
         for v in vols
     ]
+
+
+async def _placement_of(db: AsyncSession, vols: list[StorageVolume]) -> dict[str, dict]:
+    """Name where each volume's data lives: its cluster, and the registered pool for
+    (cluster, StorageClass) when there is one. One query per kind, not per volume."""
+    placed = [v for v in vols if v.cluster_id]
+    if not placed:
+        return {}
+    cluster_ids = {v.cluster_id for v in placed}
+    cluster_names = dict(
+        (await db.execute(select(Cluster.id, Cluster.name).where(Cluster.id.in_(cluster_ids)))).all()
+    )
+    pools = (await db.execute(
+        select(StoragePool.id, StoragePool.name, StoragePool.cluster_id, StoragePool.storage_class)
+        .where(StoragePool.cluster_id.in_(cluster_ids), StoragePool.deleted_at.is_(None))
+    )).all()
+    pool_by_key = {(cid, sc): (pid, pname) for pid, pname, cid, sc in pools}
+    out: dict[str, dict] = {}
+    for v in placed:
+        pid, pname = pool_by_key.get((v.cluster_id, v.storage_class), (None, None))
+        out[v.id] = {
+            "cluster_id": v.cluster_id, "cluster_name": cluster_names.get(v.cluster_id),
+            "storage_class": v.storage_class, "pool_id": pid, "pool_name": pname,
+        }
+    return out
 
 
 @router.get("/quota-usage")
@@ -472,9 +501,11 @@ async def get_volume(
             Session.status.notin_(("terminated", "error")),
         )
     )).all()
+    placement = await _placement_of(db, [vol])
     return VolumeRead.model_validate(vol).model_copy(
         update={
             "role": role, "owner_id": owner_key, "owner_name": owner_name,
+            **placement.get(vol.id, {}),
             "active_mounts": [
                 {"session_id": sid, "name": nm, "status": st,
                  "mount_path": mp, "mode": md, "owner_user_id": ou, "owner_name": on}

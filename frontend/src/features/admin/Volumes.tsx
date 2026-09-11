@@ -1,4 +1,5 @@
 import { useState } from 'react';
+import { useSearchParams } from 'react-router-dom';
 import { Select } from '@/components/Select';
 import { useUrlFilters, distinct } from '@/hooks/useUrlFilters';
 import { useProjects } from '@/api/hooks/useGroups';
@@ -16,20 +17,32 @@ import { humanizeError, asApiError } from '@/lib/errors';
 import { BlockGauge } from '@/components/BlockGauge';
 import { CopyButton } from '@/components/CopyButton';
 import { Database } from '@/components/icons';
+import { Tabs } from '@/components/Tabs';
+import { StoragePoolsPanel } from '@/features/admin/StoragePools';
 import { formatGiB, accessModeLabel } from '@/lib/format';
 
 type Vol = Record<string, unknown> & {
   id: string; name?: string; scope?: string; scope_id?: string; type?: string;
   access_mode?: string; quota_gb?: number; used_gb?: number; mount_locked?: boolean;
   owner_id?: string | null; owner_name?: string | null;
+  cluster_id?: string | null; cluster_name?: string | null; storage_class?: string | null;
+  pool_id?: string | null; pool_name?: string | null;
 };
 
 const VOL_FILTERS = ['scope', 'mode', 'type', 'group'] as const;
 
 // Fleet volume administration (/admin/volumes): every user's volumes with owner names — the
-// user-facing /data page shows only the caller's own world, super_admin included.
+// user-facing /data page shows only the caller's own world, super_admin included. The second tab
+// (?tab=pools) is the storage servers those volumes live on.
 export function AdminVolumes() {
   const { t } = useTranslation();
+  const [params, setParams] = useSearchParams();
+  const tab: 'volumes' | 'pools' = params.get('tab') === 'pools' ? 'pools' : 'volumes';
+  const setTab = (v: string) => setParams((p) => {
+    const next = new URLSearchParams(p);
+    if (v === 'volumes') next.delete('tab'); else next.set('tab', v);
+    return next;
+  }, { replace: true });
   const { data, isLoading, isError, error, refetch } = useAllVolumes();
   const del = useDeleteVolume();
   const confirm = useConfirm();
@@ -56,13 +69,14 @@ export function AdminVolumes() {
     if (group && !(v.scope === 'group' && v.scope_id === group)) return false;
     const q = table.query.trim().toLowerCase();
     if (!q) return true;
-    return [v.name, v.id, v.owner_name, v.scope_id, v.type].some((x) => String(x ?? '').toLowerCase().includes(q));
+    return [v.name, v.id, v.owner_name, v.scope_id, v.type, v.pool_name, v.cluster_name, v.storage_class].some((x) => String(x ?? '').toLowerCase().includes(q));
   });
   const rows = sortRows(matched, {
     name: (v: Vol) => v.name || v.id,
     owner: (v: Vol) => v.owner_name ?? v.scope_id ?? '',
     scope: (v: Vol) => v.scope ?? '',
     quota: (v: Vol) => (v.quota_gb ? (v.used_gb ?? 0) / v.quota_gb : 0),
+    storage: (v: Vol) => v.pool_name ?? v.cluster_name ?? '',
   }[table.sort ?? 'owner'] ?? null, table.dir);
   const pageRows = rows.slice((table.page - 1) * 25, table.page * 25);
 
@@ -137,6 +151,20 @@ export function AdminVolumes() {
       render: (v) => accessModeLabel(v.access_mode),
     },
     {
+      // Which storage server the data sits on: the pool for (cluster, StorageClass) once the
+      // PVC exists. A volume nothing has mounted yet has no PVC and therefore no place.
+      key: 'storage',
+      header: t('admin.volumes.colStorage'),
+      hideOnMobile: true,
+      sortBy: (v) => v.pool_name ?? v.cluster_name ?? '',
+      render: (v) => v.cluster_id ? (
+        <span className="inline-flex items-center gap-1.5 min-w-0" title={v.storage_class ?? undefined}>
+          <span className="truncate">{v.pool_name ?? <code className="font-mono text-xs">{v.storage_class ?? '-'}</code>}</span>
+          {v.cluster_name && <span className="gs-tag shrink-0">{v.cluster_name}</span>}
+        </span>
+      ) : <span className="text-muted text-xs">{t('volume.storageUnprovisioned')}</span>,
+    },
+    {
       key: 'quota',
       header: t('volume.colQuota'),
       align: 'right',
@@ -167,6 +195,17 @@ export function AdminVolumes() {
   return (
     <div>
       <PageHeader title={t('admin.volumes.title')} description={t('admin.volumes.subtitle')} />
+      <Tabs
+        ariaLabel={t('admin.volumes.title')}
+        items={[
+          { key: 'volumes', label: t('admin.volumes.tabVolumes'), count: all.length || undefined },
+          { key: 'pools', label: t('admin.volumes.tabPools') },
+        ]}
+        active={tab}
+        onChange={setTab}
+      />
+      {tab === 'pools' && <StoragePoolsPanel />}
+      {tab === 'volumes' && (<>
       <TableToolbar
         query={table.query}
         onQueryChange={table.setQuery}
@@ -217,6 +256,7 @@ export function AdminVolumes() {
         )}
       </div>
       <Pagination page={table.page} pageSize={25} total={rows.length} onPage={table.setPage} />
+      </>)}
     </div>
   );
 }
