@@ -22,5 +22,17 @@
   "sidebar.user.category.Sessions": {
     "message": "세션",
     "description": "The label for category 'Sessions' in sidebar 'user'"
+  },
+  "sidebar.user.category.Data and volumes": {
+    "message": "데이터와 볼륨",
+    "description": "The label for category 'Data and volumes' in sidebar 'user'"
+  },
+  "sidebar.user.category.Wallet and credits": {
+    "message": "지갑과 크레딧",
+    "description": "The label for category 'Wallet and credits' in sidebar 'user'"
+  },
+  "sidebar.user.category.Account": {
+    "message": "계정",
+    "description": "The label for category 'Account' in sidebar 'user'"
   }
 }

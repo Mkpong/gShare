@@ -21,7 +21,27 @@ const sidebars: SidebarsConfig = {
         'user/sessions-queue', 'user/sessions-end',
       ],
     },
-    'user/wallet', 'user/data', 'user/account',
+    {
+      type: 'category',
+      label: 'Data and volumes',
+      link: { type: 'doc', id: 'user/data' },
+      collapsed: false,
+      items: ['user/data-create', 'user/data-mount', 'user/data-share', 'user/data-manage'],
+    },
+    {
+      type: 'category',
+      label: 'Wallet and credits',
+      link: { type: 'doc', id: 'user/wallet' },
+      collapsed: false,
+      items: ['user/wallet-ledger', 'user/wallet-request'],
+    },
+    {
+      type: 'category',
+      label: 'Account',
+      link: { type: 'doc', id: 'user/account' },
+      collapsed: false,
+      items: ['user/account-password', 'user/account-limits', 'user/account-notifications'],
+    },
   ],
 
   // Administrators. Tenant administration is what an organization or group administrator does

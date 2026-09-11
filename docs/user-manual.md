@@ -17,9 +17,18 @@ screens you use to run sessions, keep data, and manage credits.
   - [Managing a session](./user/sessions-manage.md) — pause, resume, restart, live usage.
   - [Waiting in the queue](./user/sessions-queue.md) — why a session waits and what to do.
   - [Ending a session](./user/sessions-end.md) — terminating, billing, what survives.
-- [Wallet and credits](./user/wallet.md) — how billing works, requesting credits.
-- [Data and volumes](./user/data.md) — persistent storage, mounting, sharing.
-- [Account](./user/account.md) — membership, password, notifications.
+- [Data and volumes](./user/data.md) — persistent storage: scopes, types, the list.
+  - [Creating a volume](./user/data-create.md) — scope, type, access mode, size.
+  - [Using a volume in a session](./user/data-mount.md) — mounting, paths, who has it open.
+  - [Sharing a volume](./user/data-share.md) — granting, revoking, leaving a share.
+  - [Resizing, locking, deleting](./user/data-manage.md) — quota, locks, safe deletion.
+- [Wallet and credits](./user/wallet.md) — how billing works: hold, consume, settle.
+  - [Transaction history](./user/wallet-ledger.md) — every movement in the ledger.
+  - [Requesting credits](./user/wallet-request.md) — asking your group, and tracking it.
+- [Account](./user/account.md) — profile and membership.
+  - [Password](./user/account-password.md) — changing it, first sign-in, resets.
+  - [My limits](./user/account-limits.md) — the resource policy, and asking for more.
+  - [Notifications](./user/account-notifications.md) — the bell and its history.
 
 Administrative features — organizations, groups, users, credits, clusters, monitoring — are in
 the [Administrator guide](./admin-manual.md).

@@ -1,50 +1,67 @@
 ---
-sidebar_position: 10
+sidebar_position: 9
 title: Data and volumes
 ---
 
 # Data and volumes
 
 A **volume** is persistent storage that outlives any single session. Create one, mount it into
-sessions at a path such as `/data`, and the files are there the next time — on whichever node the
-session lands.
+sessions at a path such as `/data`, and the files are still there next time — on whichever node
+the session lands.
+
+| Page | What it covers |
+|---|---|
+| [Creating a volume](./data-create.md) | Name, owner scope, type, access mode, size |
+| [Using a volume in a session](./data-mount.md) | Mounting, paths, seeing who has it open |
+| [Sharing a volume](./data-share.md) | Giving access, read-only or read/write, revoking |
+| [Resizing, locking, deleting](./data-manage.md) | Growing the quota, locking, safe deletion |
+
+:::tip Volumes are free
+Credits are charged for GPU session time only. What limits storage is the **quota** in your
+[resource policy](../admin/resources.md), shown on every volume, not your balance.
+:::
+
+## The volume list
 
 ![Volumes](/img/screens/data.png)
 
-:::tip Volumes are free
-Credits are charged for GPU session time only. What limits storage is the **quota** your
-administrator's policy grants you, shown on each volume, not your balance.
-:::
+Everything you own, plus everything shared with you.
 
-## Creating a volume
+![A volume row](/img/screens/data-row.png)
 
-**New volume** asks for a name, the owning scope (personal or one of your groups), and the
-capacity. The form checks the capacity against your policy limit before you submit. The storage
-itself is provisioned lazily: the first session that mounts the volume creates it.
+| Column | Meaning |
+|---|---|
+| **Volume** | The name, with **locked** and **shared** tags where they apply |
+| **Scope** | *Personal (my account)*, a group, *everyone*, or *shared · \<owner\>* for one shared with you |
+| **Access mode** | read/write (RWX) or read-only (ROX) — the volume's own mode, which caps how any session may mount it |
+| **Quota** | Used against granted, with a gauge |
+| **Actions** | Share, change quota, lock, delete — or **leave share** on a volume someone shared with you |
 
-## Mounting
+Clicking a row expands it to show which sessions currently have it mounted; see
+[Using a volume in a session](./data-mount.md#who-has-it-open).
 
-Volumes are mounted from the [session wizard](./sessions-create.md): pick the volume,
-the mode (read-only or read-write), and the mount path. A session's detail page lists what it has
-mounted.
+## Scopes
 
-A volume that is mounted by a running session cannot be deleted; terminate the session first.
-The quota of a volume can be raised while it is in use but never shrunk below what is stored.
+| Scope | Who can mount it | Created by |
+|---|---|---|
+| **Personal** | You, plus anyone you [share](./data-share.md) it with | Anyone |
+| **Group** | Every member of that group, automatically | Group administrators |
+| **Everyone** | Every signed-in user | Platform administrators |
 
-## Sharing
+## Types
 
-Share a volume you own with another user, **read-only** or **read-write**. The recipient can
-only mount it in the mode you granted, and can never delete or re-share it. Revoking access takes
-effect immediately.
+The type is a label that says what the volume is for; it does not change how the storage works.
 
-## Locking and deleting
-
-**Lock** a volume to refuse any new mount — useful while you reorganise data or before handing a
-dataset over. **Delete** asks you to type the volume's name, because the data is not recoverable
-once the grace period your site configures has passed.
+| Type | For |
+|---|---|
+| **Dataset** | Training data — usually shared read-only across several sessions |
+| **Personal workspace** | Your own long-lived working files, kept across sessions |
+| **Group share** | A space the whole group reads and writes |
+| **Scratch** | Temporary fast space; may be cleaned up |
 
 ## Where the data lives
 
-Volumes are backed by the storage pool your site registered (see
-[Storage](../operations/storage.md)). A volume is created on one cluster's storage and stays
-there; if your site runs several clusters, sessions that mount it are placed on that cluster.
+Volumes sit on the storage pool your site registered (see
+[Operations → Storage](../operations/storage.md)). A volume is created on one cluster's storage
+and stays there, so on a multi-cluster installation a session that mounts it is placed on that
+cluster.

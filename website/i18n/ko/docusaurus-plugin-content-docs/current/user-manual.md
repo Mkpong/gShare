@@ -17,9 +17,18 @@ gShare는 여러 사람이 하나의 Kubernetes GPU 클러스터를 **공유(fra
   - [세션 관리](./user/sessions-manage.md) — 일시정지·재개·재시작, 실시간 사용량
   - [대기열에서 기다리기](./user/sessions-queue.md) — 왜 기다리는지, 무엇을 할지
   - [세션 종료](./user/sessions-end.md) — 종료, 과금, 남는 것
-- [지갑과 크레딧](./user/wallet.md) — 과금 방식, 크레딧 요청
-- [데이터와 볼륨](./user/data.md) — 영구 스토리지, 마운트, 공유
-- [계정](./user/account.md) — 소속, 비밀번호, 알림
+- [데이터와 볼륨](./user/data.md) — 영구 스토리지: 범위, 종류, 목록
+  - [볼륨 만들기](./user/data-create.md) — 범위, 종류, 접근 모드, 용량
+  - [세션에서 쓰기](./user/data-mount.md) — 마운트, 경로, 지금 누가 쓰는지
+  - [볼륨 공유](./user/data-share.md) — 권한 주기, 해제, 공유 나가기
+  - [용량 변경·잠금·삭제](./user/data-manage.md) — 쿼터, 잠금, 안전한 삭제
+- [지갑과 크레딧](./user/wallet.md) — 예약·사용·정산으로 이어지는 과금 방식
+  - [거래 내역](./user/wallet-ledger.md) — 원장에 남는 모든 이동
+  - [크레딧 요청](./user/wallet-request.md) — 부서에 요청하고 진행 확인하기
+- [계정](./user/account.md) — 프로필과 소속
+  - [비밀번호](./user/account-password.md) — 변경, 첫 로그인, 초기화
+  - [내 한도](./user/account-limits.md) — 자원 정책과 증액 요청
+  - [알림](./user/account-notifications.md) — 종 아이콘과 내역
 
 조직·부서·사용자·크레딧·클러스터·관제 등 관리 기능은 [관리자 가이드](./admin-manual.md)에 있습니다.
 

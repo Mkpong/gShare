@@ -1,26 +1,37 @@
 ---
-sidebar_position: 11
+sidebar_position: 17
 title: Account
 ---
 
 # Account
 
+**My page** is your profile, the limits you work under, and the record of what the platform has
+told you.
+
+| Page | What it covers |
+|---|---|
+| [Password](./account-password.md) | Changing it, first sign-in, what to do when it is lost |
+| [My limits](./account-limits.md) | The resource policy that applies to you, and asking for more |
+| [Notifications](./account-notifications.md) | The bell, and the history behind it |
+
 ![Account](/img/screens/account.png)
 
-The account page shows the organization and group you belong to and the role you hold in each.
-Membership is managed by your administrators and is read-only here; your **display name** is
-yours to edit.
+## Profile
 
-## Changing your password
+![Profile](/img/screens/account-profile.png)
 
-![Change password](/img/screens/account-password.png)
+| Field | |
+|---|---|
+| **Organization** / **Group** | Read-only. Membership is set by your administrators — ask them if it is wrong; it decides whose credits you draw on and which policy applies |
+| **Display name** | Yours to edit. It is what administrators see next to your sessions |
+| **Email** | Your sign-in identity. Only an administrator can change it |
+| **User id** | The `usr_…` identifier, with a copy button. Quote it in a support ticket |
 
-**Change password** asks for the current password and the new one. If you have forgotten the
-current password, an administrator can reset it; you will then be asked to choose a new one at
-your next sign-in.
+**Save** is disabled until something actually changes, and says so.
 
-## Notifications
+## What is not here
 
-The bell in the top bar collects what happened while you were away: a session that was queued
-and has started, one that was paused for idleness or ended by an administrator, an approved
-credit request, a volume shared with you. Each entry links to the object it is about.
+- **Your sessions, volumes and credits** live on their own screens ([Sessions](./sessions.md),
+  [Data](./data.md), [Wallet](./wallet.md)).
+- **Language and theme** are in the top bar and are per-browser, not account settings.
+- **Deleting your own account** is not possible from the console; an administrator does it.
