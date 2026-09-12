@@ -7,6 +7,7 @@ import pytest
 from app.cluster.crd import GShareSessionCRD, _to_crd_spec
 from app.core import ids
 from app.db.models import StorageVolume
+from tests.fkseed import seed
 
 
 def _spec_with(vols):
@@ -41,8 +42,7 @@ async def test_enrich_volumes_reads_storage_volume(db):
         id=ids.new("volume"), scope="user", scope_id=ids.new("user"), type="scratch",
         name="d", access_mode="RWO", quota_gb=7,
     )
-    async with db.begin():
-        db.add(vol)
+    await seed(db, [vol])
     crd = GShareSessionCRD(db)
     out = await crd._enrich_volumes([
         {"volume_id": vol.id, "mount_path": "/data", "mode": "rw"},

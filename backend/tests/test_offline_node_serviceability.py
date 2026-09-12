@@ -13,6 +13,7 @@ from app.api.schemas.session import SessionCreate
 from app.core import ids
 from app.db.models import GpuDevice, GpuNode, Offering, Session
 from app.domain.scheduler import SchedulerService, Unserviceable
+from tests.fkseed import seed
 
 
 def _device(node_id: str, model: str) -> GpuDevice:
@@ -27,8 +28,7 @@ async def _fixture(db, node_status: str) -> tuple[Session, SessionCreate]:
     node = GpuNode(id=ids.new("node"), cluster_id="clu_t", hostname="gpu3", status=node_status)
     offering = Offering(id=ids.new("offering"), name="PRO 5000", resource_class="gpu",
                         gpu_model="NVIDIA RTX PRO 5000 Blackwell", gpu_mem_mb=49152)
-    async with db.begin():
-        db.add_all([node, offering, _device(node.id, offering.gpu_model)])
+    await seed(db, [node, offering, _device(node.id, offering.gpu_model)])
     sess = Session(
         id=ids.new("session"), owner_user_id="usr_t", cluster_id="clu_t", offering_id=offering.id,
         image_id="img_t", resource_class="gpu", mode="fractional", status="pending",

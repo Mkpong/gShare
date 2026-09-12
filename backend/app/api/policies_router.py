@@ -323,6 +323,11 @@ async def create_resource_request(
         raise _Unprocessable("targets must be positive")
     if not body.note.strip():
         raise _Unprocessable("note is required")
+    # The group named on a request is the caller's own: it lands in that group's audit trail and
+    # notifications, so a member must not be able to file under a group they are not in.
+    if body.group_id and "super_admin" not in principal.global_roles \
+            and body.group_id not in principal.memberships:
+        raise Forbidden("not permitted: not a member of that group")
     r = ResourceRequest(
         id=ids.new("resourcerequest"), user_id=principal.user_id, group_id=body.group_id,
         cpu=body.cpu, mem_gb=body.mem_gb, storage_gb=body.storage_gb,

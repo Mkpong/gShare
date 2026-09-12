@@ -454,9 +454,45 @@ async def sessions_monitor_events(
     parameterized route captures ``/sessions/events`` (session_id="events") and returns 404.
     """
     principal.require(action="session.monitor")
+    # ``session.monitor`` is a rank check; the stream itself is fleet-wide (session:events:*), so
+    # every event is gated on the same owner predicate the monitoring list uses. Otherwise a
+    # group_admin of one organization watched every other tenant's session ids and phase changes.
     return EventSourceResponse(
-        _sse_events([_QUEUE_CHANNEL], [_MONITOR_PATTERN], request)
+        _sse_events([_QUEUE_CHANNEL], [_MONITOR_PATTERN], request,
+                    allow=_monitor_event_filter(principal))
     )
+
+
+def _monitor_event_filter(principal: Principal):
+    """Per-event tenant gate for the monitor stream: None for a super_admin (nothing to hide),
+    otherwise a coroutine deciding by the event's session owner, memoised per session id since a
+    session never changes owner."""
+    if managed_owner_filter(principal, "managed") is None:
+        return None
+    decided: dict[str, bool] = {}
+
+    async def _allow(msg: dict) -> bool:
+        channel = msg.get("channel")
+        if isinstance(channel, bytes):
+            channel = channel.decode()
+        sid: str | None = None
+        if isinstance(channel, str) and channel.startswith("session:events:"):
+            sid = channel.removeprefix("session:events:")
+        elif channel == _QUEUE_CHANNEL:
+            try:
+                sid = (json.loads(msg.get("data") or "{}") or {}).get("session_id")
+            except (ValueError, TypeError):
+                sid = None
+        if not sid:
+            return False
+        if sid not in decided:
+            if len(decided) > 4096:
+                decided.clear()
+            async with get_sessionmaker()() as db:
+                decided[sid] = await session_is_managed(db, principal, sid)
+        return decided[sid]
+
+    return _allow
 
 
 @router.get("/sessions/gpu-availability")
@@ -985,12 +1021,13 @@ async def restore_checkpoint(
 
 
 async def _sse_events(channels: list[str] | None, patterns: list[str] | None,
-                      request: Request):
+                      request: Request, allow=None):
     """Generic SSE generator over Redis pub/sub with periodic heartbeat.
 
     Subscribes to the given channel(s)/pattern(s), yields each published message as an SSE event,
     and emits a heartbeat every _HEARTBEAT_SEC seconds. Terminates cleanly on client disconnect or
-    cancellation, always unsubscribing/closing the pubsub.
+    cancellation, always unsubscribing/closing the pubsub. ``allow(msg)`` — when given — is
+    awaited per message and a False verdict drops the event (tenant scoping of a shared pattern).
     """
     r = get_redis()
     pubsub = r.pubsub()
@@ -1019,6 +1056,8 @@ async def _sse_events(channels: list[str] | None, patterns: list[str] | None,
                 continue
             data = msg.get("data")
             if not isinstance(data, str):
+                continue
+            if allow is not None and not await allow(msg):
                 continue
             event_type = "message"
             payload = data

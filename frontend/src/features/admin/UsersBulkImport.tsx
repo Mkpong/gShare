@@ -28,15 +28,25 @@ export interface ParsedRow extends BulkUserRow {
   problem: 'invalid_email' | 'duplicate' | 'missing_name' | null;
 }
 
+// A header row is recognised by its first cell naming the column ("email", "E-Mail", "email
+// address"), not merely by not being an address: a data row whose address has a typo must show up
+// in the preview as invalid, not silently vanish.
+const isHeaderCell = (cell: string) => !cell.includes('@') && /mail/i.test(cell);
+
 export function parseCsv(text: string): ParsedRow[] {
-  const parsed = Papa.parse<string[]>(text.trim(), { skipEmptyLines: true });
+  // Empty lines are skipped here rather than by the parser, so `line` stays the file's own line
+  // number (what the admin sees in their editor) instead of an index that drifts past each gap.
+  const parsed = Papa.parse<string[]>(text.replace(/^\uFEFF/, ''));
   const seen = new Set<string>();
   const rows: ParsedRow[] = [];
+  let first = true;
   parsed.data.forEach((cols, i) => {
+    if (cols.every((c) => !c.trim())) return;
     const [rawEmail = '', rawName = ''] = cols;
     const email = rawEmail.trim().toLowerCase();
-    // Tolerate a header row: skip a first line whose email column does not look like an email.
-    if (i === 0 && !emailOk(email)) return;
+    const isFirst = first;
+    first = false;
+    if (isFirst && isHeaderCell(email)) return;
     const name = rawName.trim();
     let problem: ParsedRow['problem'] = null;
     if (!emailOk(email)) problem = 'invalid_email';

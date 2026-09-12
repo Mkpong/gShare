@@ -17,12 +17,14 @@ from app.core import ids
 from app.core.config import settings
 from app.db.models import Cluster, GpuNode, StoragePool, StoragePoolShare
 from app.domain.storage_pools import GB, pool_bound_gb, pool_capacity_gb, usable_pools
+from tests.fkseed import seed
 
 
 async def _cluster(db, cid: str) -> None:
-    async with db.begin():
-        db.add(Cluster(id=cid, name=cid, role="primary", api_server="https://x", runtime="containerd",
-                       status="connected", kubeconfig_secret_ref=""))
+    await seed(db, [
+        Cluster(id=cid, name=cid, role="primary", api_server="https://x", runtime="containerd",
+                   status="connected", kubeconfig_secret_ref=""),
+    ])
 
 
 async def _pool(db, *, cluster_id: str, name: str, scope: str = "all",
@@ -32,8 +34,7 @@ async def _pool(db, *, cluster_id: str, name: str, scope: str = "all",
                     storage_class=storage_class, share_scope=scope,
                     capacity_bytes=capacity_bytes, manual_capacity_gb=manual_gb,
                     capacity_source="csi" if capacity_bytes else ("manual" if manual_gb else None))
-    async with db.begin():
-        db.add(p)
+    await seed(db, [p])
     return p
 
 
@@ -48,8 +49,9 @@ async def test_a_pool_serves_its_own_cluster_and_shared_ones(db):
     assert {p.id for p in await usable_pools(db, "clu_b")} == {everyone.id}
     await db.commit()   # close the read transaction before the write below opens its own
     # Sharing A's restricted pool with B explicitly brings it into B's view.
-    async with db.begin():
-        db.add(StoragePoolShare(id=ids.new("storage_pool_share"), pool_id=own.id, cluster_id="clu_b"))
+    await seed(db, [
+        StoragePoolShare(id=ids.new("storage_pool_share"), pool_id=own.id, cluster_id="clu_b"),
+    ])
     assert {p.id for p in await usable_pools(db, "clu_b")} == {own.id, everyone.id}
 
 
@@ -74,9 +76,10 @@ async def test_a_measurement_outranks_a_typed_in_figure(db):
 @pytest.mark.asyncio
 async def test_the_configured_figure_beats_the_node_disk(db, monkeypatch):
     """Both are stand-ins, but one is a statement about the pool and the other is a system drive."""
-    async with db.begin():
-        db.add(GpuNode(id=ids.new("node"), cluster_id="clu_a", hostname="store", status="ready",
-                       role="storage", disk=2062))
+    await seed(db, [
+        GpuNode(id=ids.new("node"), cluster_id="clu_a", hostname="store", status="ready",
+                   role="storage", disk=2062),
+    ])
     monkeypatch.setattr(settings, "STORAGE_POOL_CAPACITY_GB", 1424)
     assert await pool_bound_gb(db) == (1424, "manual")
 
@@ -168,8 +171,7 @@ async def test_volume_list_names_the_pool_its_data_lives_on(db):
                            access_mode="RWX", quota_gb=5, used_gb=0, cluster_id="clu_p", storage_class="gshare-data")
     fresh = StorageVolume(id=ids.new("volume"), scope="user", scope_id="u_1", type="home", name="new",
                           access_mode="RWX", quota_gb=5, used_gb=0)
-    async with db.begin():
-        db.add_all([placed, fresh])
+    await seed(db, [placed, fresh])
     rows = await list_volumes(scope=None, scope_id=None, type=None, access_mode=None, all_scopes=True,
                               page=Pagination(1, 50), principal=Principal(user_id="root", global_roles={"super_admin"}), db=db)
     by = {r.id: r for r in rows}
@@ -186,8 +188,7 @@ async def test_a_pool_with_a_node_is_named_after_the_hostname(db):
     from app.db.models import GpuNode
     await _cluster(db, "clu_n")
     node = GpuNode(id=ids.new("node"), cluster_id="clu_n", hostname="nas-01", status="ready")
-    async with db.begin():
-        db.add(node)
+    await seed(db, [node])
     root = Principal(user_id="root", global_roles={"super_admin"})
     made = await create_pool(PoolCreate(name="nickname", cluster_id="clu_n", storage_class="gshare-data", node_id=node.id),
                              principal=root, db=db)

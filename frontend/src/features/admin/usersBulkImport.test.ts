@@ -23,6 +23,30 @@ describe('parseCsv', () => {
     const rows = parseCsv('a@u.ac.kr,"Kim, Cheolsu"');
     expect(rows[0]).toMatchObject({ name: 'Kim, Cheolsu', problem: null });
   });
+
+  it('flags a first data row with a bad address instead of dropping it as a header', () => {
+    const rows = parseCsv('kim-at-u.ac.kr,Kim\nb@u.ac.kr,Lee');
+    expect(rows.map((r) => [r.line, r.problem])).toEqual([[1, 'invalid_email'], [2, null]]);
+  });
+
+  it('recognises common header spellings', () => {
+    for (const header of ['email,name', 'Email,Name', 'E-Mail,Full name', 'email address,name']) {
+      expect(parseCsv(`${header}\na@u.ac.kr,Kim`).map((r) => r.email), header).toEqual(['a@u.ac.kr']);
+    }
+  });
+
+  it('strips a UTF-8 BOM, skips blank lines and keeps file line numbers', () => {
+    const rows = parseCsv('\uFEFFemail,name\r\na@u.ac.kr,Kim\r\n\r\n   \r\nb@u.ac.kr,Lee\r\n');
+    expect(rows.map((r) => [r.line, r.email, r.problem])).toEqual([
+      [2, 'a@u.ac.kr', null],
+      [5, 'b@u.ac.kr', null],
+    ]);
+  });
+
+  it('treats the same address in different case as a duplicate', () => {
+    const rows = parseCsv('A@u.ac.kr,Kim\na@U.AC.KR,Kim');
+    expect(rows[1].problem).toBe('duplicate');
+  });
 });
 
 describe('credentialsCsv', () => {

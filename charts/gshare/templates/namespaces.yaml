@@ -1,6 +1,8 @@
 {{- if .Values.createNamespaces }}
 # Namespaces and their Pod Security Admission labels.
-# gshare-sessions enforces `restricted`; gshare-infra is `privileged`, for privileged DaemonSets only.
+# gshare-sessions enforces `baseline` and audits/warns at `restricted` (see the comment on that
+# namespace: a policy-granted privileged session runs as root, which restricted rejects);
+# gshare-infra is `privileged`, for the privileged DaemonSets only.
 apiVersion: v1
 kind: Namespace
 metadata:

@@ -7,6 +7,7 @@ import pytest
 
 from app.cluster.crd import GShareSessionCRD
 from app.db.models import Cluster
+from tests.fkseed import seed
 
 
 class _FakeApi:
@@ -19,8 +20,9 @@ class _FakeApi:
 
 @pytest.mark.asyncio
 async def test_resume_patch_is_class_aware_and_stamps_run_start(db, monkeypatch):
-    async with db.begin():
-        db.add(Cluster(id="clu_t", name="t", api_server="https://t:6443", runtime="k8s", kubeconfig_secret_ref="sec"))
+    await seed(db, [
+        Cluster(id="clu_t", name="t", api_server="https://t:6443", runtime="k8s", kubeconfig_secret_ref="sec"),
+    ])
     api = _FakeApi()
 
     @asynccontextmanager

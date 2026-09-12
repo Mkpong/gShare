@@ -8,6 +8,7 @@ from app.api.schemas.volume import VolumeCreate
 from app.api.volumes_router import _implicit_group_role, create_volume, list_volumes
 from app.auth.rbac import Principal
 from app.core.errors import Forbidden
+from tests.fkseed import seed, user_row
 
 
 def _super() -> Principal:
@@ -16,6 +17,11 @@ def _super() -> Principal:
 
 def _member() -> Principal:
     return Principal(user_id="usr_m", memberships={"grp_x": "member"})
+
+
+async def _principals(db) -> None:
+    """create_volume stamps volume_permission.user_id, so the callers need user rows."""
+    await seed(db, [user_row("usr_admin"), user_row("usr_m")])
 
 
 def _body(**kw) -> VolumeCreate:
@@ -27,6 +33,7 @@ def _body(**kw) -> VolumeCreate:
 
 @pytest.mark.asyncio
 async def test_super_admin_creates_a_shared_volume_everyone_can_read(db):
+    await _principals(db)
     vol = await create_volume(_body(), _super(), db)
     assert vol.scope == "global" and vol.scope_id == "global" and vol.access_mode == "ROX"
     # a plain member sees it in their own list, read-only
@@ -39,6 +46,7 @@ async def test_super_admin_creates_a_shared_volume_everyone_can_read(db):
 
 @pytest.mark.asyncio
 async def test_rwx_shared_volume_is_writable_by_members(db):
+    await _principals(db)
     vol = await create_volume(_body(access_mode="RWX", name="scratch-all"), _super(), db)
     assert _implicit_group_role(_member(), vol) == "rw"
 

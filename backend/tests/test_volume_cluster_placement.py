@@ -30,11 +30,9 @@ async def _volume_used_on(db, cluster_id: str) -> str:
     sess = SessionModel(id=ids.new("session"), owner_user_id="usr_1", cluster_id=cluster_id,
                         offering_id="off_1", image_id="img_1", resource_class="gpu",
                         mode="fractional", status="terminated")
-    db.add_all([vol, sess])
-    await db.flush()
-    db.add(VolumeMount(id=ids.new("volume_mount"), volume_id=vol.id, session_id=sess.id,
-                       mount_path="/home/coder", mode="rw"))
-    await db.commit()
+    await seed(db, [vol, sess,
+                    VolumeMount(id=ids.new("volume_mount"), volume_id=vol.id, session_id=sess.id,
+                                mount_path="/home/coder", mode="rw")])
     return vol.id
 
 
@@ -60,8 +58,7 @@ async def test_an_unused_volume_does_not_constrain_placement(db):
     """A volume nobody has mounted has no data anywhere yet; it may land on any cluster."""
     vol = StorageVolume(id=ids.new("volume"), scope="user", scope_id="usr_1", type="home",
                         access_mode="RWO", quota_gb=10, used_gb=0)
-    db.add(vol)
-    await db.commit()
+    await seed(db, [vol])
     svc = SchedulerService(db)
     assert await svc._clusters_holding_volumes(_Req([vol.id])) is None
 
@@ -83,10 +80,12 @@ from app.api.schemas.session import SessionCreate, VolumeMountSpec  # noqa: E402
 from app.auth.rbac import Principal  # noqa: E402
 from app.core.errors import VolumeOnAnotherCluster  # noqa: E402
 from app.db.models import CreditWallet, GpuNode, Image, Offering, VolumePermission  # noqa: E402
+from tests.fkseed import seed, user_row  # noqa: E402
 
 
 async def _cpu_fixture(db):
-    user_id = ids.new("user")
+    user = user_row()
+    user_id = user.id
     offering = Offering(id=ids.new("offering"), name="cpu", resource_class="cpu",
                         credit_per_hour=Decimal("0"), cpu=2, mem_gb=4, disk_gb=10)
     image = Image(id=ids.new("image"), name="ubuntu")
@@ -96,11 +95,9 @@ async def _cpu_fixture(db):
                         access_mode="RWO", quota_gb=10, used_gb=0, owner_id=user_id)
     node = GpuNode(id=ids.new("node"), cluster_id="clu_a", hostname="cpu0", status="ready",
                    role="cpu", cpu=8, mem=32, disk=200)
-    async with db.begin():
-        db.add_all([offering, image, wallet, vol, node])
-        await db.flush()
-        db.add(VolumePermission(id=ids.new("volume_permission"), volume_id=vol.id,
-                                user_id=user_id, role="owner"))
+    await seed(db, [user, offering, image, wallet, vol, node,
+                    VolumePermission(id=ids.new("volume_permission"), volume_id=vol.id,
+                                     user_id=user_id, role="owner")])
     return user_id, offering, image, vol
 
 
@@ -126,11 +123,9 @@ async def test_pinned_cluster_refuses_a_volume_whose_data_is_elsewhere(db, fake_
     other = SessionModel(id=ids.new("session"), owner_user_id=user_id, cluster_id="clu_b",
                          offering_id=offering.id, image_id=image.id, resource_class="cpu",
                          status="terminated")
-    async with db.begin():
-        db.add(other)
-        await db.flush()
-        db.add(VolumeMount(id=ids.new("volume_mount"), volume_id=vol.id, session_id=other.id,
-                           mount_path="/home/coder", mode="rw"))
+    await seed(db, [other,
+                    VolumeMount(id=ids.new("volume_mount"), volume_id=vol.id, session_id=other.id,
+                                mount_path="/home/coder", mode="rw")])
     svc = SchedulerService(db)
     svc.handoff = fake_handoff
     with pytest.raises(VolumeOnAnotherCluster):

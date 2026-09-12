@@ -13,13 +13,16 @@ class OperatorStatusEvent(BaseModel):
     node_name: str | None = None        # k8s node the pod landed on (pod.spec.nodeName)
     yield_state: str | None = None      # "Yielded" if operator did an in-place yield (not cold)
     pod_ref: str | None = None          # "namespace/name"
-    used_mem_mb: int | None = None      # measured occupancy (inventory reconciliation)
+    used_mem_mb: int | None = None      # reported, unused: device occupancy comes from the
+                                        # inventory callback, never from a session's status
     message: str | None = None
     trace_id: str | None = None         # W3C traceparent trace-id
     # Heartbeat facts (phase=heartbeat, also carried on phase changes when the pod exists).
     restart_count: int | None = None    # kubelet container restartCount
     generation: int | None = None       # CR generation the report describes
     container_state: str | None = None  # Running|Waiting:<reason>|Terminated:<reason>
+    cluster_id: str | None = None       # the reporting operator's cluster; cross-checked against
+                                        # its token (None from operators older than this field)
     ts: datetime                        # event time (UTC)
 
 
@@ -83,7 +86,7 @@ class OperatorAuditEvent(BaseModel):
     actor: str                          # "operator:clu_<id>"
     action: str                         # node.cordon|node.drain|pod.delete|session.force_terminate
     target: str                         # "gpu-node-3" | "gshare-sessions/ses-..-pod"
-    result: str                         # ok|failed
+    result: str                         # ok | failed (operators emit only "ok" today)
     detail: dict | None = None
     trace_id: str | None = None
     ts: datetime

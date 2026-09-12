@@ -1766,7 +1766,21 @@
     "volume_locked": "The volume is locked by its owner and takes no new mounts.",
     "volume_shrink_not_allowed": "A volume quota cannot be reduced. Create a smaller volume, move the data, then delete this one.",
     "topup_request_org_only": "Top-up requests are raised by an organization administrator on the organization wallet. Departments ask their organization; users ask their department.",
-    "privileged_not_allowed": "Your resource policy does not grant privileged sessions. Ask an administrator."
+    "privileged_not_allowed": "Your resource policy does not grant privileged sessions. Ask an administrator.",
+    "bad_request": "The request could not be understood. Refresh and try again.",
+    "method_not_allowed": "That action is not supported here. Refresh and try again.",
+    "payload_too_large": "The upload is too large.",
+    "unsupported_media_type": "The file type is not supported.",
+    "http_error": "The request failed. Try again in a moment.",
+    "build_handoff_failed": "The image build could not be handed to the cluster. Try again in a moment.",
+    "no_cluster": "No cluster is available to build images right now.",
+    "node_busy": "This node still carries live sessions. Drain it first, then try again.",
+    "pool_in_use": "This pool still has nodes or grants attached. Remove them first.",
+    "storage_capacity_exceeded": "The storage pool does not have enough free space for that size.",
+    "volume_on_another_cluster": "The selected volume's data lives on a different cluster. Pick that cluster, or a volume from this one.",
+    "cluster_credential_missing": "The cluster has no credential registered, so nothing can be scheduled on it. Ask an administrator.",
+    "cluster_credential_unavailable": "The cluster credential could not be read. Ask an administrator.",
+    "monitoring_unavailable": "The metrics backend is unreachable right now. Try again in a moment."
   },
   "nav": {
     "admin": {

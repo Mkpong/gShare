@@ -10,6 +10,7 @@ from app.api.dashboard_router import dashboard_summary
 from app.auth.rbac import Principal
 from app.core import ids
 from app.db.models import ResourcePolicy, StorageVolume
+from tests.fkseed import seed
 
 OWNER = "usr_stor01"
 P = Principal(user_id=OWNER, global_role="member", global_roles={"member"})
@@ -32,9 +33,8 @@ async def test_storage_counts_only_the_callers_live_volumes(db):
     await db.commit()
     from datetime import UTC, datetime
     gone.deleted_at = datetime.now(UTC)
-    db.add(ResourcePolicy(id=ids.new("policy"), scope="global", scope_id="*",
-                          limits={"volume_gb": 200}))
-    await db.commit()
+    await seed(db, [ResourcePolicy(id=ids.new("policy"), scope="global", scope_id="*",
+                          limits={"volume_gb": 200})])
 
     out = await dashboard_summary(scope="mine", principal=P, db=db)
     assert out["storage"] == {

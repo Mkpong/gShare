@@ -26,7 +26,7 @@ import { Timestamp } from '@/components/Timestamp';
 import { useApproveTopupRequest, useRejectTopupRequest, useTopupRequests, useCreateTopupRequest } from '@/api/hooks/useBilling';
 import { StatusPill } from '@/components/StatusPill';
 import { ReasonPopover } from '@/components/ReasonPopover';
-import { reqStatusLabel } from '@/lib/format';
+import { reqStatusLabel, formatCredit } from '@/lib/format';
 import { Check } from '@/components/icons';
 
 // Credit management: one "pool to children" table, shaped by the caller's role.
@@ -35,7 +35,7 @@ import { Check } from '@/components/icons';
 //  - group_admin: the pool is their group, children are its members
 // Each child row allocates, reclaims, and sets a refill inline; incoming requests sit underneath.
 
-const C = (v: string | number | undefined) => `${Number(v ?? 0).toLocaleString()} C`;
+const C = (v: string | number | undefined) => `${formatCredit(Number(v ?? 0))} C`;
 
 // Turn a refill-over-ceiling failure into something a person can act on.
 function grantErrorMsg(e: unknown): string {

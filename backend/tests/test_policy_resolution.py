@@ -20,6 +20,7 @@ from app.db.models import (
 )
 from app.domain.policy import resolve_effective_policy
 from app.domain.scheduler import SchedulerService
+from tests.fkseed import seed, user_row
 
 
 @pytest.mark.asyncio
@@ -29,24 +30,23 @@ async def test_per_field_merge_user_overrides_only_what_it_sets(db):
     org = Organization(id=ids.new("org"), name="o")
     group = Project(id=ids.new("group"), org_id=org.id, name="g")
     user_id = ids.new("user")
-    async with db.begin():
-        db.add_all([
-            org, group,
-            ResourcePolicy(
-                id=ids.new("policy"), scope="user", scope_id=user_id,
-                max_concurrent=1, limits={},
-            ),
-            ResourcePolicy(
-                id=ids.new("policy"), scope="group", scope_id=group.id,
-                max_concurrent=4, max_runtime=600, idle_timeout=900,
-                limits={"gpu_mem_mb": 50000},
-            ),
-            ResourcePolicy(
-                id=ids.new("policy"), scope="global", scope_id="*",
-                max_concurrent=3, max_queued=5, max_runtime=1440, idle_timeout=3600,
-                limits={"gpu_mem_mb": 98304, "cpu": 64},
-            ),
-        ])
+    await seed(db, [
+        org, group,
+        ResourcePolicy(
+            id=ids.new("policy"), scope="user", scope_id=user_id,
+            max_concurrent=1, limits={},
+        ),
+        ResourcePolicy(
+            id=ids.new("policy"), scope="group", scope_id=group.id,
+            max_concurrent=4, max_runtime=600, idle_timeout=900,
+            limits={"gpu_mem_mb": 50000},
+        ),
+        ResourcePolicy(
+            id=ids.new("policy"), scope="global", scope_id="*",
+            max_concurrent=3, max_queued=5, max_runtime=1440, idle_timeout=3600,
+            limits={"gpu_mem_mb": 98304, "cpu": 64},
+        ),
+    ])
 
     pol = await resolve_effective_policy(db, user_id, group.id)
     assert pol is not None
@@ -82,7 +82,8 @@ async def test_max_concurrent_is_per_user_not_per_group(db, fake_handoff):
         model="A100", gpu_uuid=ids.new("device"), total_mem_mb=16000, status="ready",
         mode="fractional",
     )
-    users = [ids.new("user"), ids.new("user")]
+    user_rows = [user_row(), user_row()]
+    users = [u.id for u in user_rows]
     wallets = {
         uid: CreditWallet(
             id=ids.new("wallet"), owner_type="user", owner_id=uid,
@@ -93,8 +94,7 @@ async def test_max_concurrent_is_per_user_not_per_group(db, fake_handoff):
     policy = ResourcePolicy(
         id=ids.new("policy"), scope="group", scope_id=group.id, max_concurrent=1, limits={},
     )
-    async with db.begin():
-        db.add_all([group, offering, image, device, policy, *wallets.values()])
+    await seed(db, [*user_rows, group, offering, image, device, policy, *wallets.values()])
 
     svc = SchedulerService(db)
     svc.handoff = fake_handoff

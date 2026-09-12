@@ -15,13 +15,15 @@ from app.auth.rbac import Principal
 from app.core import ids
 from app.db.models import Allocation, CreditWallet, GpuDevice, Image, Offering, Project
 from app.domain.scheduler import SchedulerService
+from tests.fkseed import seed, user_row
 
 
 @pytest.mark.asyncio
 async def test_reservation_respects_offering_model(db, fake_handoff):
     org_id = ids.new("org")
     group = Project(id=ids.new("group"), org_id=org_id, name="p")
-    user_id = ids.new("user")
+    user = user_row()
+    user_id = user.id
     wallet = CreditWallet(
         id=ids.new("wallet"), owner_type="user", owner_id=user_id,
         balance=Decimal("1000"), reserved=Decimal("0"),
@@ -44,8 +46,7 @@ async def test_reservation_respects_offering_model(db, fake_handoff):
         model="NVIDIA RTX PRO 6000 Blackwell", gpu_uuid="GPU-pro6000",
         total_mem_mb=98304, status="ready", mode="fractional",
     )
-    async with db.begin():
-        db.add_all([group, wallet, off_4090, image, dev_4090, dev_pro])
+    await seed(db, [user, group, wallet, off_4090, image, dev_4090, dev_pro])
 
     svc = SchedulerService(db)
     svc.handoff = fake_handoff

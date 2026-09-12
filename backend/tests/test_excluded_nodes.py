@@ -7,6 +7,7 @@ from app.cluster.crd import GShareSessionCRD, _to_crd_spec
 from app.cluster.handoff import Handoff
 from app.core import ids
 from app.db.models import GpuNode, Session
+from tests.fkseed import seed
 
 
 def _cpu_session() -> Session:
@@ -27,11 +28,10 @@ def test_spec_carries_the_exclusion_in_camel_case():
 
 @pytest.mark.asyncio
 async def test_excluded_nodes_are_the_cordoned_and_offline_ones_of_that_cluster(db):
-    async with db.begin():
-        db.add_all([
-            GpuNode(id=ids.new("node"), cluster_id="clu_t", hostname="ok", status="ready"),
-            GpuNode(id=ids.new("node"), cluster_id="clu_t", hostname="draining", status="cordoned"),
-            GpuNode(id=ids.new("node"), cluster_id="clu_t", hostname="dead", status="offline"),
-            GpuNode(id=ids.new("node"), cluster_id="clu_other", hostname="elsewhere", status="cordoned"),
-        ])
+    await seed(db, [
+        GpuNode(id=ids.new("node"), cluster_id="clu_t", hostname="ok", status="ready"),
+        GpuNode(id=ids.new("node"), cluster_id="clu_t", hostname="draining", status="cordoned"),
+        GpuNode(id=ids.new("node"), cluster_id="clu_t", hostname="dead", status="offline"),
+        GpuNode(id=ids.new("node"), cluster_id="clu_other", hostname="elsewhere", status="cordoned"),
+    ])
     assert await Handoff(db).excluded_nodes(_cpu_session()) == ["dead", "draining"]

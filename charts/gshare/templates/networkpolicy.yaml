@@ -1,0 +1,100 @@
+{{- if .Values.networkPolicy.enabled }}
+{{- $ns := .Values.global.namespaces.sessions }}
+{{- $np := .Values.networkPolicy }}
+# Session-namespace NetworkPolicies: deny everything, then allow the ingress controller in and DNS
+# plus the declared storage subnets out. Standalone copies of these live in deploy/security/ for
+# installs that do not use this chart; keeping them here is what gives them a deployment path.
+#
+# Off by default because the allowlists have to name this cluster's own addresses: turning them on
+# with no storage CIDR leaves sessions able to resolve DNS and nothing else.
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: gshare-default-deny-all
+  namespace: {{ $ns }}
+  labels:
+    {{- include "gshare.labels" . | nindent 4 }}
+spec:
+  podSelector: {}                        # every pod in the namespace
+  policyTypes: ["Ingress", "Egress"]
+---
+# Ingress: the proxy that fronts the session apps, and nothing else.
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: gshare-session-ingress-allow
+  namespace: {{ $ns }}
+  labels:
+    {{- include "gshare.labels" . | nindent 4 }}
+spec:
+  podSelector:
+    matchLabels: { gshare.io/workload: session }
+  policyTypes: ["Ingress"]
+  ingress:
+    - from:
+        - namespaceSelector:
+            matchLabels: { kubernetes.io/metadata.name: {{ $np.ingressNamespace }} }
+      ports:
+        {{- range $np.sessionPorts }}
+        - { protocol: TCP, port: {{ . }} }
+        {{- end }}
+---
+# Egress: DNS always, plus the storage subnets when they are declared. A session never calls the
+# control plane — the operator reports on its behalf — so nothing else is opened.
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: gshare-session-egress-allow
+  namespace: {{ $ns }}
+  labels:
+    {{- include "gshare.labels" . | nindent 4 }}
+spec:
+  podSelector:
+    matchLabels: { gshare.io/workload: session }
+  policyTypes: ["Egress"]
+  egress:
+    - to:
+        - namespaceSelector:
+            matchLabels: { kubernetes.io/metadata.name: {{ $np.dnsNamespace }} }
+          podSelector:
+            matchLabels: { k8s-app: kube-dns }
+      ports:
+        - { protocol: UDP, port: 53 }
+        - { protocol: TCP, port: 53 }
+    {{- with $np.storage.cidrs }}
+    - to:
+        {{- range . }}
+        - ipBlock: { cidr: {{ . }} }
+        {{- end }}
+      ports:
+        {{- range $np.storage.ports }}
+        - { protocol: TCP, port: {{ . }} }
+        {{- end }}
+    {{- end }}
+{{- with $np.cpuData.cidrs }}
+---
+# CPU data-prep sessions additionally reach the dataset mirror or object store.
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: gshare-cpu-data-egress-allow
+  namespace: {{ $ns }}
+  labels:
+    {{- include "gshare.labels" $ | nindent 4 }}
+spec:
+  podSelector:
+    matchLabels:
+      gshare.io/workload: session
+      gshare.io/resource-class: cpu
+  policyTypes: ["Egress"]
+  egress:
+    - to:
+        {{- range . }}
+        - ipBlock: { cidr: {{ . }} }
+        {{- end }}
+      ports:
+        {{- range $np.cpuData.ports }}
+        - { protocol: TCP, port: {{ . }} }
+        {{- end }}
+{{- end }}
+{{- end }}

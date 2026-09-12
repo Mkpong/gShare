@@ -16,6 +16,7 @@ from app.api.webhooks_router import (
 from app.auth.rbac import Principal
 from app.core.errors import Forbidden
 from app.db.models import WebhookSubscription
+from tests.fkseed import seed
 
 pytestmark = pytest.mark.asyncio
 
@@ -38,8 +39,7 @@ def _sub(sid: str, org_id: str | None) -> WebhookSubscription:
 
 
 async def _seed(db) -> None:
-    async with db.begin():
-        db.add_all([_sub("wbh_A", "org_A"), _sub("wbh_B", "org_B"), _sub("wbh_G", None)])
+    await seed(db, [_sub("wbh_A", "org_A"), _sub("wbh_B", "org_B"), _sub("wbh_G", None)])
 
 
 async def test_list_scoped_to_own_org(db):

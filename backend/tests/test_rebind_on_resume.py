@@ -7,6 +7,7 @@ import pytest
 from app.cluster.status_sync import StatusSync
 from app.core import ids
 from app.db.models import Session
+from tests.fkseed import seed
 
 
 def _event(**kw):
@@ -22,8 +23,7 @@ async def test_resumed_session_rebinds_to_the_card_it_actually_runs_on(db, monke
                    offering_id="off_t", image_id="img_t", resource_class="gpu", mode="fractional",
                    status="preparing", gpu_mem_mb=12288, gpu_cores=50,
                    bound_gpu_uuid="GPU-old", node_hostname="retired-node", pod_ref="ses-old")
-    db.add(sess)
-    await db.commit()
+    await seed(db, [sess])
 
     sync = StatusSync(db)
     # the ledger side is exercised elsewhere; here the question is only what the row records

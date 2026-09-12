@@ -17,6 +17,7 @@ from app.db.models import (
 )
 from app.db.models import Session as SessionRow
 from app.workers.budget_rollup import _period_window, _scope_group_ids, _spent_in_period
+from tests.fkseed import seed
 
 
 async def _seed(db):
@@ -49,8 +50,7 @@ async def _seed(db):
                           amount=Decimal("-50"), balance_after=Decimal("42"),
                           ref=outside.id, idempotency_key="c2"),
     ]
-    async with db.begin():
-        db.add_all([org, grp, other, wallet, sess, outside, *txns])
+    await seed(db, [org, grp, other, wallet, sess, outside, *txns])
     return org, grp
 
 
@@ -60,8 +60,7 @@ async def test_spend_rolls_up_by_session_scope(db):
     budget = Budget(id=ids.new("budget"), scope="group", scope_id=grp.id,
                     period_start=datetime(2020, 1, 1, tzinfo=UTC), period="monthly",
                     limit_credit=Decimal("100"), spent_credit=Decimal("0"), action="alert")
-    async with db.begin():
-        db.add(budget)
+    await seed(db, [budget])
 
     start, end = _period_window(budget, "Asia/Seoul")
     group_ids = await _scope_group_ids(db, budget)
@@ -76,8 +75,7 @@ async def test_org_budget_covers_all_its_groups(db):
     budget = Budget(id=ids.new("budget"), scope="org", scope_id=org.id,
                     period_start=datetime(2020, 1, 1, tzinfo=UTC), period="monthly",
                     limit_credit=Decimal("100"), spent_credit=Decimal("0"), action="alert")
-    async with db.begin():
-        db.add(budget)
+    await seed(db, [budget])
 
     group_ids = await _scope_group_ids(db, budget)
     assert group_ids == [grp.id]

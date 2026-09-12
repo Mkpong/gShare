@@ -45,7 +45,7 @@ later, keeping volumes and the hold.
 **Policy (resource policy)** — quotas: concurrency, VRAM, cores, host resources, volume quota,
 runtime cap, idle timeout. Resolves user → group → organization → global.
 
-**Preset** — a compute shape plus a GPU fraction tier (XL ½ … SS 1/32) or exclusive.
+**Preset** — a compute shape plus a GPU fraction tier (XL ½ … S 1/16) or exclusive.
 
 **Queue** — where a session waits when no card fits; admitted in priority order as capacity
 returns.

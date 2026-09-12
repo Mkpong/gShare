@@ -33,9 +33,24 @@ spec:
         spec:
           {{- include "gshare.controlPlaneNodeSelector" . | nindent 10 }}
           restartPolicy: OnFailure
+          automountServiceAccountToken: false
+          # Same identity as the database pod (the image's uid/gid 999); pg_dump writes only to
+          # the backup claim, so the root filesystem stays read-only.
+          securityContext:
+            runAsNonRoot: true
+            runAsUser: 999
+            runAsGroup: 999
+            fsGroup: 999
+            seccompProfile:
+              type: RuntimeDefault
           containers:
             - name: pg-dump
               image: {{ .Values.postgres.image }}
+              securityContext:
+                {{- include "gshare.containerSecurityContext" . | nindent 16 }}
+              resources:
+                requests: { cpu: 100m, memory: 128Mi }
+                limits: { cpu: "1", memory: 512Mi }
               command:
                 - sh
                 - -c

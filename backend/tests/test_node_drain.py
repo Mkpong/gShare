@@ -21,6 +21,7 @@ from app.db.models import (
     User,
 )
 from app.db.models import Session as SessionRow
+from tests.fkseed import seed
 
 
 def _admin() -> Principal:
@@ -47,8 +48,7 @@ async def _seed(db):
                       billing_wallet_id=wallet.id, credit_per_hour_snapshot=Decimal("60"))
     alloc = Allocation(id=ids.new("allocation"), session_id=sess.id, device_id=dev.id,
                        gpu_mem_mb=4000, gpu_cores=25, status="bound")
-    async with db.begin():
-        db.add_all([clu, node, dev, owner, wallet, off, img, sess, alloc])
+    await seed(db, [clu, node, dev, owner, wallet, off, img, sess, alloc])
     return node, dev, sess
 
 

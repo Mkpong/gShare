@@ -196,6 +196,34 @@ async def _audit_login(
     await db.commit()
 
 
+
+def _client_ip(request: Request) -> str:
+    """The client address for rate limiting and the login audit trail.
+
+    X-Forwarded-For is read from the right, TRUSTED_PROXY_HOPS entries in: the proxies in front
+    of the API append to the header, so the rightmost entries are theirs and everything further
+    left is whatever the client sent. Reading the FIRST entry let a client pick its own bucket
+    (a fresh address per attempt defeats the per-IP limit). Without the header, the socket peer.
+    """
+    hops = [h.strip() for h in (request.headers.get("x-forwarded-for") or "").split(",")]
+    hops = [h for h in hops if h]
+    if hops:
+        trusted = max(1, int(getattr(settings, "TRUSTED_PROXY_HOPS", 1) or 1))
+        return hops[-trusted] if len(hops) >= trusted else hops[0]
+    return request.client.host if request.client else "unknown"
+
+
+# A hash to verify against when the account does not exist, so a miss costs the same time as a
+# wrong password and the response time does not say which of the two it was.
+_TIMING_PAD_HASH: str | None = None
+
+
+async def _pad_password_check(password: str) -> None:
+    global _TIMING_PAD_HASH
+    if _TIMING_PAD_HASH is None:
+        _TIMING_PAD_HASH = await hash_password_async(secrets.token_urlsafe(16))
+    await verify_password_async(password or "", _TIMING_PAD_HASH)
+
 @router.post("/auth/login")
 async def auth_login(body: _LoginRequest, request: Request, db: AsyncSession = Depends(get_db)):
     """Email+password local login (gated by AUTH_ALLOW_LOCAL_PASSWORD).
@@ -209,9 +237,7 @@ async def auth_login(body: _LoginRequest, request: Request, db: AsyncSession = D
     # Brute-force / thundering-herd guard. Per-email first (targeted stuffing), then per-client-IP
     # (broad sweeps). The deployment sits behind ingress, so the first X-Forwarded-For hop is the
     # client; fall back to the socket peer.
-    client_ip = (request.headers.get("x-forwarded-for") or "").split(",")[0].strip() or (
-        request.client.host if request.client else "unknown"
-    )
+    client_ip = _client_ip(request)
     if email:
         await check_rate(f"login:email:{email}", limit=10, window_sec=300)
     await check_rate(f"login:ip:{client_ip}", limit=30, window_sec=300)
@@ -221,6 +247,7 @@ async def auth_login(body: _LoginRequest, request: Request, db: AsyncSession = D
             await db.execute(select(User).where(func.lower(User.email) == email))
         ).scalar_one_or_none()
     if user is None:
+        await _pad_password_check(body.password or "")
         await _audit_login(db, actor=email or "unknown", ok=False, ip=client_ip, email=email,
                            reason="unknown_account")
         raise Unauthenticated("invalid credentials")
@@ -230,12 +257,6 @@ async def auth_login(body: _LoginRequest, request: Request, db: AsyncSession = D
         await _audit_login(db, actor=user.id, ok=False, ip=client_ip, email=email,
                            reason="account_disabled")
         raise Unauthenticated("invalid credentials")
-    # A self-registered account waiting for approval gets a message it can act on: the
-    # credentials are right, the account simply is not open yet.
-    if user.status == "pending":
-        await _audit_login(db, actor=user.id, ok=False, ip=client_ip, email=email,
-                           reason="account_pending")
-        raise _SignupPending("account awaiting administrator approval")
     # Password check. An account with no hash cannot be authenticated at all: letting it through
     # on any password turned "credential not set yet" into "no credential required", which is a
     # login bypass for every bootstrap or legacy row. Such an account needs an administrator to
@@ -248,6 +269,13 @@ async def auth_login(body: _LoginRequest, request: Request, db: AsyncSession = D
         await _audit_login(db, actor=user.id, ok=False, ip=client_ip, email=email,
                            reason="bad_password")
         raise Unauthenticated("invalid credentials")
+    # A self-registered account waiting for approval gets a message it can act on — but only
+    # once the password has matched. Answering before the check told anyone with the address
+    # that a sign-up is pending there.
+    if user.status == "pending":
+        await _audit_login(db, actor=user.id, ok=False, ip=client_ip, email=email,
+                           reason="account_pending")
+        raise _SignupPending("account awaiting administrator approval")
     await _audit_login(db, actor=user.id, ok=True, ip=client_ip, email=email)
     return _issue_token(user)
 
@@ -296,9 +324,7 @@ async def auth_signup(body: _SignupRequest, request: Request, db: AsyncSession =
     """
     from app.api.system_router import signup_policy
 
-    client_ip = (request.headers.get("x-forwarded-for") or "").split(",")[0].strip() or (
-        request.client.host if request.client else "unknown"
-    )
+    client_ip = _client_ip(request)
     await check_rate(f"signup:ip:{client_ip}", limit=5, window_sec=3600)
 
     mode, domains = await signup_policy(db)
@@ -733,6 +759,10 @@ async def bulk_create_users(
             password_hash=pw_hash, must_change_password=True,
         )
         db.add(user)
+        # The user row has to land before its membership: without a relationship() to order them,
+        # SQLAlchemy's unit of work flushes mappers in class-name order (Membership before User),
+        # and Postgres then rejects the membership on fk_membership_user_id_user.
+        await db.flush()
         db.add(CreditWallet(
             id=ids.new("wallet"), owner_type="user", owner_id=user.id,
             balance=Decimal("0"), reserved=Decimal("0"),
@@ -1177,6 +1207,13 @@ async def set_user_department(
             )
         )
     ).all()
+    # An org_admin may move people WITHIN their organization or place an unaffiliated user; a user
+    # who belongs to another organization is not theirs to pull in. Enrolling them here made the
+    # caller their administrator (suspend, soft-delete, password reset), a cross-tenant takeover.
+    if not is_super and existing and not any(m.group_id in managed_group_ids for m in existing):
+        raise Forbidden(
+            "not permitted: the user belongs to another organization", {"user_id": user_id}
+        )
     removable = [
         m for m in existing
         if m.group_id != target_gid and (is_super or m.group_id in managed_group_ids)

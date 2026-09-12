@@ -12,6 +12,7 @@ from app.auth.rbac import Principal
 from app.core import ids
 from app.core.errors import InsufficientCredit
 from app.db.models import CreditTransaction, CreditWallet, Membership, Organization, Project, User
+from tests.fkseed import seed
 
 
 async def _cohort(db, n=3, group_balance="1000", group_grant="0"):
@@ -32,8 +33,7 @@ async def _cohort(db, n=3, group_balance="1000", group_grant="0"):
             balance=Decimal("0"), reserved=Decimal("0"),
         ))
         members.append(Membership(id=ids.new("membership"), user_id=uid, group_id=group.id, role="member"))
-    async with db.begin():
-        db.add_all([org, group, gw, *user_rows, *wallets, *members])
+    await seed(db, [org, group, gw, *user_rows, *wallets, *members])
     return group, gw, users, wallets
 
 
@@ -115,8 +115,7 @@ async def test_membership_grant_credit_actually_moves_money(db):
     user = User(id=ids.new("user"), email="s@u.ac.kr", name="S")
     uw = CreditWallet(id=ids.new("wallet"), owner_type="user", owner_id=user.id,
                       balance=Decimal("0"), reserved=Decimal("0"))
-    async with db.begin():
-        db.add_all([org, group, gw, user, uw])
+    await seed(db, [org, group, gw, user, uw])
 
     await add_membership(
         group.id, MembershipCreate(user_id=user.id, role="member", grant_credit="40"),

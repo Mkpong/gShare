@@ -81,7 +81,11 @@ type StatusEvent struct {
 	Generation int64 `json:"generation,omitempty"`
 	// Heartbeat facts: the kubelet's restart count and the main container's state, sent on
 	// every reconcile of a live pod (phase "Heartbeat" when nothing else changed).
-	RestartCount   int       `json:"restart_count,omitempty"`
+	// RestartCount is a pointer so that "the pod has never restarted" (0) reaches the control
+	// plane instead of being elided: a plain int with omitempty made a healthy pod's Running
+	// report indistinguishable from one carrying no pod facts at all. nil means "not known"
+	// (no pod behind this report) and is still omitted.
+	RestartCount   *int      `json:"restart_count,omitempty"`
 	ContainerState string    `json:"container_state,omitempty"`
 	ClusterID      string    `json:"cluster_id,omitempty"`
 	TS             time.Time `json:"ts"`
@@ -92,7 +96,7 @@ type AuditEvent struct {
 	Actor   string         `json:"actor"`  // e.g. "operator:clu_..."
 	Action  string         `json:"action"` // node.cordon | node.drain | pod.delete | ...
 	Target  string         `json:"target"` // node name | namespace/pod | ...
-	Result  string         `json:"result"` // ok | error
+	Result  string         `json:"result"` // ok | failed (operators emit only "ok" today)
 	Detail  map[string]any `json:"detail,omitempty"`
 	TraceID string         `json:"trace_id,omitempty"`
 	TS      time.Time      `json:"ts"`
@@ -182,8 +186,8 @@ func New(cfg Config) *Client {
 
 // doJSON marshals body and POSTs it to BaseURL+path with the internal-JWT bearer and
 // (when set) a W3C traceparent header, retrying on 5xx / transport errors with bounded
-// exponential backoff. 2xx and 409 are success (callbacks are idempotent). Returns the
-// response body.
+// exponential backoff, and once on 401 (a token rotation race). 2xx and 409 are success
+// (callbacks are idempotent). Every other 4xx is final. Returns the response body.
 func (c *Client) doJSON(ctx context.Context, path string, body any, traceID string) ([]byte, error) {
 	payload, err := json.Marshal(body)
 	if err != nil {
@@ -193,6 +197,11 @@ func (c *Client) doJSON(ctx context.Context, path string, body any, traceID stri
 	url := strings.TrimRight(c.cfg.BaseURL, "/") + path
 
 	var lastErr error
+	// A 401 is the one 4xx that a healthy operator can legitimately hit: the control plane
+	// rotates the token file underneath it, and the API's JWKS cache can lag a key rotation by
+	// a moment. Retrying once (with the token re-read from disk, as every attempt does) saves
+	// the report; retrying forever would hammer a genuinely rejected token.
+	retriedUnauthorized := false
 	for attempt := 0; attempt < maxAttempts; attempt++ {
 		if attempt > 0 {
 			// Bounded exponential backoff: 200ms, 400ms, 800ms ...
@@ -239,6 +248,11 @@ func (c *Client) doJSON(ctx context.Context, path string, body any, traceID stri
 			return respBody, nil
 		case resp.StatusCode >= 500:
 			// Server-side / transient: retry.
+			lastErr = fmt.Errorf("sot: POST %s: status %d: %s", path, resp.StatusCode, truncate(respBody))
+			continue
+		case resp.StatusCode == http.StatusUnauthorized && !retriedUnauthorized:
+			// Token rotation race (see above): re-read the file and try exactly once more.
+			retriedUnauthorized = true
 			lastErr = fmt.Errorf("sot: POST %s: status %d: %s", path, resp.StatusCode, truncate(respBody))
 			continue
 		default:

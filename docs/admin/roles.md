@@ -26,7 +26,7 @@ organization sees nothing of another. A person can hold different roles in diffe
 | Session monitoring and audit log | — | group | organization | everything |
 | User and group management | — | group | organization | everything |
 | Credit allocation | request only | group → user | organization → group | top-up and everything |
-| Organizations, offerings, policies, clusters, nodes, storage, images | — | — | — | ✅ |
+| Organizations, offerings, the global policy, clusters, nodes, storage, images | — | — | — | ✅ |
 
 ## Two kinds of administrator
 
@@ -45,7 +45,7 @@ side: the [GPU catalogue](./resources-offerings.md), [clusters](./clusters.md) a
 | "I need more credits" | The user's group_admin — [credit requests](./credits-requests.md) |
 | "I need a bigger quota" | Whoever owns the policy: group_admin for their group, super_admin for the global one — [resource requests](./resources-policies.md#quota-requests) |
 | "Someone is holding a GPU they are not using" | Any administrator in scope — [intervening](./monitoring-control.md), or fix the idle timeout |
-| "A new person joined" | group_admin or org_admin — [adding users](./users-add.md) |
+| "A new person joined" | org_admin — [adding users](./users-add.md); a group_admin can add an existing user to their group |
 | "A node needs maintenance" | super_admin — [draining](./nodes.md#draining) |
 | "The storage pool is full" | super_admin — [storage](./storage.md) |
 | "Sessions fail with *unserviceable*" | super_admin — the [offering](./resources-offerings.md) does not match the card |

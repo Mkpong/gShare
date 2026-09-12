@@ -20,6 +20,7 @@ from app.core import ids
 from app.core.errors import Forbidden
 from app.db.models import Membership, Organization, Project, ResourcePolicy, User
 from app.domain.policy import resolve_effective_policy
+from tests.fkseed import seed
 
 
 def _p(uid, *, super_admin=False, memberships=None):
@@ -36,7 +37,7 @@ async def _seed(db):
     grp = Project(id=ids.new("project"), org_id=org.id, name="G")
     member = User(id=ids.new("user"), email="m@x.kr", name="M")
     admin = User(id=ids.new("user"), email="a@x.kr", name="A")
-    db.add_all([
+    await seed(db, [
         org, grp, member, admin,
         Membership(id=ids.new("membership"), user_id=member.id, group_id=grp.id, role="member"),
         Membership(id=ids.new("membership"), user_id=admin.id, group_id=grp.id, role="group_admin"),
@@ -44,7 +45,6 @@ async def _seed(db):
         ResourcePolicy(id=ids.new("policy"), scope="group", scope_id=grp.id,
                        max_concurrent=3, limits={"cpu": 16, "mem_gb": 64, "storage_gb": 200}),
     ])
-    await db.commit()
     return grp, member, admin
 
 

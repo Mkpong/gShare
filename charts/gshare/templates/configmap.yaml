@@ -40,6 +40,9 @@ data:
   {{- /* not `default`: 0 is a legitimate value (reclaim on the next sync) and `default` would swallow it */}}
   GSHARE_VOLUME_RECLAIM_GRACE_HOURS: {{ ternary .Values.api.volumeReclaimGraceHours 24 (hasKey .Values.api "volumeReclaimGraceHours") | quote }}
   GSHARE_DB_MAX_OVERFLOW: {{ .Values.api.dbMaxOverflow | default 10 | quote }}
+  # Proxies that append to X-Forwarded-For in front of the api; the login rate limit and the
+  # login audit take the client address that many hops from the right of the header.
+  GSHARE_TRUSTED_PROXY_HOPS: {{ .Values.api.trustedProxyHops | default 1 | quote }}
   # JWKS used to verify the internal RS256 JWT. The api fetches it from itself when verifying an
   # operator callback. The default (api.gshare.internal) does not resolve inside the cluster, so it
   # must be overridden with the in-cluster service URL.

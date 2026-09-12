@@ -42,7 +42,7 @@ import { NotificationBell } from './NotificationBell';
 import { AccountMenu } from './AccountMenu';
 import { ClusterSelector } from './ClusterSelector';
 
-interface NavItem {
+export interface NavItem {
   to: string;
   /** Key into the pending-approval counts, when this destination has an inbox. */
   badge?: 'credits' | 'quota' | 'signups';
@@ -65,8 +65,8 @@ const USER_NAV: NavItem[] = [
 // Eleven flat rows read as a wall; the admin nav is grouped by concern instead. Routes and
 // labels are unchanged — only the presentation is grouped. A group disappears entirely when the
 // role can see none of its items.
-const ADMIN_DASHBOARD: NavItem = { to: '/admin', labelKey: 'nav.admin.dashboard', icon: Gauge, minRole: 'group_admin' };
-const ADMIN_GROUPS: { labelKey: string; items: NavItem[] }[] = [
+export const ADMIN_DASHBOARD: NavItem = { to: '/admin', labelKey: 'nav.admin.dashboard', icon: Gauge, minRole: 'group_admin' };
+export const ADMIN_GROUPS: { labelKey: string; items: NavItem[] }[] = [
   {
     labelKey: 'nav.adminGroup.tenancy',
     items: [
@@ -80,7 +80,8 @@ const ADMIN_GROUPS: { labelKey: string; items: NavItem[] }[] = [
     items: [
       { to: '/admin/clusters', labelKey: 'nav.admin.clusters', icon: Stack, exactGlobal: 'super_admin' },
       { to: '/admin/nodes', labelKey: 'nav.admin.nodes', icon: HardDrives, minRole: 'org_admin' },
-      { to: '/admin/gpus', labelKey: 'nav.admin.gpus', icon: GraphicsCard, minRole: 'org_admin' },
+      // The GPU inventory reads node.read, which is super_admin only; an org_admin has no tab there.
+      { to: '/admin/gpus', labelKey: 'nav.admin.gpus', icon: GraphicsCard, exactGlobal: 'super_admin' },
     ],
   },
   {
@@ -106,7 +107,7 @@ const ADMIN_GROUPS: { labelKey: string; items: NavItem[] }[] = [
   },
 ];
 
-function canSee(item: NavItem, globalRole?: string | null, membershipRole?: string): boolean {
+export function canSee(item: NavItem, globalRole?: string | null, membershipRole?: string): boolean {
   const effective = globalRole ?? membershipRole;
   if (item.exactGlobal) return globalRole === item.exactGlobal || effective === item.exactGlobal;
   if (item.minRole) return atLeast(effective, item.minRole);

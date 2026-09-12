@@ -37,6 +37,12 @@ class Settings(BaseSettings):
     # external-secrets, and an empty value fails fast at startup.
     # Generate with: openssl rand -hex 32. hack/gen-secrets.sh writes it into .env or a Secret.
     USER_JWT_SECRET: str = ""
+    # How many proxies in front of the API append to X-Forwarded-For. The client address used by
+    # the login and sign-up rate limiters is taken that many hops from the RIGHT of the header,
+    # because a client can prepend anything it likes but cannot remove what a trusted proxy
+    # appends. 1 = one proxy (ingress-nginx, or the compose console); 2 = a load balancer that
+    # forwards the header in front of the ingress.
+    TRUSTED_PROXY_HOPS: int = 1
     # Bootstrap administrator: an email and initial password that guarantee a super_admin account at
     # startup, from GSHARE_BOOTSTRAP_ADMIN_EMAIL and GSHARE_BOOTSTRAP_ADMIN_PASSWORD. The display
     # name is edited from the console.

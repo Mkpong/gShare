@@ -695,8 +695,8 @@ export interface paths {
          * @description Set a child wallet's monthly automatic refill, as the administrator one level up.
          *
          *     The siblings' grants must sum within the parent's grant; 0 disables refills for that wallet. The
-         *     refill itself — resetting balance to grant at the start of each month, use-it-or-lose-it — is
-         *     performed by the credit_refill worker.
+         *     refill itself — topping the balance up to the grant at the start of each month, never taking
+         *     a surplus away — is performed by the credit_refill worker.
          */
         post: operations["set_monthly_grant_api_v1_credits_wallets__wallet_id__monthly_grant_post"];
         delete?: never;
@@ -1788,6 +1788,10 @@ export interface paths {
          *
          *     Reads the same (scope, scope_id) policy and volume quota sum that _assert_storage_quota uses at
          *     creation time. has_limit=false means unlimited: no policy, or a limit of 0.
+         *
+         *     The scope must be one the caller could create a volume in or belongs to: their own user scope,
+         *     a group they are a member of, or the global scope. Another tenant's limit and provisioned total
+         *     are not theirs to read.
          */
         get: operations["storage_quota_usage_api_v1_storage_volumes_quota_usage_get"];
         put?: never;
@@ -2154,7 +2158,8 @@ export interface paths {
         };
         /**
          * Get Image
-         * @description Image detail. any authenticated.
+         * @description Image detail. any authenticated, for the shared catalogue and one's own images; another
+         *     user's private image answers 404 so its existence is not confirmed either.
          */
         get: operations["get_image_api_v1_images__image_id__get"];
         put?: never;
@@ -3277,6 +3282,12 @@ export interface paths {
          *
          *     The operator already cordoned the K8s node; the ledger reflects it so the console/scheduler
          *     stop placing new sessions there.
+         *
+         *     The operator's HealthReconciler addresses the node by its Kubernetes NAME (the hostname): it
+         *     has no ledger id. The row is therefore resolved by (token cluster, hostname) — with the ledger
+         *     id still accepted for older callers — and the event carries the row's id, which the FK needs.
+         *     Looking the hostname up as an id never matched: the cordon never reached the ledger and the
+         *     event insert violated the FK on Postgres.
          */
         post: operations["node_health_event_internal_nodes_health_events_post"];
         delete?: never;
@@ -4618,6 +4629,8 @@ export interface components {
             generation?: number | null;
             /** Container State */
             container_state?: string | null;
+            /** Cluster Id */
+            cluster_id?: string | null;
             /**
              * Ts
              * Format: date-time

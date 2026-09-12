@@ -17,6 +17,7 @@ from app.api.volumes_router import (
 from app.auth.rbac import Principal
 from app.core.errors import Forbidden
 from app.db.models import StorageFolder, StorageVolume, User, VolumePermission
+from tests.fkseed import seed
 
 
 class _Page:
@@ -28,8 +29,7 @@ class _Page:
 
 async def _seed(db):
     """Owner 'alice' personal volume + group 'eng' volume + a shared volume; outsider 'mallory'."""
-    db.add_all(
-        [
+    await seed(db, [
             User(id="alice", email="alice@example.com", name="Alice"),
             User(id="mallory", email="mallory@example.com", name="Mallory"),
             User(id="bob", email="bob@example.com", name="Bob"),
@@ -48,9 +48,7 @@ async def _seed(db):
             # bob shares vol_shared with mallory (explicit VolumePermission).
             VolumePermission(id="vpm1", volume_id="vol_shared", user_id="mallory", role="ro"),
             StorageFolder(id="fld1", volume_id="vol_alice", path="/data", size_bytes=0),
-        ]
-    )
-    await db.commit()
+        ])
 
 
 def _principal(user_id: str, *, super_admin: bool = False, memberships: dict | None = None) -> Principal:
@@ -149,8 +147,7 @@ async def test_share_recipient_cannot_delete_but_can_leave(db):
     )).all()
     assert left == []
     # …but revoking somebody ELSE still needs manage rights.
-    db.add(VolumePermission(id="vpm2", volume_id="vol_shared", user_id="mallory", role="ro"))
-    await db.commit()
+    await seed(db, [VolumePermission(id="vpm2", volume_id="vol_shared", user_id="mallory", role="ro")])
     with pytest.raises(Forbidden):
         await revoke_permission("vol_shared", "mallory", principal=_principal("alice"), db=db)
 
@@ -178,9 +175,8 @@ async def test_group_member_can_access_group_volume(db):
     assert eng.role == "rw"  # RWX volume, plain member -> derived rw
 
     # A ROX group volume derives ro for a plain member.
-    db.add(StorageVolume(id="vol_eng_ro", scope="group", scope_id="eng", type="dataset",
-                         access_mode="ROX", owner_id="eng", quota_gb=5))
-    await db.commit()
+    await seed(db, [StorageVolume(id="vol_eng_ro", scope="group", scope_id="eng", type="dataset",
+                         access_mode="ROX", owner_id="eng", quota_gb=5)])
     rows = await list_volumes(scope=None, scope_id=None, type=None, access_mode=None,
                               page=_Page(), principal=member, db=db)
     ro = next(v for v in rows if v.id == "vol_eng_ro")

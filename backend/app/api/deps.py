@@ -12,6 +12,10 @@ from app.db.base import get_db, get_sessionmaker
 # The only paths reachable while must_change_password is set: read your own profile and change the
 # password. Every other endpoint is blocked.
 _PWCHANGE_ALLOWED = ("/auth/change-password", "/auth/me")
+# The only routes that may read the bearer token from the query string: the SSE streams, which a
+# browser EventSource opens without custom headers. Everywhere else a token in the URL is a token
+# in access logs, Referer headers and browser history, so it is refused.
+_QUERY_TOKEN_SUFFIXES = ("/events",)
 
 
 async def get_current_principal(
@@ -26,10 +30,11 @@ async def get_current_principal(
     """Verify the bearer JWT and resolve the Principal (global_role ∪ Membership).
 
     The canonical form is the ``Authorization: Bearer <jwt>`` header, but a browser ``EventSource``
-    (SSE) cannot set custom headers, so ``?access_token=<jwt>`` is accepted as well. With neither,
+    (SSE) cannot set custom headers, so ``?access_token=<jwt>`` is accepted on the event-stream
+    routes only. With neither,
     the response is 401 unauthenticated rather than FastAPI's default 422. """
     token = authorization
-    if token is None and access_token:
+    if token is None and access_token and request.url.path.endswith(_QUERY_TOKEN_SUFFIXES):
         token = f"Bearer {access_token}"
     if token is None:
         raise Unauthenticated("missing credentials")
@@ -39,6 +44,9 @@ async def get_current_principal(
     if claims.get("must_change_password") and not request.url.path.endswith(_PWCHANGE_ALLOWED):
         raise PasswordChangeRequired("password change required")
     principal = await resolve_principal(db, claims)
+    # The row's flag, not only the claim: a forced reset lands after the token was issued.
+    if principal.must_change_password and not request.url.path.endswith(_PWCHANGE_ALLOWED):
+        raise PasswordChangeRequired("password change required")
     # resolve_principal's SELECT auto-begins a transaction on the session. This dependency is
     # read-only, so rolling back immediately closes it and lets the endpoint's unit of work (`async
     # with db.begin`) start a fresh transaction without colliding — SQLAlchemy 2.0 autobegin.
@@ -69,7 +77,7 @@ async def get_sse_principal(
     session; they authenticate through this dependency and hold no connection afterwards.
     """
     token = authorization
-    if token is None and access_token:
+    if token is None and access_token and request.url.path.endswith(_QUERY_TOKEN_SUFFIXES):
         token = f"Bearer {access_token}"
     if token is None:
         raise Unauthenticated("missing credentials")
@@ -79,6 +87,9 @@ async def get_sse_principal(
     async with get_sessionmaker()() as db:
         principal = await resolve_principal(db, claims)
         await db.rollback()
+    # The row's flag, not only the claim: a forced reset lands after the token was issued.
+    if principal.must_change_password and not request.url.path.endswith(_PWCHANGE_ALLOWED):
+        raise PasswordChangeRequired("password change required")
     return principal
 
 

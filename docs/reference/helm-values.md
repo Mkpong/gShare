@@ -16,7 +16,7 @@ knob).
 | Key | Purpose |
 |---|---|
 | `global.imageRegistry`, `global.imagePullSecrets` | Registry prefix and pull secrets for every image. |
-| `global.namespaces` | `system` (control plane) and `sessions` (workloads). |
+| `global.namespaces` | `system` (control plane), `sessions` (workloads) and `infra` (privileged node jobs). |
 | `global.domains`, `global.sessionUrlScheme` | Console and session domains; `https` or `http`. |
 | `controlPlane.enabled` | `false` on a cluster that only runs an operator (attached cluster). |
 | `controlPlane.nodeSelector` | Pin api, worker, frontend, data tier, and backup jobs to nodes. |
@@ -28,7 +28,8 @@ knob).
 | `podDisruptionBudget.enabled` | minAvailable 1 for api, worker, frontend. |
 | `secrets.generate` | Let the chart create passwords and keys, or bring your own. |
 | `ingress.*`, `ingress.internalPlane` | Console ingress and the whitelisted internal plane attached operators call. |
-| `serviceAccounts.*` | Names and annotations. |
+| `serviceAccounts.*` | Service-account names for the controller (api/worker) and the operator. |
+| `networkPolicy.*` | Deny-all plus ingress/egress allowlists for the session namespace. Off by default — see below. |
 
 ## `api`
 
@@ -42,10 +43,12 @@ knob).
 | `seedSessionImages` | true | Seed the `boanlab/gshare-session` catalogue. |
 | `gpuPacking` | binpack | `binpack` or `spread` for fractional placement. |
 | `volumeReclaimGraceHours` | 24 | Keep a deleted volume's data this long. |
+| `forwardedAllowIps` | `*` | Peers uvicorn trusts to set `X-Forwarded-*` (`--forwarded-allow-ips`); narrow to the ingress controller's addresses where possible. |
+| `trustedProxyHops` | 1 | Proxies that append to `X-Forwarded-For` before the api (`GSHARE_TRUSTED_PROXY_HOPS`); `2` with a load balancer in front of the ingress. |
 
 ## `worker`
 
-`replicas`, `resources`, `gracePeriodSec` (billing settle window), `yieldReservationTtlSec`.
+`replicas`, `resources`, `gracePeriodSec` (grace window after credit exhaustion before a session is paused or yielded), `yieldReservationTtlSec`.
 
 ## `operator`
 
@@ -60,6 +63,20 @@ knob).
 | `sessionImagePullPolicy` | For session pods. |
 | `losslessAgentImage`, `migAgentImage`, `kanikoImage` | Optional sidecar and build images. |
 | `webhook.*`, `hamiYieldExtender` | The lend-guard admission webhook and HAMi yield extender. |
+
+## `networkPolicy`
+
+Off by default (`networkPolicy.enabled: false`). Enabling it renders a deny-all policy for the
+session namespace plus allowlists: ingress from `ingressNamespace` on `sessionPorts`, egress to
+DNS in `dnsNamespace`, and egress to `storage.cidrs` on `storage.ports`. `cpuData.cidrs` adds a
+second egress rule for CPU data-prep sessions only.
+
+The CIDRs are cluster-specific and start empty, which is why the whole block is off: enabling it
+without a storage CIDR leaves sessions able to resolve DNS and reach nothing else. The same
+manifests stand alone in `deploy/security/` for installs that do not use this chart.
+
+The policies select session pods by the `gshare.io/workload=session` label (CPU sessions also by
+`gshare.io/resource-class=cpu`), which the operator stamps on every session pod.
 
 ## `frontend`, `agent`
 

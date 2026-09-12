@@ -52,8 +52,11 @@ class SoftDeleteMixin:
 # ── Identity / tenancy ──
 class User(Base, TimestampMixin, SoftDeleteMixin):
     __tablename__ = "user"
+    # The live schema carries the UNIQUE as a named constraint plus a plain index (0001);
+    # declared the same way here so `alembic check` sees no difference.
+    __table_args__ = (UniqueConstraint("email", name="uq_user_email"),)
     id: Mapped[str] = mapped_column(String, primary_key=True)            # usr_ULID
-    email: Mapped[str] = mapped_column(String, unique=True, index=True)
+    email: Mapped[str] = mapped_column(String, index=True)
     name: Mapped[str] = mapped_column(String)
     status: Mapped[str] = mapped_column(String, default="active")
     # global_roles is the source of truth and may hold several roles. global_role is the primary one
@@ -496,6 +499,8 @@ class GpuDevice(Base, TimestampMixin):
     #
     lend_state: Mapped[str] = mapped_column(String, default="", server_default=text("''"))
     __table_args__ = (
+        # One alias per card within a cluster (0052); NULL aliases stay free of it.
+        Index("uq_gpu_device_cluster_alias", "cluster_id", "alias", unique=True),
         # Final overcommit defense.
         CheckConstraint(
             "used_mem_mb <= total_mem_mb AND used_cores <= total_cores", name="no_overcommit"
@@ -790,6 +795,8 @@ class SystemSetting(Base, TimestampMixin):
 class AuditLog(Base, TimestampMixin):
     """Hash-chained audit log; this plane is the only writer."""
     __tablename__ = "audit_log"
+    # The list and export endpoints order by time (0031).
+    __table_args__ = (Index("ix_audit_log_created_at", "created_at"),)
     id: Mapped[str] = mapped_column(String, primary_key=True)            # aud_ULID
     actor: Mapped[str] = mapped_column(String, index=True)
     action: Mapped[str] = mapped_column(String, index=True)

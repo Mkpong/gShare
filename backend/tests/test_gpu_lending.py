@@ -21,6 +21,7 @@ from app.core.config import settings
 from app.db.models import Allocation, GpuDevice, Image, Offering, Session
 from app.domain.scheduler import SchedulerService
 from app.domain.session_service import SessionService
+from tests.fkseed import cluster_row, seed, user_row
 
 CLUSTER = "clu_lend"
 
@@ -48,8 +49,7 @@ async def _setup_yielded_card(db, *, lend_state: str = "yielded"):
         cluster_mode="single", resource_class="gpu", mode="exclusive",
         offering_id="off_x", image_id="img_x", preemptible=True, status="pending",
     )
-    async with db.begin():
-        db.add_all([dev, owner, owner_alloc, borrower])
+    await seed(db, [dev, owner, owner_alloc, borrower])
     return dev, owner, borrower
 
 
@@ -147,9 +147,8 @@ async def test_fractional_multi_borrow_packs_yielded_card(db):
     dev_id = dev.id
 
     async def place(mem, cores):
-        async with db.begin():
-            b = _frac_borrower(mem, cores)
-            db.add(b)
+        b = _frac_borrower(mem, cores)
+        await seed(db, [b])
         async with db.begin():
             return await sched.reserve_spot_slice(b, _req_frac(mem, cores))
 
@@ -254,22 +253,22 @@ async def test_demote_not_lent_is_graceful(db):
 @pytest.mark.asyncio
 async def test_preemptible_session_priced_at_spot_discount(db):
     """A preemptible exclusive session snapshots the normal rate multiplied by SPOT_DISCOUNT."""
-    cluster_id = ids.new("cluster")
+    cluster = cluster_row()
     offering = Offering(
         id=ids.new("offering"), name="excl", resource_class="gpu",
         gpu_model="A100", gpu_mem_mb=81920, gpu_cores=100, credit_per_hour=Decimal("400"),
     )
     image = Image(id=ids.new("image"), name="pytorch")
-    async with db.begin():
-        db.add_all([offering, image])
+    spot_user, normal_user = user_row(), user_row()
+    await seed(db, [offering, image, cluster, spot_user, normal_user])
     svc = SchedulerService(db)
     base = dict(offering_id=offering.id, image_id=image.id, resource_class="gpu",
-                cluster_id=cluster_id, mode="exclusive")
+                cluster_id=cluster.id, mode="exclusive")
 
     spot = await svc._persist_pending(
-        SessionCreate(**base, preemptible=True), Principal(user_id=ids.new("user")))
+        SessionCreate(**base, preemptible=True), Principal(user_id=spot_user.id))
     normal = await svc._persist_pending(
-        SessionCreate(**base, preemptible=False), Principal(user_id=ids.new("user")))
+        SessionCreate(**base, preemptible=False), Principal(user_id=normal_user.id))
 
     assert normal.credit_per_hour_snapshot == Decimal("400")
     assert normal.preemptible is False

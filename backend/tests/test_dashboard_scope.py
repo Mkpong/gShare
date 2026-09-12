@@ -9,6 +9,7 @@ from app.auth.rbac import Principal
 from app.core import ids
 from app.db.models import Membership, Organization, Project
 from app.db.models import Session as SessionRow
+from tests.fkseed import seed
 
 
 def _session(owner: str) -> SessionRow:
@@ -29,18 +30,17 @@ async def world(db):
     org_a, org_b = ids.new("org"), ids.new("org")
     g_a1, g_a2, g_b = ids.new("group"), ids.new("group"), ids.new("group")
     admin_a1, member_a1, member_a2, member_b, org_admin_a = (ids.new("user") for _ in range(5))
-    async with db.begin():
-        db.add_all([
-            Organization(id=org_a, name="A"), Organization(id=org_b, name="B"),
-            Project(id=g_a1, org_id=org_a, name="a1"), Project(id=g_a2, org_id=org_a, name="a2"),
-            Project(id=g_b, org_id=org_b, name="b"),
-            Membership(id=ids.new("membership"), user_id=admin_a1, group_id=g_a1, role="group_admin"),
-            Membership(id=ids.new("membership"), user_id=member_a1, group_id=g_a1, role="member"),
-            Membership(id=ids.new("membership"), user_id=member_a2, group_id=g_a2, role="member"),
-            Membership(id=ids.new("membership"), user_id=member_b, group_id=g_b, role="member"),
-            _session(admin_a1), _session(member_a1), _session(member_a2), _session(member_b),
-            _session(org_admin_a),
-        ])
+    await seed(db, [
+        Organization(id=org_a, name="A"), Organization(id=org_b, name="B"),
+        Project(id=g_a1, org_id=org_a, name="a1"), Project(id=g_a2, org_id=org_a, name="a2"),
+        Project(id=g_b, org_id=org_b, name="b"),
+        Membership(id=ids.new("membership"), user_id=admin_a1, group_id=g_a1, role="group_admin"),
+        Membership(id=ids.new("membership"), user_id=member_a1, group_id=g_a1, role="member"),
+        Membership(id=ids.new("membership"), user_id=member_a2, group_id=g_a2, role="member"),
+        Membership(id=ids.new("membership"), user_id=member_b, group_id=g_b, role="member"),
+        _session(admin_a1), _session(member_a1), _session(member_a2), _session(member_b),
+        _session(org_admin_a),
+    ])
     return {"g_a1": g_a1, "org_a": org_a, "admin_a1": admin_a1, "org_admin_a": org_admin_a,
             "member_a1": member_a1}
 

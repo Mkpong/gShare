@@ -54,13 +54,13 @@ endpoints until they do.
 | `/queue` | Queue entries, cancel, priority |
 | `/credits`, `/budgets` | Wallets, allocations, requests, refills, ledger; organization budgets |
 | `/storage/volumes`, `/storage/pools` | Volumes, shares, quota, locks; storage pools |
-| `/offerings`, `/presets`, `/images`, `/resource-policies` | The catalogue and policies, including quota requests |
+| `/offerings`, `/resource-presets`, `/images`, `/resource-policies` | The catalogue and policies, including quota requests |
 | `/clusters`, `/nodes`, `/gpu-devices`, `/node-pools` | Infrastructure: registration, cordon/drain/delete, cards, pools |
 | `/monitoring`, `/dashboard`, `/metrics` | Metrics proxies and summaries |
-| `/audit` | Audit log with filters and CSV export |
+| `/audit-logs` | Audit log with filters and CSV export |
 | `/notifications`, `/webhooks` | The bell, and outbound webhooks per organization |
 | `/system` | Branding, sign-up policy, placement policy |
-| `/health` | Liveness for probes |
+| `/healthz` (at the root, not under `/api/v1`) | Liveness for probes |
 
 The **internal** plane (`/internal/...`, `/.well-known/gshare-internal-jwks.json`) is for
 operators only and is authenticated with the RS256 internal JWT, never a user token.

@@ -6,6 +6,7 @@ import pytest
 from app.core import ids
 from app.db.models import Allocation, GpuDevice, GpuNode, Session
 from app.domain import device_health
+from tests.fkseed import seed
 
 
 @pytest.mark.asyncio
@@ -20,13 +21,12 @@ async def test_unhealthy_ends_bound_sessions_and_ready_does_not(db, monkeypatch)
                        offering_id="off_t", image_id="img_t", resource_class="gpu", mode="fractional",
                        status=status, gpu_mem_mb=100, gpu_cores=10)
     on_dev, on_other, ended_before = sess(), sess(), sess("terminated")
-    async with db.begin():
-        db.add_all([node, dev, other, on_dev, on_other, ended_before])
-        db.add_all([
-            Allocation(id=ids.new("allocation"), session_id=on_dev.id, device_id=dev.id, status="bound"),
-            Allocation(id=ids.new("allocation"), session_id=on_other.id, device_id=other.id, status="bound"),
-            Allocation(id=ids.new("allocation"), session_id=ended_before.id, device_id=dev.id, status="bound"),
-        ])
+    await seed(db, [
+        node, dev, other, on_dev, on_other, ended_before,
+        Allocation(id=ids.new("allocation"), session_id=on_dev.id, device_id=dev.id, status="bound"),
+        Allocation(id=ids.new("allocation"), session_id=on_other.id, device_id=other.id, status="bound"),
+        Allocation(id=ids.new("allocation"), session_id=ended_before.id, device_id=dev.id, status="bound"),
+    ])
     calls: list[tuple[str, str]] = []
 
     class _Svc:

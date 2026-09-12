@@ -73,11 +73,8 @@ rules:
     resources: ["csistoragecapacities", "storageclasses"]
     verbs: ["get", "list", "watch"]
   - apiGroups: ["batch"]
-    resources: ["jobs"]                     # lossless pause: the privileged agent Job (checkpoint and restore)
-    verbs: ["get", "list", "watch", "create", "delete"]
-  - apiGroups: [""]
-    resources: ["pods"]                     # lossless pause: creating and managing restore pods in gshare-infra
-    verbs: ["get", "list", "watch", "create", "delete"]
+    resources: ["jobs"]                     # the manager's informer: checkpoint, mig-agent and kaniko Jobs
+    verbs: ["get", "list", "watch"]         # creating and deleting them is confined to gshare-infra below
   - apiGroups: ["admissionregistration.k8s.io"]
     resources: ["validatingwebhookconfigurations"]   # lend-guard: injecting its own caBundle
     verbs: ["get", "list", "watch", "update"]
@@ -100,8 +97,10 @@ subjects:
     name: {{ .Values.serviceAccounts.operator }}
     namespace: {{ .Values.global.namespaces.system }}
 ---
-# ── Console image builds: kaniko Jobs run in the infra namespace (Jobs/pods are covered by the
-#     cluster-scope rules above); this Role adds only the Dockerfile ConfigMaps and log reads. ──
+# ── Privileged node work in the infra namespace: the lossless-pause checkpoint and restore Jobs,
+#     the mig-agent Jobs, and the kaniko build Jobs all run in gshare-infra, so the operator's right
+#     to create and delete Jobs and pods stops at that namespace. Reads stay cluster-scoped above
+#     because the manager's cache lists and watches those types cluster-wide. ──
 apiVersion: rbac.authorization.k8s.io/v1
 kind: Role
 metadata:
@@ -110,6 +109,12 @@ metadata:
   labels:
     {{- include "gshare.labels" . | nindent 4 }}
 rules:
+  - apiGroups: ["batch"]
+    resources: ["jobs"]                     # checkpoint/restore, mig-agent and kaniko Jobs
+    verbs: ["get", "list", "watch", "create", "delete"]
+  - apiGroups: [""]
+    resources: ["pods"]                     # restore pods; a stuck Job's pod on cleanup
+    verbs: ["get", "list", "watch", "create", "delete"]
   - apiGroups: [""]
     resources: ["configmaps"]               # per-build Dockerfile; deleted when the build finishes
     verbs: ["create", "get", "delete"]
@@ -154,7 +159,7 @@ rules:
     verbs: ["create", "get", "list", "watch", "delete"]
   - apiGroups: [""]
     resources: ["secrets"]                  # the per-session ses-<id>-secret only
-    verbs: ["create", "get", "delete"]      # no list, watch, or update, and no wildcard
+    verbs: ["create", "get", "list", "watch", "delete"]   # list/watch: the Secret informer is confined to this namespace (operator cache options); no update, no wildcard
   - apiGroups: [""]
     resources: ["events"]                   # eviction cause recovery: a gracefully-evicted pod ends
     verbs: ["get", "list"]                  # Succeeded with no reason; the kubelet Event is the only evidence
@@ -289,7 +294,7 @@ metadata:
     {{- include "gshare.labels" . | nindent 4 }}
 rules:
   - apiGroups: [""]
-    resources: ["pods", "services", "secrets", "persistentvolumeclaims"]
+    resources: ["pods", "services", "persistentvolumeclaims"]   # no secrets: those are read only in the sessions namespace (Role above)
     verbs: ["get", "list", "watch"]
   - apiGroups: ["networking.k8s.io"]
     resources: ["ingresses"]

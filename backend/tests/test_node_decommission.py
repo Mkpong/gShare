@@ -16,6 +16,7 @@ from app.core import ids
 from app.core.errors import DomainError
 from app.db.models import Cluster, GpuDevice, GpuNode
 from app.internal.inventory_router import decommissioning_nodes, node_decommissioned
+from tests.fkseed import seed
 
 CLU = "clu_t"
 
@@ -27,16 +28,15 @@ def _super() -> Principal:
 async def _node(db, status: str = "offline") -> GpuNode:
     node = GpuNode(id=ids.new("node"), cluster_id=CLU, hostname="gpu3", status=status,
                    cpu=32, mem=128, disk=500)
-    async with db.begin():
-        db.add_all([
-            Cluster(id=CLU, name="local", api_server="https://k8s", runtime="containerd",
-                    kubeconfig_secret_ref="secret"),
-            node,
-            GpuDevice(id=ids.new("device"), cluster_id=CLU, node_id=node.id,
-                      gpu_uuid=ids.new("device"), model="RTX PRO 5000", mode="fractional",
-                      status="ready", total_mem_mb=49152, used_mem_mb=0,
-                      total_cores=100, used_cores=0),
-        ])
+    await seed(db, [
+        Cluster(id=CLU, name="local", api_server="https://k8s", runtime="containerd",
+                kubeconfig_secret_ref="secret"),
+        node,
+        GpuDevice(id=ids.new("device"), cluster_id=CLU, node_id=node.id,
+                  gpu_uuid=ids.new("device"), model="RTX PRO 5000", mode="fractional",
+                  status="ready", total_mem_mb=49152, used_mem_mb=0,
+                  total_cores=100, used_cores=0),
+    ])
     return node
 
 

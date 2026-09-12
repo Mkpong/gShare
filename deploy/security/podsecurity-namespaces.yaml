@@ -19,8 +19,13 @@ kind: Namespace
 metadata:
   name: gshare-sessions
   labels:
-    # Tenant sessions: restricted, enforced. Anything not running as non-root is denied at admission.
-    pod-security.kubernetes.io/enforce: restricted
+    # Tenant sessions: baseline enforced, restricted audited and warned — the same profile the
+    # chart sets (charts/gshare/templates/namespaces.yaml). Every ordinary session pod already
+    # has the restricted shape; the one relaxation is a policy-granted privileged session running
+    # as root, which restricted would reject outright. Enforcing restricted here while the chart
+    # enforces baseline meant whichever manifest was applied last decided, and applying this one
+    # last silently broke that feature.
+    pod-security.kubernetes.io/enforce: baseline
     pod-security.kubernetes.io/enforce-version: latest
     pod-security.kubernetes.io/audit: restricted
     pod-security.kubernetes.io/warn: restricted

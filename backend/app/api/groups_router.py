@@ -843,6 +843,7 @@ async def add_membership(
     user = await db.get(User, body.user_id)
     if user is None or user.deleted_at is not None:
         raise NotFound("user", {"user_id": body.user_id})
+    await _assert_user_enrollable(db, principal, body.user_id)
 
     # (user, project) is unique: 409 when they are already a member.
     dup = await db.scalar(
@@ -995,6 +996,42 @@ def _page(pagination: Pagination, total: int) -> dict[str, int]:
         "total": int(total),
         "total_pages": math.ceil(total / size) if size else 0,
     }
+
+
+async def _assert_user_enrollable(db: AsyncSession, principal: Principal, user_id: str) -> None:
+    """A non-super administrator may only enroll a user who already shares a tenant with them, or
+    who belongs to no group yet.
+
+    Membership is authority: whoever administers the group can reset the member's password,
+    suspend them, soft-delete them and move their credits. Enrolling an arbitrary user id (which
+    /users/resolve hands out for any email) into one's own group therefore used to hand a
+    group_admin of one organization those powers over a member of another. Moving a user between
+    organizations stays a super_admin task.
+    """
+    if "super_admin" in principal.global_roles:
+        return
+    target_groups = set(
+        (await db.scalars(
+            select(Membership.group_id).where(
+                Membership.user_id == user_id, Membership.group_id.is_not(None)
+            )
+        )).all()
+    )
+    if not target_groups:
+        return   # unaffiliated (freshly created / approved) user: nothing to take over
+    reachable = {gid for gid, r in principal.memberships.items() if r in ("org_admin", "group_admin")}
+    if principal.org_admin_orgs:
+        reachable |= set(
+            (await db.scalars(
+                select(Project.id).where(
+                    Project.org_id.in_(list(principal.org_admin_orgs)), Project.deleted_at.is_(None)
+                )
+            )).all()
+        )
+    if not (reachable & target_groups):
+        raise Forbidden(
+            "not permitted: the user belongs to another organization", {"user_id": user_id}
+        )
 
 
 async def _load_project(db: AsyncSession, group_id: str) -> Project:

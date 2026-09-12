@@ -4,43 +4,32 @@ title: 멀티 클러스터
 ---
 # 여러 클러스터에서 gShare 운영하기
 
-제어 플레인 하나, GPU 클러스터 여럿. 제어 플레인은 사용자, 돈, 결정을 쥐고, 각 클러스터는 그
-결정을 파드로 바꾸고 실제로 일어난 일을 보고하는 오퍼레이터를 돌립니다.
+단일 제어 플레인(Control Plane)과 다수의 GPU 클러스터(Data Plane) 환경을 구성합니다. 제어 플레인은 사용자 계정, 자산/크레딧, 중앙 정책 및 리소스 할당을 관장하며, 각 데이터 플레인 클러스터는 해당 결정을 실제 워크로드 파드로 변환하고 수행 상태를 보고하는 오퍼레이터(Operator)를 실행합니다.
 
-이 문서는 운영자 가이드입니다. 무엇이 갖춰져야 하는지, 무엇을 실행하는지, 잘 됐는지 어떻게
-아는지.
+본 문서는 클러스터 운영자를 위한 가이드로, 사전 요구 사항, 실행 절차 및 정상 작동 검증 방법을 안내합니다.
 
 ---
 
-## 각 쪽의 책임
+## 각 영역별 역할 및 책임
 
-| | 제어 플레인 클러스터 | 데이터 플레인 클러스터 |
+| 구분 | 제어 플레인 클러스터 | 데이터 플레인 클러스터 |
 |---|---|---|
-| 실행 | api, worker, 콘솔, Postgres, Redis | 오퍼레이터만 |
-| 보유 | 사용자, 크레딧, 정책, 세션 기록, 모든 클러스터의 자격 증명 | GPU, 세션 파드, 자체 인그레스 |
-| 통신 대상 | 등록한 kubeconfig로 각 클러스터의 apiserver | 제어 플레인의 `/internal` 경로 |
+| 실행 요소 | api, worker, 콘솔, Postgres, Redis | 오퍼레이터 (Operator) 단독 실행 |
+| 보유 리소스 | 사용자, 크레딧, 정책, 세션 기록, 전체 클러스터 접근 자격 증명 | GPU 리소스, 세션 파드, 자체 인그레스 (Ingress) |
+| 통신 대상 | 등록된 kubeconfig 기반 각 클러스터의 apiserver | 제어 플레인의 `/internal` 엔드포인트 |
 
-시작 전에 짚어 둘 두 가지 결과:
+- **독립적인 세션 URL 제공**: 각 데이터 플레인 클러스터는 자신만의 세션 URL을 서비스합니다. 세션 접속 주소는 워크로드가 실행되는 클러스터의 호스트명으로 지정되며, 해당 클러스터의 인그레스가 파드로 트래픽을 라우팅합니다. 전역 단일 도메인이 아닌 클러스터별 전용 도메인을 부여합니다.
+- **양방향 통신 요구 사항**: 제어 플레인과 데이터 플레인 간 양방향 네트워크 연결이 필요합니다. 오퍼레이터는 상태 보고를 위해 제어 플레인을 콜백하며, 제어 플레인은 세션 리소스 반영을 위해 대상 클러스터의 apiserver를 호출합니다.
 
-- **각 클러스터는 자기 세션 URL을 서비스합니다.** 세션 주소는 세션이 도는 클러스터의 호스트명입니다.
-  그 클러스터의 인그레스가 파드로 라우팅하기 때문입니다. 호스트명은 클러스터마다 줍니다. 전역
-  하나는 없습니다.
-- **제어 플레인은 데이터 플레인에서 닿아야 하고, 그 반대도 마찬가지입니다.** 오퍼레이터는 상태
-  보고를 위해 콜백하고, 제어 플레인은 세션 리소스 적용을 위해 apiserver를 호출합니다.
+> **보안 아키텍처**
+> 모든 오퍼레이터 인증 토큰은 `operator:<cluster_id>` 형태로 발급되며, 제어 플레인은 해당 토큰을 기반으로 콜백 요청을 검증합니다. 상태 보고, 인벤토리 갱신(upsert), 사용량 메트릭 수집은 토큰에 명시된 클러스터의 세션 및 노드에 대해서만 허용됩니다 (위반 시 `403 Forbidden`). 이를 통해 특정 클러스터가 침해되더라도 타 클러스터의 세션에 대한 위변조를 방지합니다.
 
 ---
 
-모든 오퍼레이터 토큰은 `operator:<cluster_id>`로 발급되고 제어 플레인은 각 콜백을 거기에 묶습니다.
-상태 보고, 인벤토리 upsert, 사용량 샘플 배치는 토큰에 적힌 클러스터의 세션·노드에 대해서만
-받아들여집니다(아니면 `403 forbidden`). 따라서 침해된 클러스터는 자기 세션에 대해서는 거짓말할 수
-있어도 남의 세션에 대해서는 할 수 없습니다.
+## 사전 요구 사항
 
----
-
-## 전제 조건
-
-**제어 플레인에서** 내부 플레인이 데이터 플레인 클러스터에서 닿아야 합니다. 기본은 닫혀 있으며,
-단일 클러스터 설치에는 그것이 맞습니다.
+### 1. 제어 플레인 엔드포인트 개방
+데이터 플레인 클러스터에서 제어 플레인의 내부 엔드포인트에 접근할 수 있어야 합니다. 기본 설치 환경에서는 외부 접근이 차단되어 있으므로 아래와 같이 설정을 변경합니다.
 
 ```bash
 helm upgrade gshare charts/gshare -n gshare-system --reuse-values \
@@ -48,172 +37,130 @@ helm upgrade gshare charts/gshare -n gshare-system --reuse-values \
   --set ingress.internalPlane.sourceRange="10.0.0.0/8"
 ```
 
-`/internal`과 `/.well-known`만 열립니다. 둘 다 이미 RS256 내부 JWT를 요구하므로 인증 없는 표면은
-아니지만 — 그래도 `sourceRange`를 클러스터가 실제로 있는 네트워크로 제한하세요.
-
-확인:
+`/internal` 및 `/.well-known` 경로가 개방됩니다. 해당 엔드포인트는 RS256 내부 JWT 검증을 거치지만, 보안 강화를 위해 `sourceRange`를 실제 데이터 플레인 클러스터가 위치한 CIDR 대역으로 제한하는 것을 권장합니다.
 
 ```bash
-curl -s https://gshare.example.com/.well-known/gshare-internal-jwks.json | head -c 40
-# {"keys":[{"alg":"RS256", ...     ← 콘솔 HTML이 아니라 진짜 키
+# 정상 개방 여부 확인 (HTML이 아닌 JWKS JSON 키가 반환되어야 함)
+curl -s [https://gshare.example.com/.well-known/gshare-internal-jwks.json](https://gshare.example.com/.well-known/gshare-internal-jwks.json) | head -c 40
+# {"keys":[{"alg":"RS256", ...
 ```
 
-**새 클러스터의 각 GPU 노드에서** 세 가지가 이미 동작해야 합니다. 연결 스크립트가 셋 다 확인하고
-빠진 것이 있으면 해결 방법과 함께 멈춥니다. 어느 것도 원격으로 할 수 없기 때문입니다.
+### 2. 신규 데이터 플레인 노드 구성
+각 GPU 노드에서 다음 3가지 항목이 정상 작동해야 합니다. 연동 스크립트 실행 시 각 항목을 자동으로 검증합니다.
 
 ```bash
-nvidia-smi                                              # 드라이버
+nvidia-smi                                              # GPU 드라이버
 nvidia-ctk --version                                    # 컨테이너 툴킷
-sudo containerd config dump | grep nvidia-container-runtime   # containerd에 런타임 등록
+sudo containerd config dump | grep nvidia-container-runtime   # containerd 런타임 등록 확인
 ```
 
-마지막 줄이 아무것도 출력하지 않으면:
+containerd 런타임이 등록되지 않은 경우:
 
 ```bash
 sudo nvidia-ctk runtime configure --runtime=containerd && sudo systemctl restart containerd
 ```
 
-드라이버가 아예 없으면 그 노드에서 `sudo ./hack/cluster-bootstrap.sh prereqs --gpu`. 보통 재부팅이
-필요합니다.
-
-**새 클러스터의 kubeconfig**는 `server:`가 실제 네트워크 주소여야 합니다. kubeadm의 `admin.conf`는
-흔히 `127.0.0.1`이라 그 노드에서만 동작하는데, 제어 플레인도 닿아야 합니다. 시작 전에 고치세요.
+GPU 드라이버가 누락된 노드의 경우 아래 명령으로 필수 패키지를 설치합니다 (설치 후 시스템 재부팅 필요).
 
 ```bash
-grep server: remote.kubeconfig     # localhost가 아니라 노드의 LAN 주소여야 함
+sudo ./hack/cluster-bootstrap.sh prereqs --gpu
+```
+
+### 3. Kubeconfig 엔드포인트 검증
+신규 클러스터의 `kubeconfig` 내 `server:` 주소는 루프백(`127.0.0.1`)이 아닌 실제 네트워크 접근 가능한 LAN/WAN IP여야 합니다.
+
+```bash
+grep server: remote.kubeconfig     # localhost가 아닌 노드의 실제 접근 가능 IP 확인
 ```
 
 ---
 
-## 클러스터 연결
+## 클러스터 연동
 
 ```bash
 ./hack/attach-cluster.sh \
   --kubeconfig ~/remote.kubeconfig \
   --name lab-c2 \
-  --control-plane https://gshare.example.com \
+  --control-plane [https://gshare.example.com](https://gshare.example.com) \
   --session-domain gshare.lab-c2.example.com \
   --ingress-node master-c2 \
-  --storage-values ~/csi-values.yaml     # 선택, "볼륨과 스토리지" 참고
+  --storage-values ~/csi-values.yaml     # 선택 사항, "볼륨 및 스토리지" 절 참조
 ```
 
-`--session-domain`은 이 클러스터의 ingress-nginx가 도는 노드로 해석되어야 하는 호스트명입니다. 이
-클러스터의 세션은 거기로 안내됩니다.
+`--session-domain`은 대상 클러스터의 ingress-nginx가 바인딩된 노드로 라우팅되는 호스트명입니다. 해당 클러스터에서 생성된 모든 세션은 이 도메인을 통해 접속합니다.
 
-**현재 kube 컨텍스트는 제어 플레인을 가리켜야** 합니다. 오퍼레이터 토큰이 거기서 서명되기
-때문입니다 — 서명 키는 절대 그곳을 떠나지 않습니다. 원격 클러스터는 `--kubeconfig`로만 지정합니다.
+> **주의**: 현재 실행 중인 `kubectl` 컨텍스트는 **제어 플레인**을 가리키고 있어야 합니다. 오퍼레이터 토큰이 제어 플레인에서 서명되기 때문입니다. 연동 대상 원격 클러스터는 `--kubeconfig` 파라미터로 지정합니다.
 
-스크립트는 멱등합니다. 다시 실행하는 것이 반쯤 끝난 연결을 고치거나 오퍼레이터를 올리는 공식
-방법입니다. 하는 일:
+스크립트는 멱등성(Idempotency)을 보장하므로 실패 시 재실행이 가능합니다. 주요 자동화 작업:
 
-1. kubeconfig가 클러스터에 닿고 localhost를 가리키지 않는지 확인.
-2. 모든 GPU 노드의 드라이버와 containerd nvidia 런타임 확인.
-3. `nvidia` RuntimeClass 생성, GPU 노드 라벨(`gpu=on`, `gshare.io/gpu-mode`).
-4. HAMi 설치(스케줄러 이미지를 클러스터의 Kubernetes 버전에 고정), GPU가 실제로 광고될 때까지
-   대기.
-5. ingress-nginx 설치(이미 있으면 `--skip-ingress`).
-6. 제어 플레인에 클러스터 등록. 제어 플레인은 받아들이기 전에 프로브합니다.
-7. 오퍼레이터 배포, 제어 플레인에서 토큰 발급·주입.
-8. `--storage-values`가 있으면: 모든 노드의 NFS 클라이언트 확인, 공유 풀에 대해 democratic-csi
-   설치, 오퍼레이터를 그 StorageClass로 지정. 없으면 건너뜀.
-9. 연결 테스트 실행, 첫 인벤토리 보고 대기.
+1. kubeconfig 네트워크 연동 및 IP 유효성 검증
+2. GPU 노드 드라이버 및 containerd nvidia 런타임 상태 점검
+3. `nvidia` RuntimeClass 생성 및 GPU 노드 레이블 부여 (`gpu=on`, `gshare.io/gpu-mode`)
+4. HAMi 설치 (Kubernetes 버전에 맞춰 스케줄러 이미지 고정) 및 GPU 디바이스 할당 대기
+5. ingress-nginx 배포 (기존 설치 시 `--skip-ingress` 옵션 활용)
+6. 제어 플레인에 클러스터 등록 및 헬스 체크 프로브 수행
+7. 오퍼레이터 배포 및 내부 JWT 토큰 발급/주입
+8. `--storage-values` 지정 시: NFS 클라이언트 상태 점검, democratic-csi 배포, 오퍼레이터 StorageClass 지정
 
 ---
 
-## 검증
+## 연동 검증
 
 ```bash
-# 클러스터가 응답하며, 제어 플레인이 신경 쓰는 런타임 검사 결과 포함
-curl -sX POST https://gshare.example.com/api/v1/clusters/$CID/connection-test \
+# 제어 플레인에서 연동 클러스터의 런타임 헬스 체크 실행
+curl -sX POST [https://gshare.example.com/api/v1/clusters/$CID/connection-test](https://gshare.example.com/api/v1/clusters/$CID/connection-test) \
   -H "Authorization: Bearer $TOKEN" -H 'Content-Type: application/json' -d '{}'
-# → {"status":"connected","checks":{"runtime_class_nvidia":true,"hami_device_plugin":true,...}}
+# 정상 응답 예시: {"status":"connected","checks":{"runtime_class_nvidia":true,"hami_device_plugin":true,...}}
 ```
 
-그다음 콘솔에서: 상단 바 선택기에 클러스터가 나타나고, 노드 관리에 노드가, GPU 관리에 카드가
-나타납니다. 상단 바에서 클러스터를 고르면 관리자 화면이 그것으로 좁혀집니다.
+검증 완료 후 콘솔 UI 상단 클러스터 선택기에 신규 클러스터가 추가되며, 노드 및 GPU 디바이스 관리에 관련 리소스가 정상 표시됩니다.
 
-진짜 테스트는 세션입니다. 새 클러스터에 고정해 하나 만들고 열어 보세요. URL에 새 클러스터의
-호스트명이 있어야 합니다. 제어 플레인의 것이면 `session_domain`이 설정되지 않은 것입니다.
+실제 워크로드 생성 테스트 시, 신규 클러스터를 지정하여 세션을 생성하고 접속 URL의 호스트명이 지정한 `session_domain`과 일치하는지 확인합니다.
 
 ---
 
-## 볼륨과 스토리지 {#volumes-and-storage}
+## 볼륨 및 스토리지
 
-gShare 볼륨은 클러스터에 묶이지 않습니다. 볼륨은 소유자와 쿼터를 가지고, 세션이 배치된 클러스터의
-오퍼레이터가 PVC를 만듭니다. 이것은 **모든 클러스터가 같은 풀을 마운트**할 때만 성립합니다 —
-NFS/ZFS 서버 하나, 클러스터당 democratic-csi 드라이버 하나, 모두 그것을 가리킴. 클러스터별
-스토리지는 각 사용자를 데이터가 있는 클러스터에 묶어 버리는데, 공유 플릿의 목적과 정반대입니다.
-
-제어 플레인 클러스터에서는 `cluster-bootstrap.sh`가 드라이버를 설치했습니다. 연결된 클러스터에는
-그 값을 내보내 같은 드라이버를 설치합니다.
+gShare 볼륨은 특정 클러스터에 귀속되지 않으며 독립된 소유권과 쿼터를 가집니다. 워크로드가 배치된 클러스터의 오퍼레이터가 이에 대응하는 PVC를 동적으로 생성합니다. 따라서 **모든 클러스터가 동일한 공유 스토리지 풀(NFS/ZFS)을 마운트**하는 아키텍처를 권장합니다.
 
 ```bash
-# 제어 플레인에서: 스토리지 서버에 쓰는 SSH 키를 포함한 드라이버 설정
+# 제어 플레인에서 기존 스토리지 드라이버 설정 추출
 helm -n gshare-storage get values gshare-storage > csi-values.yaml && chmod 600 csi-values.yaml
-# 딱 하나 수정: controller.nodeSelector → 새 클러스터의 노드(프로비저너가 거기서 돕니다)
+
+# csi-values.yaml 내 controller.nodeSelector 항목을 신규 클러스터 노드로 수정한 후 연동 실행
 ./hack/attach-cluster.sh ... --storage-values csi-values.yaml
 ```
 
-값 파일에는 스토리지 서버의 SSH 키가 들어 있습니다. 저장소 밖에 두고 연결이 끝나면 삭제하세요.
+### 스토리지 풀 등록
 
-### 풀 등록
+콘솔 UI(**자원 → 볼륨 관리 → 스토리지 풀**) 또는 API(`POST /api/v1/storage/pools`)를 통해 스토리지 풀을 등록합니다.
 
-풀은 노드 역할에서 추론하는 것이 아니라 등록하는 객체입니다. 콘솔(**자원 → 볼륨 관리 → 스토리지
-풀**) 또는 `POST /api/v1/storage/pools`로 다음 값과 함께 등록합니다.
+- **클러스터**: 스토리지 서버가 위치한 원천 클러스터
+- **스토리지 클래스**: 해당 풀에서 사용하는 StorageClass 명칭
+- **공유 범위**: 전체 클러스터 대상 `all`, 또는 특정 클러스터 지정 `selected`
 
-- **클러스터** — 스토리지 서버가 있는 클러스터;
-- **스토리지 클래스** — 거기서 프로비저닝하는 클래스. 오퍼레이터에 `--volume-storage-class`로 준
-  것과 같은 이름;
-- **공유** — 플릿의 모든 클러스터에 `all`(NFS 서버 하나를 전체에 내보내는 보통의 형태), 또는
-  `selected`와 볼륨을 둘 수 있는 클러스터 목록.
+> **스토리지 용량 산정 방식**
+> 다수의 스토리지 서버를 하나의 풀로 합산하여 관리하지 않습니다. 단일 볼륨은 정해진 하나의 스토리지 풀에 위치하므로, 용량 제한 및 할당 정책은 각 스토리지 풀의 **최대 가용 용량**을 기준으로 평가됩니다.
 
-**스토리지 서버 여러 대는 풀 하나가 아닙니다.** 볼륨은 정확히 하나에 존재합니다 — PVC가 지정한
-StorageClass가 위치를 정하고 gShare는 아무것도 고르지 않습니다. 따라서 용량 게이트와 대시보드는
-합계가 아니라 배치가 쓸 수 있는 *가장 큰* 풀을 상한으로 삼습니다. 2 TB 서버 두 대를 더해 4 TB
-볼륨을 허가하면 어느 쪽도 담을 수 없습니다.
+### 용량 산정 데이터 원천
 
-### 용량 값의 출처
+1. **`csi`**: CSI 드라이버의 `GetCapacity` 메트릭 (`CSIStorageCapacity` 객체 기준, 자동 측정)
+2. **`manual`**: 스토리지 풀 등록 시 직접 입력한 명시적 용량 (`manual_capacity_gb`)
+3. **`node_disk`**: 스토리지 노드의 루트 디스크 용량 (대체 메트릭)
 
-순서대로, 그리고 각 값은 어느 출처를 썼는지 표시합니다.
+### 스토리지 연결 사전 조건
 
-1. **`csi`** — 드라이버의 `GetCapacity`. external-provisioner가 `CSIStorageCapacity` 객체로
-   발행하고 오퍼레이터가 볼륨 동기화 틱마다 읽습니다. 유일한 자동 소스입니다. 다른 어느 것도
-   노드 루트 디스크 너머를 볼 수 없습니다.
-2. **`manual`** — 풀에 적어 둔 값(`manual_capacity_gb`). 제어 플레인 전체의
-   `STORAGE_POOL_CAPACITY_GB`는 단일 풀 설치의 플릿 기본값으로 여전히 동작합니다.
-3. **`node_disk`** — 스토리지 노드의 시스템 드라이브. 대용이며 그렇게 표시됩니다. ZFS 서버에서는
-   풀과 다른 디스크라 수백 GB 차이가 날 수 있습니다.
-
-`attach-cluster.sh`는 `csiDriver.storageCapacity=true`를 설정해 용량을 지원하는 드라이버가 발행을
-시작하게 합니다. 모든 드라이버가 지원하지는 않으며, 프로비저너에도 `--enable-capacity`,
-`--capacity-for-immediate-binding=true`(우리 StorageClass는 즉시 바인딩)와 노드 토폴로지를
-보고하는 드라이버가 필요합니다. 토폴로지가 없으면 객체가 갱신마다 생성·삭제를 반복합니다. 아무것도
-발행되지 않으면 풀은 적어 둔 용량을 유지하고, 대시보드는 측정한 척하지 않고 `manual`이라고
-말합니다.
-
-연결된 클러스터의 전제 — 스크립트가 둘 다 확인하고 빠지면 해결 방법과 함께 멈춥니다.
-
-- **모든 노드에 NFS 클라이언트**(Debian/Ubuntu는 `nfs-common`, RHEL은 `nfs-utils`): 드라이버는
-  세션이 도는 노드에 풀을 마운트합니다. `mount.nfs`가 없는 노드는 세션을 `ContainerCreating`에
-  묶어 둡니다.
-- **모든 노드에서 스토리지 서버로의 네트워크 경로** 2049/tcp(NFSv3 내보내기라면 111/tcp,
-  20048/tcp도). 다른 서브넷의 노드는 내보내기의 허용 범위에도 있어야 합니다.
-
-관리자 대시보드의 스토리지 타일은 풀을 플릿 전체로 읽고, 클러스터를 선택하면 *클러스터 간 공유*라고
-표시합니다. 풀이 어느 한 클러스터의 것이 아니기 때문입니다. 제어 플레인의
-`STORAGE_POOL_CAPACITY_GB`가 풀의 실제 크기를 말하고, 없으면 타일은 스토리지 노드의 디스크로
-대체합니다.
+- **모든 노드에 NFS 클라이언트 설치**: Debian/Ubuntu (`nfs-common`), RHEL/Rocky (`nfs-utils`). 미설치 시 세션 파드가 `ContainerCreating` 상태에 멈추게 됩니다.
+- **네트워크 방화벽 개방**: 스토리지 서버 간 `2049/tcp` (NFSv3 사용 시 `111/tcp`, `20048/tcp` 추가 개방) 포트 통신이 가능해야 합니다.
 
 ---
 
-## 토큰 회전
+## 오퍼레이터 토큰 로테이션
 
-오퍼레이터 토큰은 7일 유효합니다. 지금은 아무것도 자동 회전하지 않으며, 만료되면 오퍼레이터
-콜백이 401로 실패하기 시작합니다 — 파드는 계속 도는데 세션 기록이 갱신되지 않는, 디버그하기
-혼란스러운 상태. 스케줄에 올리세요.
+오퍼레이터 내부 JWT 인증 토큰의 유효 기간은 7일입니다. 주기적인 로테이션을 권장하며, 토큰 만료 시 콜백 통신이 `401 Unauthorized`로 거부됩니다.
 
 ```bash
-# 제어 플레인에서, 하루 한 번
+# 제어 플레인 환경에서 주기적(1일 1회 등)으로 토큰 재발급 및 반영
 CID=clu_...
 TOKEN=$(kubectl -n gshare-system exec deploy/gshare-api -c api -- python -c \
   "from app.auth.internal_jwt import sign_internal_jwt; print(sign_internal_jwt('operator:$CID', ttl=604800))")
@@ -222,63 +169,42 @@ printf '%s' "$TOKEN" | KUBECONFIG=~/remote.kubeconfig kubectl -n gshare-system \
   --dry-run=client -o yaml | KUBECONFIG=~/remote.kubeconfig kubectl apply -f -
 ```
 
-오퍼레이터는 시도마다 파일을 다시 읽으므로 재시작이 필요 없습니다.
+오퍼레이터는 런타임에 시크릿 파일을 수시로 다시 읽어들이므로 프로세스 재시작이 필요하지 않습니다.
 
 ---
 
-## 안 될 때
+## 트러블슈팅
 
-**클러스터는 등록되는데 노드가 안 보입니다.** 오퍼레이터가 제어 플레인에 닿지 못합니다. 로그를
-보고, `internalPlane`이 켜져 있고 `sourceRange`에 클러스터가 포함되는지 확인하세요.
-
-```bash
-KUBECONFIG=~/remote.kubeconfig kubectl -n gshare-system logs deploy/gshare-operator --tail=50
-```
-
-**등록이 런타임 오류로 거부됩니다.** 프로브가 `nvidia` RuntimeClass나 HAMi를 찾지 못했습니다. 둘 다
-연결 스크립트가 설치합니다. 손으로 등록했다면 먼저 설치하세요.
-
-**등록이 멈췄다가 unreachable로 실패합니다.** kubeconfig의 apiserver 주소가 *제어 플레인
-파드에서* 닿지 않습니다. 프로브는 거기서 돌지 노트북에서 돌지 않습니다. 포기까지 몇 분 걸립니다.
-
-**세션은 시작되는데 URL이 404입니다.** `session_domain`이 비어 있거나 잘못된 호스트를 가리켜,
-사용자가 그 세션의 경로가 없는 클러스터 인그레스로 보내집니다.
-
-```bash
-curl -sX PATCH https://gshare.example.com/api/v1/clusters/$CID \
-  -H "Authorization: Bearer $TOKEN" -H 'Content-Type: application/json' \
-  -d '{"session_domain":"gshare.lab-c2.example.com"}'
-```
-
-**세션은 시작되는데 연결하면 401입니다.** 세션의 인그레스가 제어 플레인에 연결 토큰 검증을
-요청하므로, 오퍼레이터만이 아니라 *데이터 플레인 클러스터의 인그레스 컨트롤러*도
-`/internal/connect/verify`에 닿아야 합니다.
+- **클러스터 등록 완료 후 노드가 미표시되는 경우**: 오퍼레이터가 제어 플레인에 연결하지 못하는 상태입니다. `internalPlane.enabled` 및 `sourceRange` 방화벽 설정을 재확인합니다.
+  ```bash
+  KUBECONFIG=~/remote.kubeconfig kubectl -n gshare-system logs deploy/gshare-operator --tail=50
+  ```
+- **런타임 오류로 등록이 거부되는 경우**: `nvidia` RuntimeClass 또는 HAMi 디바이스 플러그인 미설치 상태입니다.
+- **연동 시 Unreachable 에러로 타임아웃 발생하는 경우**: `kubeconfig`에 기술된 apiserver IP가 제어 플레인 파드에서 라우팅 불가능한 주소인지 점검합니다.
+- **세션 생성 후 URL 접속 시 404가 발생하는 경우**: `session_domain` 설정값이 누락되었거나 대상 클러스터의 인그레스 도메인과 불일치하는 상태입니다.
+  ```bash
+  curl -sX PATCH [https://gshare.example.com/api/v1/clusters/$CID](https://gshare.example.com/api/v1/clusters/$CID) \
+    -H "Authorization: Bearer $TOKEN" -H 'Content-Type: application/json' \
+    -d '{"session_domain":"gshare.lab-c2.example.com"}'
+  ```
+- **세션 접속 시 401 Unauthorized가 발생하는 경우**: 데이터 플레인 인그레스 컨트롤러에서 제어 플레인의 `/internal/connect/verify` 엔드포인트로의 인증 요청 트래픽이 차단되었는지 확인합니다.
 
 ---
 
-## 클러스터 제거
+## 클러스터 해제
 
 ```bash
-curl -sX DELETE https://gshare.example.com/api/v1/clusters/$CID -H "Authorization: Bearer $TOKEN"
+curl -sX DELETE [https://gshare.example.com/api/v1/clusters/$CID](https://gshare.example.com/api/v1/clusters/$CID) -H "Authorization: Bearer $TOKEN"
 ```
 
-살아 있는 세션이나 할당이 있으면 거부됩니다 — 먼저 종료하세요. 등록 해제는 노드와 디바이스를
-지우고, 세션 이력은 원장이 참조하므로 남습니다.
+실행 중인 세션이나 할당된 리소스가 남아 있는 경우 해제가 거부되므로 사전 세션 종료가 필요합니다. 등록 해제 시 노드 및 디바이스 메타데이터가 정리되며, 과거 세션 이력 데이터는 보존됩니다.
 
 ---
 
-## 알려진 제한
+## 제약 사항
 
-- **Prometheus는 클러스터별이 아니라 제어 플레인 전체입니다.** 모니터링 화면은 Prometheus 하나를
-  읽습니다. 연결된 클러스터의 노드·카드는 페더레이션하거나 두 번째 스크레이프 대상을 추가하기
-  전까지 거기 나타나지 않습니다. 대시보드·노드·카드·세션 화면은 영향 없습니다 — 제어 플레인 자체
-  인벤토리(클러스터별)를 읽습니다.
-- **토큰 회전은 수동입니다.** 위 참고.
-- **이미지는 클러스터별입니다.** 세션 이미지는 세션이 배치되는 클러스터에서 풀 가능해야 합니다.
-  모든 클러스터가 닿는 레지스트리에 올리거나 클러스터마다 미리 적재하세요.
-- **볼륨은 처음 마운트한 클러스터에 머뭅니다.** PersistentVolume 객체는 클러스터별이므로 PVC가
-  클러스터 A에 있는 볼륨을 클러스터 B의 세션이 마운트할 수 없습니다 — 스케줄러는 그런 세션을 A에
-  두고 B를 명시한 요청은 거부합니다(`409 volume_on_another_cluster`). 데이터는 공유 풀에 있지만
-  두 번째 클러스터의 PVC에 바인딩하는 것은 아직 자동화되지 않았습니다.
-- **자격 증명은 제자리에서 회전할 수 없습니다.** 클러스터 kubeconfig를 갱신하려면 등록 해제 후
-  재등록해야 하며, 새 클러스터 id — 따라서 새 오퍼레이터 토큰과 갱신할 Helm 값 — 가 생깁니다.
+- **Prometheus 통합 모니터링**: 모니터링 시스템은 단일 Prometheus 엔드포인트를 사용하므로, 신규 데이터 플레인의 메트릭 수집을 위해서는 페더레이션 설정이나 스크레이프 타깃 추가가 필요합니다. (단, 콘솔 인벤토리/노드/세션 제어 기능은 영향받지 않습니다.)
+- **토큰 수동 로테이션**: 오퍼레이터 인증 토큰 로테이션 자동화 절차가 필요합니다.
+- **컨테이너 이미지 접근성**: 세션 이미지는 워크로드가 실행되는 해당 클러스터의 노드에서 접근 및 렌더링이 가능해야 합니다.
+- **볼륨 클러스터 바인딩**: PVC 기반의 PersistentVolume은 특정 클러스터에 고정됩니다.
+- **자격 증명 인플레이스 로테이션 미지원**: 클러스터 `kubeconfig` 변경 시 기존 등록 해제 후 재등록 절차가 필요합니다.

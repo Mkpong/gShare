@@ -334,7 +334,19 @@ async def storage_quota_usage(
     """Per-scope storage limit, usage, and headroom, for the limit warning on the new-volume form.
 
     Reads the same (scope, scope_id) policy and volume quota sum that _assert_storage_quota uses at
-    creation time. has_limit=false means unlimited: no policy, or a limit of 0."""
+    creation time. has_limit=false means unlimited: no policy, or a limit of 0.
+
+    The scope must be one the caller could create a volume in or belongs to: their own user scope,
+    a group they are a member of, or the global scope. Another tenant's limit and provisioned total
+    are not theirs to read."""
+    if "super_admin" not in principal.global_roles:
+        allowed = (
+            scope == "global"
+            or (scope == "user" and scope_id == principal.user_id)
+            or (scope == "group" and scope_id in principal.memberships)
+        )
+        if not allowed:
+            raise Forbidden("not permitted: storage quota of another scope")
     limit, allocated = await _storage_usage(db, scope, scope_id)
     cap, pool_alloc = await _physical_storage(db)
     physical = {"physical_remaining_gb": max(0, cap - pool_alloc)} if cap is not None else {}
@@ -639,6 +651,28 @@ async def list_folders(
     }
 
 
+async def _assert_volume_write(db: AsyncSession, principal: Principal, vol: StorageVolume) -> None:
+    """Authorize changing a volume's contents metadata (folders): read access is not enough.
+
+    Owner, group member, super_admin, or a grantee holding rw/owner; a read-only grantee and a
+    plain reader of a global volume may look but not add."""
+    if "super_admin" in principal.global_roles:
+        return
+    if vol.scope == "user" and vol.scope_id == principal.user_id:
+        return
+    if vol.scope == "group" and vol.scope_id in principal.memberships:
+        return
+    role = await db.scalar(
+        select(VolumePermission.role).where(
+            VolumePermission.volume_id == vol.id,
+            VolumePermission.user_id == principal.user_id,
+        )
+    )
+    if role in ("owner", "rw"):
+        return
+    raise Forbidden("not permitted: read-only access to this volume")
+
+
 @router.post("/{volume_id}/folders", status_code=status.HTTP_201_CREATED)
 async def create_folder(
     volume_id: str,
@@ -648,7 +682,7 @@ async def create_folder(
 ):
     """Create a folder (absolute path) under a volume."""
     vol = await _load_volume(db, volume_id)
-    await _assert_volume_access(db, principal, vol)
+    await _assert_volume_write(db, principal, vol)
     path = body.get("path")
     if not path or not isinstance(path, str) or not path.startswith("/"):
         raise _ValidationFailed("path must be an absolute string")

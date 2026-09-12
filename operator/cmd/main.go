@@ -21,6 +21,7 @@ import (
 	utilruntime "k8s.io/apimachinery/pkg/util/runtime"
 	clientgoscheme "k8s.io/client-go/kubernetes/scheme"
 	ctrl "sigs.k8s.io/controller-runtime"
+	"sigs.k8s.io/controller-runtime/pkg/cache"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/healthz"
 	"sigs.k8s.io/controller-runtime/pkg/log/zap"
@@ -191,6 +192,17 @@ func main() {
 	}
 	if webhookEnabled {
 		mgrOpts.WebhookServer = ctrlwebhook.NewServer(ctrlwebhook.Options{Port: webhookPort, CertDir: webhookCertDir})
+	}
+	// The only Secrets the operator touches are the per-session ses-<id>-secret objects it
+	// creates, so their informer is confined to the session namespace. Without this the manager
+	// lists and watches Secrets cluster-wide, which is why the chart had to grant the operator
+	// read access to every Secret in the cluster (kube-system included).
+	if sessionNamespace != "" {
+		mgrOpts.Cache = cache.Options{
+			ByObject: map[client.Object]cache.ByObject{
+				&corev1.Secret{}: {Namespaces: map[string]cache.Config{sessionNamespace: {}}},
+			},
+		}
 	}
 	mgr, err := ctrl.NewManager(ctrl.GetConfigOrDie(), mgrOpts)
 	if err != nil {

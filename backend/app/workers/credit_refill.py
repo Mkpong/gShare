@@ -1,8 +1,10 @@
-"""credit_refill — the monthly automatic credit refill, use-it-or-lose-it.
+"""credit_refill — the monthly automatic credit refill (top-up to the grant).
 
-Invoked hourly but acts **once a month**, made idempotent by a Redis month marker set with SET NX.
-When it runs, every wallet with monthly_grant > 0 has its balance reset to the grant, so last
-month's unused credits expire. To preserve active holds the balance is set to max(grant, reserved).
+Invoked hourly but acts **once a month**, made idempotent by a Redis month marker set with SET NX
+plus a per-wallet ledger key. When it runs, every wallet with monthly_grant > 0 is topped UP to
+its grant: a balance already above the grant is left alone (purchased, allocated and welcome
+credit are never reclaimed), so this is not use-it-or-lose-it. To preserve active holds the
+target is max(grant, reserved).
 
 The hierarchy ceiling — the siblings' grants summing within the parent's — is enforced when a grant
 is set, so resetting each wallet independently is sufficient here. """
@@ -50,7 +52,19 @@ async def run() -> None:
     if not await redis.set(marker, "1", nx=True, ex=40 * 24 * 3600):
         return
     log.info("credit_refill: monthly reset start (%s)", tag)
+    try:
+        reset = await _sweep(tag)
+    except BaseException:
+        # The marker was claimed before the sweep ran. Keeping it after a failure meant the
+        # wallets the sweep had not reached went without their refill for the whole month — no
+        # later tick could get past the NX claim. Release it so the next hourly tick retries;
+        # the per-wallet refill key keeps the retry from crediting anyone twice.
+        await redis.delete(marker)
+        raise
+    log.info("credit_refill: reset %d wallet(s) for %s", reset, tag)
 
+
+async def _sweep(tag: str) -> int:
     sessionmaker = get_sessionmaker()
     reset = 0
     # Batched: one transaction locking every wallet would block concurrent holds for the whole
@@ -72,7 +86,23 @@ async def run() -> None:
                 if not wallets:
                     break
                 last_id = wallets[-1].id
+                # Wallets this month's sweep already credited (a replay after the month marker
+                # was lost, or a retry after a crash mid-sweep). Inserting their key again raised
+                # a unique violation that aborted the whole batch instead of skipping the wallet.
+                done = set(
+                    (
+                        await db.scalars(
+                            select(CreditTransaction.wallet_id).where(
+                                CreditTransaction.idempotency_key.in_(
+                                    [f"refill:{w.id}:{tag}" for w in wallets]
+                                )
+                            )
+                        )
+                    ).all()
+                )
                 for w in wallets:
+                    if w.id in done:
+                        continue
                     # Top the wallet UP to the monthly grant; never down. The reset also erased
                     # credit that was bought, allocated by a parent or granted as welcome credit —
                     # money the grant never provided and has no business reclaiming.
@@ -94,4 +124,4 @@ async def run() -> None:
                         )
                     )
                     reset += 1
-    log.info("credit_refill: reset %d wallet(s) for %s", reset, tag)
+    return reset

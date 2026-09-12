@@ -9,6 +9,7 @@ from app.auth.rbac import Principal
 from app.core import ids
 from app.core.errors import DomainError, Forbidden
 from app.db.models import Cluster, GpuDevice, GpuNode
+from tests.fkseed import seed
 
 
 def _super() -> Principal:
@@ -21,9 +22,10 @@ async def _cards(db) -> tuple[GpuDevice, GpuDevice]:
                   mode="fractional", status="ready", total_mem_mb=24564, used_mem_mb=0, total_cores=100, used_cores=0)
     b = GpuDevice(id=ids.new("device"), cluster_id="clu_t", node_id=node.id, gpu_uuid="GPU-b", model="RTX 4090",
                   mode="fractional", status="ready", total_mem_mb=24564, used_mem_mb=0, total_cores=100, used_cores=0)
-    async with db.begin():
-        db.add_all([Cluster(id="clu_t", name="t", api_server="https://k", runtime="containerd",
-                            kubeconfig_secret_ref="s"), node, a, b])
+    await seed(db, [
+        Cluster(id="clu_t", name="t", api_server="https://k", runtime="containerd",
+                        kubeconfig_secret_ref="s"), node, a, b,
+    ])
     return a, b
 
 

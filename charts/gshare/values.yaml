@@ -61,7 +61,7 @@ images:
     pullPolicy: IfNotPresent
   # Per-node metrics agent (see the `agent` section below).
   agent:
-    repository: docker.io/boanlab/gshare-agent
+    repository: gshare-agent
     tag: "latest"
     pullPolicy: IfNotPresent
 
@@ -88,6 +88,18 @@ api:
   # (and the CSI driver the dataset). 0 reclaims on the next sync (about five minutes).
   volumeReclaimGraceHours: 24
   dbMaxOverflow: 10
+  # Which peers uvicorn trusts to set X-Forwarded-For / X-Forwarded-Proto (--forwarded-allow-ips).
+  # "*" trusts every peer, which is right when the only way to the pod is the ingress controller
+  # but lets any in-cluster client choose its own recorded address (login audit rows and the
+  # per-IP login rate limit key off it). Narrow it to the ingress controller's pod CIDR or IPs
+  # ("10.244.0.0/16" or "10.244.1.5,10.244.2.7") where the cluster lets you pin that down.
+  forwardedAllowIps: "*"
+  # How many proxies append to X-Forwarded-For before a request reaches the api
+  # (GSHARE_TRUSTED_PROXY_HOPS). The client address used for the login rate limit and the login
+  # audit rows is taken that many entries from the RIGHT of the header, because a client can
+  # prepend anything but cannot remove what a trusted proxy appends. 1 = ingress-nginx alone;
+  # 2 = a load balancer that forwards the header in front of the ingress.
+  trustedProxyHops: 1
   resources:
     requests: { cpu: "250m", memory: 512Mi }
     limits: { cpu: "1", memory: 1Gi }
@@ -200,6 +212,29 @@ frontend:
 # ── Per-node metrics agent ──
 # One pod per node sampling each session's cgroup counters, for a one-second live view on the
 # session page. Off by default: the Prometheus path already covers history, GPU and host metrics,
+# ── NetworkPolicies for the session namespace ──
+# Deny-all plus an ingress and egress allowlist for session pods (rendered by
+# templates/networkpolicy.yaml; the same manifests stand alone in deploy/security/).
+#
+# Off by default: the allowlists name addresses that differ per cluster, and enabling them without
+# a storage CIDR leaves sessions able to resolve DNS and reach nothing else. Fill the CIDRs in,
+# then enable.
+networkPolicy:
+  enabled: false
+  # Namespace of the ingress controller that fronts the session apps.
+  ingressNamespace: ingress-nginx
+  # Namespace running kube-dns / CoreDNS.
+  dnsNamespace: kube-system
+  # Ports the session containers listen on: code-server, JupyterLab, the web terminal.
+  sessionPorts: [8080, 8888, 7681]
+  storage:
+    cidrs: []          # e.g. ["10.20.0.0/16"] — the NFS / CephFS subnet
+    ports: [2049, 6789]
+  # Extra destinations for CPU data-prep sessions (dataset mirror, object store). No CIDR = no rule.
+  cpuData:
+    cidrs: []
+    ports: [443]
+
 # and this only earns its keep where people watch a job start.
 agent:
   enabled: false

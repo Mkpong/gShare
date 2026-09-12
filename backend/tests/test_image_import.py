@@ -15,6 +15,7 @@ from app.auth.rbac import Principal
 from app.core import ids
 from app.core.errors import DomainError, Forbidden, NotImplementedFeature
 from app.db.models import Image, User
+from tests.fkseed import seed
 
 REF = "pytorch/pytorch:2.4.0-cuda12.4-cudnn9-runtime"
 
@@ -37,8 +38,7 @@ def _body(source: str = REF, **kw) -> ImageImport:
 
 async def _user(db, email: str) -> str:
     u = User(id=ids.new("user"), email=email, name=email)
-    db.add(u)
-    await db.commit()
+    await seed(db, [u])
     return u.id
 
 
@@ -56,9 +56,8 @@ async def test_member_import_is_forbidden(db):
 async def test_member_is_refused_even_for_an_existing_shared_ref(db):
     """Idempotent hand-back of the shared row was a member convenience; it went with the path."""
     uid = await _user(db, "m2@x.kr")
-    db.add(Image(id=ids.new("image"), name="Shared", registry=REF, kind="container", tags={},
-                 import_status="ready", public=True, owner_user_id=None))
-    await db.commit()
+    await seed(db, [Image(id=ids.new("image"), name="Shared", registry=REF, kind="container", tags={},
+                 import_status="ready", public=True, owner_user_id=None)])
     with pytest.raises(Forbidden):
         await import_image(_body(), principal=_p(uid), db=db)
 

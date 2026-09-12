@@ -137,6 +137,8 @@ class Principal:
     memberships: dict[str, str] = field(default_factory=dict)  # {group_id: role}
     email: str | None = None
     org_admin_orgs: set[str] = field(default_factory=set)  # ids of the organizations this principal administers, used to scope list queries
+    # Read from the row, so an administrator's forced reset reaches tokens issued before it.
+    must_change_password: bool = False
 
     def require(self, action: str, group_id: str | None = None) -> None:
         """Guard: raise Forbidden (403) unless the principal may perform ``action``."""
@@ -192,8 +194,9 @@ def rbac_allows(principal: Principal, action: str, group_id: str | None = None) 
 
 # Per-process Principal cache: resolve_principal runs on EVERY authenticated request (2-3
 # SELECTs), which at thousands of users is pure overhead. Memberships change rarely; 30s of
-# staleness is acceptable (revocation via must_change_password rides in the JWT claims and is
-# unaffected). Keyed by user id + the claim fields that shape the Principal.
+# staleness is acceptable: the account-state gate, the global roles and must_change_password are
+# read from the row inside this same resolution, so a suspension, a demotion or a forced reset
+# lags by at most the TTL. Keyed by user id + the claim fields that shape the Principal.
 _PRINCIPAL_CACHE: dict[str, tuple[float, Principal]] = {}
 _PRINCIPAL_TTL_SEC = 30.0
 _PRINCIPAL_CACHE_MAX = 8192
@@ -274,14 +277,14 @@ async def _resolve_principal_uncached(db: AsyncSession, claims: dict) -> Princip
             if cur is None or _RANK.get(cur, -1) < _RANK["org_admin"]:
                 memberships[pid] = "org_admin"
 
-    # Prefer the token's global_roles list; an older token carrying a single global_role is promoted
-    # to a list.
-    roles_claim = claims.get("global_roles")
-    if isinstance(roles_claim, list):
-        global_roles = {r for r in roles_claim if r in GLOBAL_ROLES}
-    else:
-        single = claims.get("global_role")
-        global_roles = {single} if single in GLOBAL_ROLES else set()
+    # Global roles come from the row, never from the token. A bearer token lives 24h and there is
+    # no revocation list, so a demoted super_admin would otherwise keep the role until the token
+    # expired; the row is re-read here (30s principal cache) exactly like the account-state gate
+    # above. The claim is still issued for older clients that display it, but it decides nothing.
+    db_roles = list(user_row.global_roles or [])
+    if not db_roles and user_row.global_role in GLOBAL_ROLES:
+        db_roles = [user_row.global_role]   # a row from before global_roles existed
+    global_roles = {r for r in db_roles if r in GLOBAL_ROLES}
 
     return Principal(
         user_id=claims["sub"],
@@ -290,4 +293,5 @@ async def _resolve_principal_uncached(db: AsyncSession, claims: dict) -> Princip
         memberships=memberships,
         email=claims.get("email"),
         org_admin_orgs=org_admin_orgs,
+        must_change_password=bool(user_row.must_change_password),
     )

@@ -41,6 +41,7 @@ from app.db.models import (
     Project,
 )
 from app.db.models import Session as SessionRow
+from tests.fkseed import seed
 
 pytestmark = pytest.mark.asyncio
 
@@ -77,11 +78,10 @@ async def _world(db) -> World:
         id="dev-1", node_id=w.node.id, cluster_id=w.cluster.id, model="A100", gpu_uuid="GPU-1",
         total_mem_mb=16000, status="ready", mode="fractional",
     )
-    async with db.begin():
-        db.add_all([
-            w.cluster, w.cluster2, w.org_a, w.org_b, w.g1, w.gb, w.pool, w.other, w.grant_a,
-            w.node, w.free_node, w.dev,
-        ])
+    await seed(db, [
+        w.cluster, w.cluster2, w.org_a, w.org_b, w.g1, w.gb, w.pool, w.other, w.grant_a,
+        w.node, w.free_node, w.dev,
+    ])
     w.su = Principal(user_id="su", global_role="super_admin", global_roles={"super_admin"})
     w.admin_a = Principal(
         user_id="adm-a", memberships={w.g1.id: "org_admin"}, org_admin_orgs={w.org_a.id}
@@ -261,8 +261,7 @@ async def test_set_node_pool_and_node_reads(db):
     w = await _world(db)
     # cross-cluster pool → validation error
     foreign = NodePool(id=ids.new("pool"), cluster_id=w.cluster2.id, name="F", kind="dedicated")
-    db.add(foreign)
-    await db.commit()
+    await seed(db, [foreign])
     with pytest.raises(_Validation):
         await set_node_pool(w.free_node.id, NodePoolSet(pool_id=foreign.id), principal=w.su, db=db)
     with pytest.raises(NotFound):
@@ -301,8 +300,7 @@ async def test_delete_pool_refused_under_live_sessions_then_clears_nodes(db):
         id=ids.new("allocation"), session_id=sess.id, device_id=w.dev.id, gpu_uuid="GPU-1",
         gpu_mem_mb=8000, gpu_cores=50, status="bound",
     )
-    db.add_all([offering, image, sess, alloc])
-    await db.commit()
+    await seed(db, [offering, image, sess, alloc])
 
     with pytest.raises(_PoolInUse) as ei:
         await delete_node_pool(w.pool.id, principal=w.su, db=db)
@@ -311,8 +309,7 @@ async def test_delete_pool_refused_under_live_sessions_then_clears_nodes(db):
         await delete_node_pool(w.pool.id, principal=w.admin_a, db=db)
 
     sess.status = "terminated"
-    db.add(sess)
-    await db.commit()
+    await seed(db, [sess])
     await delete_node_pool(w.pool.id, principal=w.su, db=db)
     assert await db.get(NodePool, w.pool.id) is None
     assert await db.get(NodePoolGrant, w.grant_a.id) is None

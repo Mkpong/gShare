@@ -107,7 +107,19 @@ func (r *SessionReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ct
 					logger.Error(cerr, "checkpoint cleanup on terminate failed (will leak)", "session", s.Name, "node", s.Status.CheckpointNode)
 				}
 			}
-			_ = r.SoT.Report(ctx, s.Name, sot.StatusEvent{Generation: s.Generation, Phase: "Terminated", TraceID: traceID})
+			// The Terminated report is what settles the bill. Dropping it (control plane restart,
+			// a network blip outlasting the client's own retries) and removing the finalizer anyway
+			// left the session "running" — billed, and holding its GPU reservation — until the
+			// liveness sweep noticed the silence minutes later. Keep the finalizer and requeue so
+			// the report is retried; give up only after terminatedReportGrace so a control plane
+			// that is gone for good cannot pin the custom resource forever.
+			if err := r.SoT.Report(ctx, s.Name, sot.StatusEvent{Generation: s.Generation, Phase: "Terminated", TraceID: traceID}); err != nil {
+				if time.Since(s.DeletionTimestamp.Time) < terminatedReportGrace {
+					logger.Error(err, "terminated report failed; keeping the finalizer to retry", "session", s.Name)
+					return ctrl.Result{}, err
+				}
+				logger.Error(err, "terminated report still failing past the grace window; releasing the finalizer", "session", s.Name)
+			}
 			controllerutil.RemoveFinalizer(&s, finalizer)
 			if err := r.Update(ctx, &s); err != nil {
 				return ctrl.Result{}, err
@@ -373,13 +385,19 @@ func (r *SessionReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ct
 		phase = "Preparing"
 	}
 	restarts, cstate := containerFacts(&live)
+	// Only a report backed by a live pod carries restart facts; without a pod the count is not
+	// zero, it is unknown, and the control plane must not read it as "never restarted".
+	var restartCount *int
+	if live.UID != "" {
+		restartCount = &restarts
+	}
 	if phase == s.Status.Phase && live.UID != "" && (phase == "Running" || phase == "Preparing") {
 		// Nothing changed: still a heartbeat. The control plane never inspects Kubernetes, so
 		// this is how it learns the pod is still there (and how a crash loop surfaces — a pod
 		// whose container keeps restarting stays Running from the phase's point of view).
 		_ = r.SoT.Report(ctx, s.Name, sot.StatusEvent{Generation: s.Generation,
 			Phase: "Heartbeat", BoundGpuUUID: gpu, NodeName: live.Spec.NodeName,
-			PodRef: live.Namespace + "/" + live.Name, RestartCount: restarts, ContainerState: cstate,
+			PodRef: live.Namespace + "/" + live.Name, RestartCount: restartCount, ContainerState: cstate,
 			TraceID: traceID,
 		})
 		return ctrl.Result{RequeueAfter: heartbeatInterval}, nil
@@ -409,7 +427,7 @@ func (r *SessionReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ct
 			NodeName:       live.Spec.NodeName,
 			PodRef:         s.Status.PodRef,
 			UsedMemMB:      s.Status.UsedMemMb,
-			RestartCount:   restarts,
+			RestartCount:   restartCount,
 			ContainerState: cstate,
 			TraceID:        traceID,
 		}
@@ -437,6 +455,11 @@ func (r *SessionReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ct
 // heartbeatInterval is how often a live session is re-reported to the control plane. The
 // control plane's SESSION_STALE_SEC must comfortably exceed it.
 const heartbeatInterval = 60 * time.Second
+
+// terminatedReportGrace bounds how long a deleted session's finalizer is held while the
+// Terminated report keeps failing. Past it the finalizer is released and the control plane's
+// liveness sweep (SESSION_STALE_SEC) is left to settle the session.
+const terminatedReportGrace = 10 * time.Minute
 
 // containerFacts reads the session container's restart count and a compact state string
 // ("Running", "Waiting:CrashLoopBackOff", "Terminated:OOMKilled") off the pod status.

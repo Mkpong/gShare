@@ -17,6 +17,7 @@ from app.core import ids
 from app.core.errors import InsufficientCredit
 from app.db.models import CreditTransaction, CreditWallet, Session
 from app.domain.credit_engine import CreditEngine
+from tests.fkseed import seed
 
 
 async def _make_wallet(db, balance: str, reserved: str = "0") -> CreditWallet:
@@ -27,8 +28,7 @@ async def _make_wallet(db, balance: str, reserved: str = "0") -> CreditWallet:
         balance=Decimal(balance),
         reserved=Decimal(reserved),
     )
-    async with db.begin():
-        db.add(wallet)
+    await seed(db, [wallet])
     return wallet
 
 
@@ -143,8 +143,7 @@ async def test_consume_idempotent(db):
         credit_per_hour_snapshot=Decimal("60"),
         started_at=started,
     )
-    async with db.begin():
-        db.add(sess)
+    await seed(db, [sess])
 
     engine = CreditEngine(db)
     now = started + timedelta(hours=1)
@@ -196,8 +195,7 @@ async def test_consume_exhaustion_clamps_to_zero_and_arms_grace(db):
         billing_wallet_id=wallet.id, status="running",
         credit_per_hour_snapshot=Decimal("5000"), started_at=started,
     )
-    async with db.begin():
-        db.add(sess)
+    await seed(db, [sess])
 
     await CreditEngine(db).consume(sess, minute_bucket=99, now=started + timedelta(hours=1))
 
@@ -227,8 +225,7 @@ async def test_resume_requires_solvent_wallet(db):
         billing_wallet_id=wallet.id, status="paused",
         credit_per_hour_snapshot=Decimal("200"), started_at=datetime.now(UTC),
     )
-    async with db.begin():
-        db.add(sess)
+    await seed(db, [sess])
 
     with pytest.raises(InsufficientCredit):
         await SessionService(db).start(sess.id)
@@ -258,8 +255,7 @@ async def test_settle_paused_session_does_not_bill_the_paused_gap(db):
         billing_wallet_id=wallet.id, status="paused",
         credit_per_hour_snapshot=Decimal("300"), started_at=started,
     )
-    async with db.begin():
-        db.add(sess)
+    await seed(db, [sess])
 
     # final_consume=False (terminate-from-paused): nothing further is billed.
     await CreditEngine(db).settle(sess, key=f"settle:{sess.id}", final_consume=False)
@@ -279,8 +275,7 @@ async def test_settle_final_consume_clamps_at_balance(db):
         billing_wallet_id=wallet.id, status="running",
         credit_per_hour_snapshot=Decimal("300"), started_at=started,
     )
-    async with db.begin():
-        db.add(sess)
+    await seed(db, [sess])
 
     await CreditEngine(db).settle(sess, key=f"settle:{sess.id}", final_consume=True)
     after = await _reload(db, wallet.id)

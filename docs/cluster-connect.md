@@ -95,6 +95,13 @@ comments in [`docker-compose.yml`](../docker-compose.yml)). The control plane's
 > only has to forward everything to the frontend. This handles a single external cluster,
 > and is left unset for an all-in-one Kubernetes install where the cluster ingress routes
 > `/proxy/` itself.
+>
+> **Client addresses behind the proxy.** The API records the client address in the login
+> audit and rate-limits logins per address. It reads that address from `X-Forwarded-For`,
+> counting `GSHARE_TRUSTED_PROXY_HOPS` entries from the right (default `1`: the Compose
+> frontend or ingress-nginx alone). With a load balancer that forwards the header in front
+> of that proxy, set it to `2`; otherwise every login would be attributed to the balancer's
+> address. In the chart the same knob is `api.trustedProxyHops`.
 
 1. **Enable internal callbacks** — generate the RS256 key, then start:
 
@@ -183,7 +190,7 @@ rotate it for you.
 When the control plane itself runs on Kubernetes, external-secrets projects each
 kubeconfig under `GSHARE_CLUSTER_KUBECONFIG_DIR`. Deploy each additional cluster's operator
 with the chart, setting `operator.clusterId` to the registered id, plus
-`operator.internalJwksUrl` and `operator.internalJwtSecret`.
+`operator.controlPlaneUrl` and `operator.internalJwtSecret`.
 
 ## Security and limitations
 

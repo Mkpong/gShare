@@ -12,6 +12,7 @@ from app.api.deps import Pagination
 from app.core import ids
 from app.db.models import CreditTransaction, CreditWallet, Image, Offering
 from app.db.models import Session as SessionRow
+from tests.fkseed import seed
 
 
 @pytest.mark.asyncio
@@ -38,8 +39,7 @@ async def test_consume_rows_fold_per_session(db):
             amount=Decimal("-1.67"), balance_after=Decimal("1000") - Decimal("1.67") * (i + 1),
             ref=sess.id, idempotency_key=f"c{i}", created_at=base + timedelta(minutes=i + 1),
         ))
-    async with db.begin():
-        db.add_all([wallet, offering, image, sess, *rows])
+    await seed(db, [wallet, offering, image, sess, *rows])
 
     out = await _grouped_transactions(db, wallet.id, Pagination(page=1, size=50))
     assert len(out) == 2, [r.type for r in out]           # one rollup + the topup
@@ -80,8 +80,7 @@ async def test_two_sessions_stay_separate(db):
                 balance_after=Decimal("99"), ref=sess.id, idempotency_key=f"c{n}-{i}",
                 created_at=base + timedelta(minutes=i),
             ))
-    async with db.begin():
-        db.add_all([wallet, offering, image, *sessions, *txns])
+    await seed(db, [wallet, offering, image, *sessions, *txns])
 
     out = await _grouped_transactions(db, wallet.id, Pagination(page=1, size=50))
     assert len(out) == 2
@@ -116,8 +115,7 @@ async def test_settle_marker_folds_into_the_refund_row(db):
                           balance_after=Decimal("95"), ref=sess.id, idempotency_key="s",
                           created_at=base + timedelta(minutes=2)),
     ]
-    async with db.begin():
-        db.add_all([wallet, offering, image, sess, *txns])
+    await seed(db, [wallet, offering, image, sess, *txns])
 
     out = await _grouped_transactions(db, wallet.id, Pagination(page=1, size=50))
     assert "settle" not in {r.type for r in out}          # no standalone zero-amount line
@@ -147,8 +145,7 @@ async def test_closed_streams_are_not_live(db):
             created_at=base + timedelta(minutes=i))
         for i in range(2)
     ]
-    async with db.begin():
-        db.add_all([wallet, offering, image, sess, *rows])
+    await seed(db, [wallet, offering, image, sess, *rows])
 
     out = await _grouped_transactions(db, wallet.id, Pagination(page=1, size=50))
     assert {r.type: r.live for r in out} == {"consume": False}

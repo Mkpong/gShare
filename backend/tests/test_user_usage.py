@@ -13,12 +13,13 @@ from app.api.users_router import get_user_usage
 from app.auth.rbac import Principal
 from app.core import ids
 from app.db.models import Allocation, CreditWallet, Session, StorageVolume, User
+from tests.fkseed import seed
 
 
 async def _seed(db):
     uid = ids.new("user")
     other = ids.new("user")
-    db.add_all([
+    await seed(db, [
         User(id=uid, email="u@t.local", name="U"),
         User(id=other, email="o@t.local", name="O"),
         CreditWallet(id=ids.new("wallet"), owner_type="user", owner_id=uid,
@@ -39,7 +40,7 @@ async def _seed(db):
         offering_id=running.offering_id, image_id=running.image_id, resource_class="gpu",
         cpu=16, mem_gb=32, status="terminated",
     )
-    db.add_all([
+    await seed(db, [
         running, paused, done,
         Allocation(id=ids.new("allocation"), session_id=running.id, gpu_uuid="GPU-A",
                    gpu_mem_mb=8000, gpu_cores=50, status="bound"),
@@ -50,7 +51,6 @@ async def _seed(db):
         StorageVolume(id=ids.new("volume"), scope="user", scope_id=other, type="home",
                       access_mode="RWX", quota_gb=999, used_gb=1),  # someone else's: out
     ])
-    await db.commit()
     return uid, other
 
 

@@ -23,6 +23,10 @@ async def report_status(
     claims: dict = Depends(require_internal_jwt),    # aud=gshare-internal
     db: AsyncSession = Depends(get_db),
 ):
+    # The payload names the reporting cluster; a token that says otherwise is refused rather than
+    # believed, exactly as the inventory callback does. Older operators send no cluster_id, which
+    # the guard tolerates (the session check below still binds the report).
+    require_operator_cluster(claims, ev.cluster_id, what="status report")
     # Only the operator of the session's own cluster may speak for it. The operator addresses the
     # session by its CR name, so the lookup has to be the same one StatusSync uses; an unknown
     # session falls through to StatusSync, which already treats it as a no-op.

@@ -8,6 +8,7 @@ from app.core import ids
 from app.core.errors import InsufficientCredit, NoCapacity
 from app.db.models import QueueEntry, Session
 from app.domain import queue_ranking, scheduler
+from tests.fkseed import seed
 
 
 def _paused(**kw) -> Session:
@@ -23,8 +24,7 @@ def _paused(**kw) -> Session:
 @pytest.mark.asyncio
 async def test_enqueue_resume_is_idempotent_and_invisible_to_the_pending_head(db):
     sess = _paused()
-    async with db.begin():
-        db.add(sess)
+    await seed(db, [sess])
     async with db.begin():
         await scheduler.enqueue_resume(db, sess.id)
         await scheduler.enqueue_resume(db, sess.id)
@@ -38,8 +38,8 @@ async def test_enqueue_resume_is_idempotent_and_invisible_to_the_pending_head(db
 @pytest.mark.asyncio
 async def test_parked_session_resumes_when_start_succeeds(db, monkeypatch):
     sess = _paused()
+    await seed(db, [sess])
     async with db.begin():
-        db.add(sess)
         await scheduler.enqueue_resume(db, sess.id)
     started: list[str] = []
 
@@ -64,8 +64,8 @@ async def test_parked_session_resumes_when_start_succeeds(db, monkeypatch):
 ])
 async def test_parked_session_outcomes(db, monkeypatch, exc, outcome, keeps_entry):
     sess = _paused()
+    await seed(db, [sess])
     async with db.begin():
-        db.add(sess)
         await scheduler.enqueue_resume(db, sess.id)
 
     class _Svc:

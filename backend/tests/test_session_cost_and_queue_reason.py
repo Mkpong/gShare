@@ -13,6 +13,7 @@ from app.api.sessions_router import list_sessions
 from app.auth.rbac import Principal
 from app.core import ids
 from app.db.models import CreditTransaction, CreditWallet, Session, SessionEvent
+from tests.fkseed import seed, user_row
 
 OWNER = "usr_cost01"
 P = Principal(user_id=OWNER, global_role="member", global_roles={"member"})
@@ -35,15 +36,17 @@ async def _rows(db):
 async def test_cost_is_the_sum_of_the_consume_rows(db):
     wallet = CreditWallet(id=ids.new("wallet"), owner_type="user", owner_id=OWNER,
                           balance=Decimal("100"), reserved=Decimal("0"))
-    db.add_all([wallet, _session("ses_paid", "terminated"), _session("ses_free", "terminated")])
+    await seed(db, [user_row(OWNER), wallet,
+                    _session("ses_paid", "terminated"), _session("ses_free", "terminated")])
     # two billing ticks on one session, plus a hold and a refund that must NOT count as spend
-    for i, (typ, amt) in enumerate(
-        [("consume", "-3.50"), ("consume", "-1.25"), ("hold", "-10"), ("refund", "10")]
-    ):
-        db.add(CreditTransaction(id=ids.new("txn"), wallet_id=wallet.id, type=typ,
-                                 amount=Decimal(amt), balance_after=Decimal("0"),
-                                 ref="ses_paid", idempotency_key=f"k{i}"))
-    await db.commit()
+    await seed(db, [
+        CreditTransaction(id=ids.new("txn"), wallet_id=wallet.id, type=typ,
+                          amount=Decimal(amt), balance_after=Decimal("0"),
+                          ref="ses_paid", idempotency_key=f"k{i}")
+        for i, (typ, amt) in enumerate(
+            [("consume", "-3.50"), ("consume", "-1.25"), ("hold", "-10"), ("refund", "10")]
+        )
+    ])
 
     rows = await _rows(db)
     assert rows["ses_paid"].credit_consumed == 4.75
@@ -53,7 +56,7 @@ async def test_cost_is_the_sum_of_the_consume_rows(db):
 
 @pytest.mark.asyncio
 async def test_a_waiting_session_reports_its_latest_queue_reason(db):
-    db.add_all([_session("ses_wait", "pending"), _session("ses_run", "running")])
+    await seed(db, [_session("ses_wait", "pending"), _session("ses_run", "running")])
     for i, (sid, kind, reason) in enumerate([
         ("ses_wait", "queued", "no_gpu_capacity"),
         ("ses_wait", "queued", "host_headroom"),   # the newer refusal wins
@@ -72,12 +75,11 @@ async def test_the_queue_entry_carries_the_same_reason(db):
     """The queue screen and the dashboard read the reason from one place, so they agree."""
     from app.api.queue_router import _decorate
 
-    db.add_all([
+    await seed(db, [
         _session("ses_q1", "pending"),
         SessionEvent(id="sev_q0", session_id="ses_q1", kind="queued", reason="no_gpu_capacity"),
         SessionEvent(id="sev_q1", session_id="ses_q1", kind="queued", reason="host_headroom"),
     ])
-    await db.commit()
 
     out = await _decorate(db, [{"session_id": "ses_q1"}, {"session_id": "ses_none"}])
     assert out[0]["reason"] == "host_headroom"

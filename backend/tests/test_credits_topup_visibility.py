@@ -11,6 +11,7 @@ from app.api.deps import Pagination
 from app.auth.rbac import Principal
 from app.core import ids
 from app.db.models import CreditWallet, TopupRequest
+from tests.fkseed import seed
 
 
 @pytest.mark.asyncio
@@ -20,8 +21,7 @@ async def test_member_sees_only_their_own_topup_requests(db):
     w2 = CreditWallet(id=ids.new("wallet"), owner_type="user", owner_id=other, balance=Decimal("0"), reserved=Decimal("0"))
     r1 = TopupRequest(id=ids.new("topup"), wallet_id=w1.id, requester_id=me, amount=Decimal("10"), status="pending")
     r2 = TopupRequest(id=ids.new("topup"), wallet_id=w2.id, requester_id=other, amount=Decimal("20"), status="pending")
-    async with db.begin():
-        db.add_all([w1, w2, r1, r2])
+    await seed(db, [w1, w2, r1, r2])
 
     mine = await list_topup_requests(page=Pagination(page=1, size=50), status_filter=None, wallet_id=None,
                                      principal=Principal(user_id=me), db=db)

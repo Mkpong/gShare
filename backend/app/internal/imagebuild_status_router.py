@@ -12,7 +12,7 @@ from fastapi import APIRouter, Depends, status
 from pydantic import BaseModel, Field
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.auth.internal_jwt import require_internal_jwt
+from app.auth.internal_jwt import require_internal_jwt, require_operator_cluster
 from app.core import ids
 from app.db.base import get_db
 from app.db.models import Image, ImageBuild
@@ -36,12 +36,16 @@ class BuildStatusEvent(BaseModel):
 async def report_build_status(
     build_id: str,
     ev: BuildStatusEvent,
-    _claims: dict = Depends(require_internal_jwt),   # aud=gshare-internal
+    claims: dict = Depends(require_internal_jwt),   # aud=gshare-internal
     db: AsyncSession = Depends(get_db),
 ):
     build = await db.get(ImageBuild, build_id, with_for_update=True)
     if build is None or ev.phase not in _PHASES:
         return {"accepted": False}
+    # Only the operator of the cluster running the kaniko Job may finish this build: a
+    # neighbouring cluster's token could otherwise mark it succeeded with an image ref of its
+    # choosing, which becomes a private Image row the owner then runs sessions from.
+    require_operator_cluster(claims, build.cluster_id, what="image build")
     if build.status in _TERMINAL:                    # terminal never regresses (retried callbacks)
         return {"accepted": True, "status": build.status}
 

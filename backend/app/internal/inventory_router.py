@@ -8,7 +8,7 @@ RS256 internal JWT required (aud=gshare-internal). Python is the only DB writer.
 from __future__ import annotations
 
 from fastapi import APIRouter, Body, Depends, status
-from sqlalchemy import select
+from sqlalchemy import or_, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.api.schemas.internal import (
@@ -141,32 +141,47 @@ async def report_drift(
 @router.post("/internal/nodes/health-events", status_code=status.HTTP_202_ACCEPTED)
 async def node_health_event(
     ev: OperatorNodeHealthEvent,
-    _claims: dict = Depends(require_internal_jwt),
+    claims: dict = Depends(require_internal_jwt),
     db: AsyncSession = Depends(get_db),
 ):
     """Record a NodeHealthEvent and, on a cordon action, mark GpuNode.status=cordoned.
 
     The operator already cordoned the K8s node; the ledger reflects it so the console/scheduler
     stop placing new sessions there.
+
+    The operator's HealthReconciler addresses the node by its Kubernetes NAME (the hostname): it
+    has no ledger id. The row is therefore resolved by (token cluster, hostname) — with the ledger
+    id still accepted for older callers — and the event carries the row's id, which the FK needs.
+    Looking the hostname up as an id never matched: the cordon never reached the ledger and the
+    event insert violated the FK on Postgres.
     """
+    require_operator_cluster(claims, ev.cluster_id, what="health event")
+    cluster_id = operator_cluster(claims) or ev.cluster_id
     async with db.begin():
+        node_q = select(GpuNode).where(
+            or_(GpuNode.hostname == ev.node_id, GpuNode.id == ev.node_id)
+        )
+        if cluster_id is not None:
+            node_q = node_q.where(GpuNode.cluster_id == cluster_id)
+        node = (await db.execute(node_q.limit(1))).scalar_one_or_none()
+        hostname = ev.node_id
+        if node is None:
+            # No dangling FK row for a node the ledger does not know; the signal is still logged.
+            log.warning("node health event for unknown node=%s cluster=%s kind=%s action=%s",
+                        ev.node_id, cluster_id, ev.kind, ev.action)
+            return {"accepted": True}
         db.add(
             NodeHealthEvent(
                 id=ev.id or ids.new("healthevent"),
-                node_id=ev.node_id,
+                node_id=node.id,
                 kind=ev.kind,
                 severity=ev.severity,
                 action=ev.action,
             )
         )
-        hostname = ev.node_id
+        hostname = node.hostname
         if (ev.action or "").lower() == "cordon":
-            node = (
-                await db.execute(select(GpuNode).where(GpuNode.id == ev.node_id))
-            ).scalar_one_or_none()
-            if node is not None:
-                node.status = "cordoned"
-                hostname = node.hostname
+            node.status = "cordoned"
         # Warning, critical, and cordon events notify the system administrators.
         if (ev.severity or "").lower() in ("warn", "warning", "critical") or (ev.action or "").lower() == "cordon":
             from app.domain.notification_service import NotificationService
