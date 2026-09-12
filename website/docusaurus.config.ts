@@ -11,8 +11,10 @@ const config: Config = {
   favicon: 'img/favicon.png',
   future: { v4: true },
 
-  url: 'https://boanlab.github.io',
-  baseUrl: '/gshare/',
+  // Published as a project site: one per repository, so it does not use up the organization's
+  // single boanlab.github.io slot. The workflow overrides both when a fork builds a preview.
+  url: process.env.SITE_URL ?? 'https://boanlab.github.io',
+  baseUrl: process.env.SITE_BASE_URL ?? '/gshare/',
   organizationName: 'boanlab',
   projectName: 'gshare',
   trailingSlash: false,

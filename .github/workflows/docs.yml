@@ -1,0 +1,81 @@
+# Publishes the documentation site to GitHub Pages.
+#
+# The built site is never committed: this workflow builds it from `docs/` and `website/` and hands
+# the result straight to Pages, so there is no gh-pages branch to keep in sync.
+#
+# Before the first run, an administrator has to set Settings → Pages → Source to "GitHub Actions"
+# on this repository. The site is then served at https://boanlab.github.io/gshare/ as a project
+# site, which is per-repository and does not occupy the organization's single boanlab.github.io.
+name: Docs site
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - 'docs/**'
+      - 'website/**'
+      - '.github/workflows/docs.yml'
+  # Lets an administrator republish without a code change, and lets a fork build a preview.
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  pages: write
+  id-token: write
+
+# One deployment at a time; a newer push waits rather than racing the one in flight.
+concurrency:
+  group: pages
+  cancel-in-progress: false
+
+env:
+  SITE_URL: https://boanlab.github.io
+  SITE_BASE_URL: /gshare/
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: website
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: npm
+          cache-dependency-path: website/package-lock.json
+
+      - name: Install
+        run: npm ci
+
+      # A fork sits at its own owner and repository name, so it builds against its own Pages URL.
+      # Nothing here needs editing to preview a fork.
+      - name: Resolve the site address
+        run: |
+          if [ "$GITHUB_REPOSITORY" != "boanlab/gshare" ]; then
+            owner="${GITHUB_REPOSITORY%%/*}"
+            name="${GITHUB_REPOSITORY##*/}"
+            echo "SITE_URL=https://${owner}.github.io" >> "$GITHUB_ENV"
+            echo "SITE_BASE_URL=/${name}/" >> "$GITHUB_ENV"
+          fi
+
+      - name: Build
+        run: npm run build
+
+      - uses: actions/configure-pages@v5
+
+      - uses: actions/upload-pages-artifact@v3
+        with:
+          path: website/build
+
+  deploy:
+    needs: build
+    runs-on: ubuntu-latest
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
+      - id: deployment
+        uses: actions/deploy-pages@v4
