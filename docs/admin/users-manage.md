@@ -63,7 +63,7 @@ What happens (a *soft* delete, which is what the console does):
 A *hard* delete exists in the API for the super_admin, and only for an account with no session
 history at all; it removes memberships, share permissions and an empty wallet.
 
-:::caution Deactivate first, delete later
+:::caution[Deactivate first, delete later]
 For someone who has simply left, deactivation is almost always the right action: it stops
 access at once and leaves you a week to find out what of theirs the team still depends on.
 :::

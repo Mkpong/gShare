@@ -16,7 +16,7 @@ the session lands.
 | [Sharing a volume](./data-share.md) | Giving access, read-only or read/write, revoking |
 | [Resizing, locking, deleting](./data-manage.md) | Growing the quota, locking, safe deletion |
 
-:::tip Volumes are free
+:::tip[Volumes are free]
 Credits are charged for GPU session time only. What limits storage is the **quota** in your
 [resource policy](../admin/resources.md), shown on every volume, not your balance.
 :::

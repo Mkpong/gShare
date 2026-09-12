@@ -32,7 +32,7 @@ why a link that has been sat on for a while, or forwarded to someone else, does 
 The panel also shows the raw URL and the token with copy buttons, for pasting into a ticket or
 a script that has to reach the session.
 
-:::caution The link is your access
+:::caution[The link is your access]
 Anyone holding an unredeemed link can enter your session and your data. Treat it like a
 password: do not paste it into a shared channel.
 :::

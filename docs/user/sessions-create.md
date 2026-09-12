@@ -80,7 +80,7 @@ choice. The seeded catalogue runs from **Compute S** (2 vCPU · 4 GiB · 20 GiB)
 disk up to 500 GB. The sliders stop at what one node can realistically give: asking for more
 than a node has only puts the session in the queue.
 
-:::tip The scratch disk is not a volume
+:::tip[The scratch disk is not a volume]
 The disk in the preset is the container's own scratch space. It disappears when the session
 ends. Anything you want to keep belongs on a [volume](./data.md).
 :::
@@ -132,7 +132,7 @@ Each tile carries its own status:
 - **Capacity short** / **Unavailable** — no card of this model can serve that tier (for
   example, no card is configured for exclusive use).
 
-:::tip Take the smallest tier that fits
+:::tip[Take the smallest tier that fits]
 Occupancy is what you pay for, and a slice you do not use is a slice someone else could have.
 An eighth of a card costs an eighth of the rate.
 :::

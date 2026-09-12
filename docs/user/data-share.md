@@ -48,7 +48,7 @@ your own. What differs:
 owner — this is the polite way to tidy a list, not a way to delete someone's data. Ask the owner
 to share it again if you need it back.
 
-:::caution Sharing is access, not a copy
+:::caution[Sharing is access, not a copy]
 Everyone you share a read/write volume with can overwrite the files in it. For a dataset that
 must not change, share it read-only — or create it read-only in the first place.
 :::

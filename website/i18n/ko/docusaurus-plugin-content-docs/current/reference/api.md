@@ -7,7 +7,7 @@ title: REST API
 
 gShare 콘솔의 모든 기능은 `/api/v1` 경로의 공개 REST API를 통해 처리됩니다. 시스템 실행 시 OpenAPI 스펙은 `/api/v1/openapi.json`에서 제공되며, Swagger UI는 `/api/v1/docs` 경로에서 확인할 수 있습니다. 저장소 내 `frontend/openapi.json` 파일에도 동일한 사양이 포함되어 있습니다.
 
-:::note API 제공 범위
+:::note[API 제공 범위]
 gShare는 콘솔 환경을 최우선으로 고려하여 설계되었습니다. 별도의 API 키, CLI, SDK는 제공하지 않습니다. API는 콘솔 UI 동작 및 운영자의 관리 작업 자동화 목적으로 활용됩니다.
 :::
 

@@ -9,7 +9,7 @@ Everything the console does goes through the public REST API at `/api/v1`. The r
 installation serves the OpenAPI document at `/api/v1/openapi.json` and Swagger UI at
 `/api/v1/docs`; the same document is checked into the repository as `frontend/openapi.json`.
 
-:::note Scope
+:::note[Scope]
 gShare is deliberately console-first: there are no API keys, CLI, or SDK. The API exists for the
 console and for operators automating administration with a user's own token.
 :::
