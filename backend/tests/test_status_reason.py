@@ -12,6 +12,7 @@ from app.cluster.status_sync import StatusSync, _map_operator_reason
 from app.core import ids
 from app.db.models import Allocation, GpuDevice, Image, Notification, Offering
 from app.db.models import Session as SessionRow
+from tests.fkseed import seed
 
 
 def test_operator_message_mapping():
@@ -33,8 +34,7 @@ async def _running_session(db):
         offering_id=offering.id, image_id=image.id, resource_class="gpu",
         mode="fractional", status="running", gpu_mem_mb=4000, gpu_cores=25,
     )
-    async with db.begin():
-        db.add_all([offering, image, sess])
+    await seed(db, [offering, image, sess])
     return sess
 
 
@@ -64,8 +64,8 @@ async def _card_with_live_alloc(db, sess, *, mem=6144, cores=13, used_mem=24576,
         id=ids.new("allocation"), session_id=sess.id, device_id=dev.id, gpu_uuid=dev.gpu_uuid,
         gpu_mem_mb=mem, gpu_cores=cores, status="bound", kind="resident",
     )
+    await seed(db, [dev, alloc])
     async with db.begin():
-        db.add_all([dev, alloc])
         sess = await db.get(SessionRow, sess.id)
         sess.bound_gpu_uuid = dev.gpu_uuid
     return dev, alloc

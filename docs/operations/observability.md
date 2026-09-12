@@ -49,8 +49,8 @@ the agent is the one-second live view and nothing depends on it.
 
 ## Health and alerts
 
-- `/health` on the API reports database and Redis reachability.
-- The operator posts node inventory once a minute; a node silent for `api.nodeStaleSec` goes
+- `/healthz` on the API is a plain liveness probe; it does not check database or Redis reachability.
+- The operator posts node inventory every 15 seconds; a node silent for `api.nodeStaleSec` goes
   **offline** and every super_admin is notified. Fatal Xid events from DCGM cordon the node.
 - The audit log records `access.denied` entries, de-duplicated per minute, so a misbehaving
   client is visible without log scraping.

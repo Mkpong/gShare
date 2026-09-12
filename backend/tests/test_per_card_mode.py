@@ -24,12 +24,14 @@ from app.db.models import Cluster, CreditWallet, GpuDevice, GpuNode, Image, Offe
 from app.db.models import Session as SessionRow
 from app.domain.pool import maybe_apply_drained_mode
 from app.domain.scheduler import SchedulerService
+from tests.fkseed import seed, user_row
 
 
 def _seed(db_objs, *, mode="fractional", mode_state="ready"):
     org_id = ids.new("org")
     group = Project(id=ids.new("group"), org_id=org_id, name="p")
-    user_id = ids.new("user")
+    user = user_row()
+    user_id = user.id
     wallet = CreditWallet(
         id=ids.new("wallet"), owner_type="user", owner_id=user_id,
         balance=Decimal("1000"), reserved=Decimal("0"),
@@ -45,7 +47,7 @@ def _seed(db_objs, *, mode="fractional", mode_state="ready"):
         model="A100", gpu_uuid=f"GPU-{ids.new('device')}", total_mem_mb=16000, status="ready",
         mode=mode, mode_state=mode_state,
     )
-    db_objs.extend([group, wallet, offering, image, device])
+    db_objs.extend([user, group, wallet, offering, image, device])
     return group, user_id, wallet, cluster_id, offering, image, device
 
 
@@ -54,8 +56,7 @@ async def test_fractional_spec_carries_ledger_pin(db, fake_handoff, monkeypatch)
     monkeypatch.setattr(settings, "PER_CARD_MODE", True)
     objs: list = []
     group, user_id, wallet, cluster_id, offering, image, dev = _seed(objs)
-    async with db.begin():
-        db.add_all(objs)
+    await seed(db, objs)
 
     svc = SchedulerService(db)
     svc.handoff = fake_handoff
@@ -107,8 +108,7 @@ async def test_inventory_report_does_not_flip_policy_mode(db):
         id="GPU-x", node_id=node.id, cluster_id=cluster.id, model="A100",
         gpu_uuid="GPU-x", total_mem_mb=16000, status="ready", mode="fractional",
     )
-    async with db.begin():
-        db.add_all([cluster, node, dev])
+    await seed(db, [cluster, node, dev])
 
     sync = InventorySync(db)
     ev = OperatorGpuDeviceUpsert(
@@ -138,8 +138,7 @@ async def test_draining_card_accepts_no_placement_and_applies_when_empty(db, fak
         objs, mode="fractional", mode_state="draining",
     )
     dev.desired_mode = "exclusive"
-    async with db.begin():
-        db.add_all(objs)
+    await seed(db, objs)
 
     svc = SchedulerService(db)
     svc.handoff = fake_handoff
@@ -167,8 +166,7 @@ async def test_set_device_mode_endpoint(db):
         id="GPU-y", node_id=node.id, cluster_id=cluster.id, model="A100",
         gpu_uuid="GPU-y", total_mem_mb=16000, status="ready", mode="fractional",
     )
-    async with db.begin():
-        db.add_all([cluster, node, dev])
+    await seed(db, [cluster, node, dev])
     admin = Principal(user_id=ids.new("user"), global_roles=["super_admin"])
 
     out = await set_gpu_device_mode("GPU-y", GpuDeviceModeSet(desired_mode="exclusive"),

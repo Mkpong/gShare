@@ -215,20 +215,6 @@ export function useDeleteUser() {
   });
 }
 
-// PUT /users/{id}/global-role — grant global roles. super_admin only, and several may be granted.
-export function useSetGlobalRole() {
-  const qc = useQueryClient();
-  return useMutation({
-    mutationFn: async ({ id, global_roles }: { id: string; global_roles: string[] }) => {
-      const { data } = await raw.PUT('/api/v1/users/{user_id}/global-role', {
-        params: { path: { user_id: id } },
-        body: { global_roles },
-      });
-      return data as AdminUser;
-    },
-    onSuccess: () => qc.invalidateQueries({ queryKey: userKeys.all }),
-  });
-}
 
 // GET /users/{id}/usage — live resource footprint for the admin drawer.
 export interface UserUsage {

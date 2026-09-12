@@ -10,6 +10,7 @@ from app.api.budgets_router import create_budget, delete_budget
 from app.api.schemas.budget import BudgetCreate
 from app.auth.rbac import Principal
 from app.db.models import Budget, BudgetAlert, Project
+from tests.fkseed import seed
 
 
 def _root() -> Principal:
@@ -18,8 +19,7 @@ def _root() -> Principal:
 
 @pytest.mark.asyncio
 async def test_delete_budget_removes_alert_children(db):
-    db.add(Project(id="g1", org_id="o1", name="g"))
-    await db.commit()
+    await seed(db, [Project(id="g1", org_id="o1", name="g")])
     out = await create_budget(
         BudgetCreate(scope="group", scope_id="g1",
                      period_start=datetime(2026, 8, 1, tzinfo=UTC),

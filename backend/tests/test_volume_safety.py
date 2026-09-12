@@ -12,6 +12,7 @@ from app.core import ids
 from app.core.errors import VolumeLocked, VolumeShrinkNotAllowed
 from app.db.models import Session, StorageVolume, VolumeMount
 from app.domain.scheduler import SchedulerService
+from tests.fkseed import seed, user_row
 
 
 def _super() -> Principal:
@@ -23,6 +24,9 @@ def _member() -> Principal:
 
 
 async def _shared(db) -> StorageVolume:
+    # The principals below own rows (volume_permission.user_id, session.owner_user_id), so they
+    # have to exist on the ledger.
+    await seed(db, [user_row("usr_admin"), user_row("usr_m"), user_row("usr_ga")])
     body = VolumeCreate(scope="global", scope_id="global", type="dataset", name="ds",
                         access_mode="ROX", quota_gb=50)
     vol = await create_volume(body, _super(), db)
@@ -73,10 +77,12 @@ async def test_force_delete_terminates_mounting_sessions(db, monkeypatch):
                      image_id="img_t", resource_class="cpu", mode="cpu", status="paused")
     ended = Session(id=ids.new("session"), owner_user_id="usr_m", cluster_id="clu_t", offering_id="off_t",
                     image_id="img_t", resource_class="cpu", mode="cpu", status="terminated")
-    db.add_all([live, paused, ended])
-    for s in (live, paused, ended):
-        db.add(VolumeMount(id=ids.new("mount"), session_id=s.id, volume_id=vol.id, mount_path="/mnt/ds", mode="ro"))
-    await db.commit()
+    await seed(db, [live, paused, ended])
+    await seed(db, [
+        VolumeMount(id=ids.new("mount"), session_id=s.id, volume_id=vol.id, mount_path="/mnt/ds",
+                    mode="ro")
+        for s in (live, paused, ended)
+    ])
 
     cut: list[tuple[str, bool, str]] = []
 

@@ -1,17 +1,13 @@
 import { useCallback, useMemo, useState } from 'react';
 import { Select } from '@/components/Select';
 import { useTranslation } from 'react-i18next';
-import { useNavigate } from 'react-router-dom';
 import {
   useImages,
   useImageBuilds,
   useImportImage,
   useUpdateImage,
-  useCreateBuild,
   type ImportImageBody,
-  type CreateBuildBody,
 } from '@/api/hooks/useImages';
-import { useProjects } from '@/api/hooks/useGroups';
 import { useGpuAvailability, useOfferings } from '@/api/hooks/useResources';
 import { cudaCompatible } from '@/lib/cuda';
 import { Table, TableToolbar, sortAccessor, type Column } from '@/components/Table';
@@ -29,7 +25,7 @@ import { Hammer, Package, Plus } from '@/components/icons';
 import { StatusPill } from '@/components/StatusPill';
 import { Tabs } from '@/components/Tabs';
 
-// The image and template registry plus image builds (/images, /images/import, /image-builds).
+// The image and template registry plus the image-build list (/images, /images/import, /image-builds).
 
 interface ImageRow {
   id: string;
@@ -447,107 +443,5 @@ function ImportImageForm({ onDone }: { onDone: () => void }) {
         <button type="button" className="gs-btn" onClick={onDone}>{t('common.cancel')}</button>
       </div>
       </form>
-  );
-}
-
-// Image build, at /admin/images/build.
-export function BuildImagePage() {
-  const { t } = useTranslation();
-  const navigate = useNavigate();
-  const groups = useProjects().data ?? [];
-  const [projectId, setProjectId] = useState('');
-  const effGroupId = projectId || groups[0]?.id || '';
-  const [name, setName] = useState('');
-  const [source, setSource] = useState<'dockerfile' | 'git'>('git');
-  const [gitUrl, setGitUrl] = useState('');
-  const [gitRef, setGitRef] = useState('main');
-  const [dockerfile, setDockerfile] = useState('');
-  const build = useCreateBuild();
-  const pushToast = useUiStore((s) => s.pushToast);
-
-  const submit = () => {
-    const body: CreateBuildBody = {
-      group_id: effGroupId,
-      name: name.trim(),
-      source,
-      ...(source === 'git'
-        ? { git_url: gitUrl.trim(), git_ref: gitRef.trim() || 'main' }
-        : { dockerfile }),
-    };
-    build.mutate(body, {
-      onSuccess: () => { guard.clear(); pushToast('success', t('admin.images.buildStarted', { name })); navigate('/admin/images'); },
-      onError: (e) => pushToast('error', humanizeError(asApiError(e))),
-    });
-  };
-
-  const valid =
-    effGroupId.length > 0 &&
-    name.trim().length > 0 &&
-    (source === 'git' ? gitUrl.trim().length > 0 : dockerfile.trim().length > 0);
-  const guard = useFormGuard(build.isPending);
-
-  return (
-    <div className="w-full max-w-3xl">
-      <PageHeader
-        title={t('admin.images.buildTitle')}
-        crumbs={[{ label: t('admin.images.title'), to: '/admin/images' }, { label: t('admin.images.buildTitle') }]}
-      />
-      <form className="gs-card" noValidate {...guard.props} onSubmit={(e) => { e.preventDefault(); if (valid) submit(); }}>
-      <div className="grid gap-3">
-        <label className="text-sm font-semibold">
-          {t('common.group')}
-          <Select className="gs-input mt-1 w-full" value={effGroupId} onChange={(e) => setProjectId(e.target.value)}>
-            {groups.length === 0 && <option value="">{t('admin.images.noGroup')}</option>}
-            {groups.map((g) => <option key={g.id} value={g.id}>{g.name}</option>)}
-          </Select>
-        </label>
-        <label className="text-sm font-semibold">
-          {t('admin.images.imageName')}
-          <input className="gs-input mt-1 w-full" value={name} onChange={(e) => setName(e.target.value)} placeholder="vision-train" autoComplete="off" />
-        </label>
-        <label className="text-sm font-semibold">
-          {t('admin.images.source')}
-          <Select className="gs-input mt-1 w-full" value={source} onChange={(e) => setSource(e.target.value as 'dockerfile' | 'git')}>
-            <option value="git">git</option>
-            <option value="dockerfile">dockerfile</option>
-          </Select>
-        </label>
-        {source === 'git' ? (
-          <>
-            <label className="text-sm font-semibold">
-              Git URL
-              <input className="gs-input mt-1 w-full font-mono" value={gitUrl} onChange={(e) => setGitUrl(e.target.value)} placeholder="https://git.example.com/vision/trainer.git" autoComplete="off" />
-            </label>
-            <label className="text-sm font-semibold">
-              Git Ref
-              <input className="gs-input mt-1 w-full font-mono" value={gitRef} onChange={(e) => setGitRef(e.target.value)} placeholder="main" autoComplete="off" />
-            </label>
-          </>
-        ) : (
-          <label className="text-sm font-semibold">
-            Dockerfile
-            <textarea
-              className="gs-input mt-1 w-full font-mono h-40"
-              value={dockerfile}
-              onChange={(e) => setDockerfile(e.target.value)}
-              placeholder={'FROM nvidia/cuda:12.4.0-runtime\nRUN pip install torch'}
-            />
-          </label>
-        )}
-        <p className="text-muted text-xs">{t('admin.images.buildNote2')}</p>
-      </div>
-      <div className="flex justify-end items-center gap-3 mt-4 flex-wrap">
-        <DisabledReason reasons={valid ? [] : [
-          !effGroupId && t('common.group'),
-          !name.trim() && t('admin.images.imageName'),
-          source === 'git' && !gitUrl.trim() && 'Git URL',
-          source === 'dockerfile' && !dockerfile.trim() && 'Dockerfile',
-        ].filter(Boolean) as string[]} />
-        <button type="submit" className="gs-btn gs-btn-primary disabled:opacity-50" disabled={!valid || build.isPending}>
-          {build.isPending ? t('admin.images.starting') : t('admin.images.startBuild')}</button>
-        <button type="button" className="gs-btn" onClick={() => navigate('/admin/images')}>{t('common.cancel')}</button>
-      </div>
-      </form>
-    </div>
   );
 }

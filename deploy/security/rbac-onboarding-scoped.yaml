@@ -1,8 +1,10 @@
 # Onboarding RBAC for a remote target cluster: namespace-scoped least privilege, a read-only
 # ClusterRole, and an in-cluster service account.
 #
-# No blanket access to secrets, no pods/exec, no long-lived token grants, and no wildcard verbs. There
-# is no long-lived kubeconfig either — access rotates through 24-hour TokenRequests.
+# No blanket access to secrets, no long-lived token grants, and no wildcard verbs. There is no
+# long-lived kubeconfig either — access rotates through 24-hour TokenRequests. `pods/exec` is not
+# granted to the controller: section (C) below defines a break-glass Role for it that is left
+# deliberately unbound, so nothing can exec into a session until an administrator binds it by hand.
 #
 # Apply this to the cluster being onboarded, which the GShare control plane will reconcile remotely.
 # Bootstrapping then issues only a short-lived token:

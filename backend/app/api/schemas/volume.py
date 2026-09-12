@@ -29,6 +29,14 @@ class VolumeRead(ORMModel):
     owner_id: str | None = None
     owner_name: str | None = None  # display name of the creator, for shared/admin listings
     shared_count: int = 0          # users granted access besides the owner (rw/ro)
+    # Where the data lives, once a session has mounted the volume and its PVC exists: the
+    # provisioning cluster and StorageClass, resolved to the registered storage pool when one
+    # matches. All None for a volume nothing has mounted yet.
+    cluster_id: str | None = None
+    cluster_name: str | None = None
+    storage_class: str | None = None
+    pool_id: str | None = None
+    pool_name: str | None = None
     # Sessions currently mounting this volume — filled on the single-volume read only
     # (response_model strips undeclared keys, so the field must exist here).
     active_mounts: list[dict] | None = None

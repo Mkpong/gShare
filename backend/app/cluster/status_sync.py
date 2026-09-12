@@ -105,14 +105,18 @@ class StatusSync:
             # a deleted pod's exit lands after its successor is up). Acting on it would settle the
             # bill and release the NEW reservation out from under a session that continues.
             if phase in ("paused", "terminated", "error") and sess.status == "running":
-                stale = sess.started_at is not None and _aware(ev.ts) < _aware(sess.started_at)
-                # Generation beats timestamps: the operator may reconcile the stop's generation
-                # AFTER the resume was committed (its report is then newer than the run start),
-                # so compare against the generation the resume produced.
-                if not stale and ev.generation:
-                    marker = await get_redis().get(f"resume-gen:{sess.id}")
-                    if marker is not None and int(ev.generation) < int(marker):
-                        stale = True
+                # The CR generation is the primary test: both numbers come from the same
+                # apiserver, so it holds however far apart the operator's clock and ours are.
+                # The timestamp is only the fallback for a report that cannot be placed by
+                # generation (an older operator, or a resume whose patch returned none) — it
+                # compares two machines' clocks, so an operator running behind used to have its
+                # legitimate Paused/Terminated discarded for the whole skew window after a
+                # resume, with nothing to recover it.
+                marker = await get_redis().get(f"resume-gen:{sess.id}") if ev.generation else None
+                if marker is not None:
+                    stale = int(ev.generation) < int(marker)
+                else:
+                    stale = sess.started_at is not None and _aware(ev.ts) < _aware(sess.started_at)
                 if stale:
                     log.info("stale %s report for running session %s ignored (event %s gen %s < run start %s)",
                              phase, sess.id, ev.ts, ev.generation, sess.started_at)
@@ -260,6 +264,17 @@ class StatusSync:
         now = self._event_ts(ev)
         was_running = sess.status == "running"
 
+        if sess.status in ("terminating", "terminated", "error"):
+            # A settled (or settling) session must not come back. Its hold was released and its
+            # settle key is spent, so a resurrected row would bill against no reservation and
+            # never settle again. A late `running` for a finished session is a stale report, not
+            # a transition — and it must be refused BEFORE the ledger is touched: binding the
+            # card here left a live Allocation (and used_* on the device) that nothing would
+            # ever release, since the session was already over.
+            log.info("ignoring running report for finished session=%s status=%s",
+                     sess.id, sess.status)
+            return
+
         # Idempotency: a single live Allocation per session (partial UNIQUE WHERE ended_at IS NULL).
         # If one already exists, this is a duplicate `running` (operator restart) -> no-op for the
         # ledger, but we still converge interim session fields.
@@ -283,13 +298,6 @@ class StatusSync:
             sess.node_hostname = ev.node_name
         if sess.started_at is None:
             sess.started_at = now
-        if sess.status in ("terminated", "error"):
-            # A settled session must not come back. Its hold was released and its settle key is
-            # spent, so a resurrected row would bill against no reservation and never settle
-            # again. A late `running` for a finished session is a stale report, not a transition.
-            log.info("ignoring running report for finished session=%s status=%s",
-                     sess.id, sess.status)
-            return
         if sess.status != "running":
             # preparing/pending -> running (allowed by the lifecycle SM).
             sess.status = "running"

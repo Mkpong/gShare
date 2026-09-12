@@ -19,6 +19,7 @@ from app.core import ids
 from app.core.errors import Forbidden
 from app.db.models import Session as SessionModel
 from app.internal import inventory_router, status_router
+from tests.fkseed import seed
 
 
 def test_subject_parsing():
@@ -39,8 +40,7 @@ async def _session_on(db, cluster_id: str) -> str:
     sess = SessionModel(id=ids.new("session"), owner_user_id="usr_1", cluster_id=cluster_id,
                         offering_id="off_1", image_id="img_1", resource_class="gpu",
                         mode="fractional", status="running")
-    async with db.begin():
-        db.add(sess)
+    await seed(db, [sess])
     return sess.id
 
 
@@ -97,8 +97,7 @@ async def test_the_guard_does_not_hold_a_transaction_open(db):
     sess = SessionModel(id=ids.new("session"), owner_user_id="usr_1", cluster_id="clu_a",
                         offering_id="off_1", image_id="img_1", resource_class="gpu",
                         mode="fractional", status="pending")
-    async with db.begin():
-        db.add(sess)
+    await seed(db, [sess])
     ev = OperatorStatusEvent(phase="preparing", ts="2026-09-09T00:00:00Z")
     await status_router.report_status(sess.id.lower().replace("_", "-"), ev,
                                       {"sub": "operator:clu_a"}, db)

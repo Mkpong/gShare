@@ -19,6 +19,7 @@ from app.auth.rbac import Principal
 from app.core import ids
 from app.core.errors import Forbidden, TopupRequestOrgOnly
 from app.db.models import CreditWallet, Organization, Project, User
+from tests.fkseed import seed
 
 
 async def _tenant(db):
@@ -30,8 +31,7 @@ async def _tenant(db):
                       balance=Decimal("0"), reserved=Decimal("0"))
     oa = User(id=ids.new("user"), email="oa@t.local", name="oa")
     ga = User(id=ids.new("user"), email="ga@t.local", name="ga")
-    async with db.begin():
-        db.add_all([org, prj, ow, gw, oa, ga])
+    await seed(db, [org, prj, ow, gw, oa, ga])
     return org, prj, ow, gw, oa.id, ga.id
 
 

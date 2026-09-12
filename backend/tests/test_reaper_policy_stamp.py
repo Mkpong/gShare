@@ -10,17 +10,19 @@ import pytest
 from app.cluster.crd import GShareSessionCRD
 from app.core import ids
 from app.db.models import ResourcePolicy
+from tests.fkseed import seed
 
 
 @pytest.mark.asyncio
 async def test_cpu_sessions_use_cpu_session_windows(db):
     user_id = ids.new("user")
-    async with db.begin():
-        db.add(ResourcePolicy(
-            id=ids.new("policy"), scope="user", scope_id=user_id,
-            max_concurrent=2, max_queued=2, max_runtime=60, idle_timeout=3600,
-            limits={"cpu_session_idle_timeout_sec": 0, "cpu_session_max_runtime_min": 0},
-        ))
+    await seed(db, [
+        ResourcePolicy(
+        id=ids.new("policy"), scope="user", scope_id=user_id,
+        max_concurrent=2, max_queued=2, max_runtime=60, idle_timeout=3600,
+        limits={"cpu_session_idle_timeout_sec": 0, "cpu_session_max_runtime_min": 0},
+        ),
+    ])
     crd = GShareSessionCRD(db=db)
 
     gpu_spec = {"owner": user_id, "group_id": None, "resource_class": "gpu"}

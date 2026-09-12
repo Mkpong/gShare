@@ -8,6 +8,7 @@ from app.auth.rbac import Principal
 from app.core import ids
 from app.db.models import Cluster, GpuDevice, GpuNode
 from app.workers import pool_rebalancer
+from tests.fkseed import seed
 
 
 class FakeChangeCRD:
@@ -42,8 +43,7 @@ async def _fleet(db, n=3):
         )
         for i in range(n)
     ]
-    async with db.begin():
-        db.add_all([cluster, node, *devs])
+    await seed(db, [cluster, node, *devs])
     return cluster, node, devs
 
 
@@ -159,8 +159,7 @@ async def test_idle_card_metadata_transition_applies(db, monkeypatch):
         total_mem_mb=48935, used_mem_mb=0, total_cores=100, used_cores=0,
         status="ready", mode="fractional", desired_mode="exclusive", mode_state="draining",
     )
-    async with db.begin():
-        db.add(dev)
+    await seed(db, [dev])
 
     monkeypatch.setattr(pool_rebalancer, "get_sessionmaker", lambda: (lambda: _NullCtx(db)))
     await pool_rebalancer.run()

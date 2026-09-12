@@ -9,6 +9,7 @@ import {
   reqStatusLabel,
   formatVram,
   formatDuration,
+  formatCredit,
 } from './format';
 
 describe('roleLabel', () => {
@@ -56,5 +57,19 @@ describe('formatDuration', () => {
   it('renders an em dash for a missing or invalid start', () => {
     expect(formatDuration(null)).toBe('—');
     expect(formatDuration('not-a-date')).toBe('—');
+  });
+});
+
+describe('formatCredit', () => {
+  it('groups thousands, keeps at most the ledger\'s two decimals, and accepts Decimal strings', () => {
+    expect(formatCredit(1234567)).toBe('1,234,567');
+    expect(formatCredit(0.125)).toBe('0.13');
+    expect(formatCredit('1000.50')).toBe('1,000.5');
+    expect(formatCredit('-12.50')).toBe('-12.5');
+  });
+  it('renders null, empty and non-numeric input as a dash', () => {
+    expect(formatCredit(null)).toBe('-');
+    expect(formatCredit('')).toBe('-');
+    expect(formatCredit('abc')).toBe('-');
   });
 });

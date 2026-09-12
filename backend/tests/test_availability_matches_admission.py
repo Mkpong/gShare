@@ -13,6 +13,7 @@ from app.api.sessions_router import gpu_availability
 from app.core import ids
 from app.db.models import Cluster, GpuDevice, GpuNode
 from app.domain.placement import placeable_device_clauses
+from tests.fkseed import seed
 
 
 async def _fleet(db):
@@ -34,8 +35,7 @@ async def _fleet(db):
         dev("GPU-faulted", ready, status="unhealthy"),     # administrator marked it faulted
         dev("GPU-cordoned-node", cordoned),                # node takes no new work
     ]
-    async with db.begin():
-        db.add_all([cluster, ready, cordoned, *devices])
+    await seed(db, [cluster, ready, cordoned, *devices])
     return devices
 
 

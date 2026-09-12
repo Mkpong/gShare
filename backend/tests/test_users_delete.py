@@ -12,6 +12,7 @@ from app.core import ids
 from app.core.errors import DomainError
 from app.db.models import CreditWallet, Image, Offering, User
 from app.db.models import Session as SessionRow
+from tests.fkseed import seed
 
 
 def _admin() -> Principal:
@@ -33,8 +34,7 @@ async def _user_with_sessions(db, statuses):
                    billing_wallet_id=wallet.id, credit_per_hour_snapshot=Decimal("60"))
         for st in statuses
     ]
-    async with db.begin():
-        db.add_all([user, wallet, offering, image, *sessions])
+    await seed(db, [user, wallet, offering, image, *sessions])
     # A real hold (ledger row + reserved), so settle-on-delete has something to release.
     from app.domain.credit_engine import CreditEngine
 

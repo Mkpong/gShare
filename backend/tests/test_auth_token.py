@@ -14,6 +14,7 @@ from jose import jwt
 from app.auth.jwt_auth import verify_jwt
 from app.core.config import settings
 from app.core.errors import Unauthenticated
+from tests.fkseed import seed
 
 
 def _make_token(**claims) -> str:
@@ -83,8 +84,7 @@ async def test_must_change_password_allows_change_password_path(db):
     from app.db.models import User
 
     # The principal resolver now verifies the account row exists and is not suspended/deleted.
-    async with db.begin():
-        db.add(User(id="usr_x", email="x@example.com", name="x", status="active"))
+    await seed(db, [User(id="usr_x", email="x@example.com", name="x", status="active")])
 
     tok = _make_token(must_change_password=True)
     req = SimpleNamespace(url=SimpleNamespace(path="/api/v1/auth/change-password"))
@@ -105,8 +105,7 @@ async def test_suspended_user_is_rejected_on_login_and_token(db, fake_redis):
     from app.core.errors import Forbidden, Unauthenticated
     from app.db.models import User
 
-    async with db.begin():
-        db.add(User(id="usr_susp", email="susp@example.com", name="s", status="suspended"))
+    await seed(db, [User(id="usr_susp", email="susp@example.com", name="s", status="suspended")])
 
     fake_req = SimpleNamespace(headers={}, client=None)
     with pytest.raises(Unauthenticated):

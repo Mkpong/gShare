@@ -83,7 +83,7 @@ const ledgerColumns = (): Column<LedgerTxn>[] => [
       const n = Number(r.amount);
       // A hold only moves balance into reserve; +green would read as income, so it stays neutral.
       const sign = r.type === 'hold' ? 'text-muted' : n > 0 ? 'text-free' : n < 0 ? 'text-danger' : '';
-      return <span className={`gs-num font-semibold ${sign}`}>{n > 0 ? '+' : ''}{r.amount} C</span>;
+      return <span className={`gs-num font-semibold ${sign}`}>{n > 0 ? '+' : ''}{formatCredit(r.amount)} C</span>;
     },
   },
   {
@@ -91,7 +91,7 @@ const ledgerColumns = (): Column<LedgerTxn>[] => [
     header: i18n.t('wallet.colBalanceAfter'),
     sortBy: (r) => Number(r.balance_after),
     align: 'right',
-    render: (r) => <span className="gs-num">{r.balance_after} C</span>,
+    render: (r) => <span className="gs-num">{formatCredit(r.balance_after)} C</span>,
   },
   {
     key: 'ref',
@@ -316,7 +316,7 @@ export function WalletPage() {
       <span className="gs-tag">{(r as { kind?: string }).kind === 'topup' ? t('wallet.kindTopup') : t('wallet.kindAllocation')}</span>
     ) },
     { key: 'level', header: t('wallet.colTarget'), render: (r) => (r.level === 'user' ? t('wallet.targetMine') : scopeLabel(r.level)) },
-    { key: 'amount', header: t('wallet.colAmount'), align: 'right', sortBy: (r) => Number(r.amount), render: (r) => <span className="gs-num">{r.amount} C</span> },
+    { key: 'amount', header: t('wallet.colAmount'), align: 'right', sortBy: (r) => Number(r.amount), render: (r) => <span className="gs-num">{formatCredit(r.amount)} C</span> },
     { key: 'status', header: t('common.status'), render: (r) => (
       <span className="inline-flex items-center gap-1.5">
         <StatusPill kind={r.status} label={reqStatusLabel(r.status)} />

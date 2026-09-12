@@ -16,6 +16,7 @@ from app.core import ids
 from app.core.errors import Forbidden
 from app.db.models import Membership, Organization, Project
 from app.db.models import Session as SessionRow
+from tests.fkseed import seed
 
 pytestmark = pytest.mark.asyncio
 
@@ -34,17 +35,16 @@ async def world(db):
     g_a, g_b = ids.new("group"), ids.new("group")
     gadmin_a, member_a, member_b, oadmin_a, oadmin_b = (ids.new("user") for _ in range(5))
     s_a, s_b = _session(member_a, "a-run"), _session(member_b, "b-run")
-    async with db.begin():
-        db.add_all([
-            Organization(id=org_a, name="A"), Organization(id=org_b, name="B"),
-            Project(id=g_a, org_id=org_a, name="a"), Project(id=g_b, org_id=org_b, name="b"),
-            Membership(id=ids.new("membership"), user_id=gadmin_a, group_id=g_a, role="group_admin"),
-            Membership(id=ids.new("membership"), user_id=member_a, group_id=g_a, role="member"),
-            Membership(id=ids.new("membership"), user_id=member_b, group_id=g_b, role="member"),
-            Membership(id=ids.new("membership"), user_id=oadmin_a, group_id=g_a, role="member"),
-            Membership(id=ids.new("membership"), user_id=oadmin_b, group_id=g_b, role="member"),
-            s_a, s_b,
-        ])
+    await seed(db, [
+        Organization(id=org_a, name="A"), Organization(id=org_b, name="B"),
+        Project(id=g_a, org_id=org_a, name="a"), Project(id=g_b, org_id=org_b, name="b"),
+        Membership(id=ids.new("membership"), user_id=gadmin_a, group_id=g_a, role="group_admin"),
+        Membership(id=ids.new("membership"), user_id=member_a, group_id=g_a, role="member"),
+        Membership(id=ids.new("membership"), user_id=member_b, group_id=g_b, role="member"),
+        Membership(id=ids.new("membership"), user_id=oadmin_a, group_id=g_a, role="member"),
+        Membership(id=ids.new("membership"), user_id=oadmin_b, group_id=g_b, role="member"),
+        s_a, s_b,
+    ])
     return {
         "org_a": org_a, "org_b": org_b, "g_a": g_a, "g_b": g_b,
         "gadmin_a": gadmin_a, "oadmin_a": oadmin_a, "oadmin_b": oadmin_b, "member_a": member_a,

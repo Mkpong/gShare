@@ -1,13 +1,96 @@
 {
-  "home.tagline": { "message": "인터랙티브 워크로드를 위한 GPU 공유 제어 플레인" },
-  "home.getStarted": { "message": "시작하기" },
-  "home.userManual": { "message": "사용자 가이드" },
-  "home.f1.title": { "message": "인터랙티브 GPU 세션" },
-  "home.f1.desc": { "message": "사용자는 콘솔에서 GPU 조각 위에 Jupyter, VS Code, 터미널을 엽니다. API 키도, 배치 큐도 익힐 필요가 없습니다 — 세션은 플랫폼이 배치하고, 과금하고, 회수하는 파드입니다." },
-  "home.f2.title": { "message": "GPU 분할과 정직한 정산" },
-  "home.f2.desc": { "message": "HAMi가 카드를 VRAM과 코어 단위로 나누고, gShare는 측정된 점유율로 세션을 승인하고, 들어가지 않는 세션은 대기열에 넣고, 유휴 GPU는 일시정지해 예약된 카드가 낭비되지 않게 합니다." },
-  "home.f3.title": { "message": "크레딧 · 한도 · 테넌트" },
-  "home.f3.desc": { "message": "조직, 부서, 사용자가 각각 지갑과 자원 정책을 가집니다. 세션은 실행 전에 크레딧을 예약하고, 실행 중에 소비하고, 종료 시 정산합니다 — 모든 이동이 감사 기록에 남습니다." },
-  "home.f4.title": { "message": "하나의 제어 플레인, 여러 클러스터" },
-  "home.f4.desc": { "message": "스크립트 하나로 두 번째 GPU 클러스터를 연결합니다. 콘솔은 선택한 클러스터로 좁혀지고, 세션은 데이터가 있는 곳에 배치되며, 공유 스토리지는 측정된 용량을 가진 등록 풀입니다." }
+  "home.getStarted": {
+    "message": "시작하기"
+  },
+  "home.userManual": {
+    "message": "사용자 가이드"
+  },
+  "home.f1.title": {
+    "message": "인터랙티브 GPU 세션"
+  },
+  "home.f1.desc": {
+    "message": "콘솔에서 GPU 조각 위에 Jupyter, VS Code, 터미널을 엽니다. API 키도 배치 큐도 익힐 필요가 없습니다."
+  },
+  "home.f2.title": {
+    "message": "GPU 분할과 정직한 정산"
+  },
+  "home.f2.desc": {
+    "message": "티어는 카드 한 장의 몇 분의 몇이고, 요금은 실제 점유율을 따릅니다. 노는 GPU는 일시정지하고 카드를 돌려줍니다."
+  },
+  "home.f3.title": {
+    "message": "크레딧, 한도, 테넌트"
+  },
+  "home.f3.desc": {
+    "message": "세션은 실행 전에 크레딧을 잡아 두고, 실행하면서 쓰고, 끝나면 정산합니다. 모든 이동이 감사 기록에 남습니다."
+  },
+  "home.f4.title": {
+    "message": "하나의 제어 플레인, 여러 클러스터"
+  },
+  "home.f4.desc": {
+    "message": "스크립트 하나로 두 번째 GPU 클러스터를 붙입니다. 세션은 데이터가 있는 곳에, 용량이 측정된 스토리지 풀 위에 뜹니다."
+  },
+  "home.hero.title": {
+    "message": "GPU 한 장을 여러 사람이 함께 씁니다",
+    "description": "홈 히어로 제목"
+  },
+  "home.hero.sub": {
+    "message": "HAMi가 카드를 나누고, gShare가 세션을 배치하고 과금하고 카드를 회수합니다. 전부 콘솔 하나에서 합니다.",
+    "description": "홈 히어로 본문"
+  },
+  "home.hero.shotAlt": {
+    "message": "관리자 대시보드: 가동률, GPU 디바이스, 노드 상태, 스토리지 서버",
+    "description": "히어로 스크린샷 대체 텍스트"
+  },
+  "home.f1.shotAlt": {
+    "message": "세션 목록: 자원 모드, GPU 스펙, 가동 시간, 예상 비용, 상태",
+    "description": "세션 목록 스크린샷 대체 텍스트"
+  },
+  "home.f2.shotAlt": {
+    "message": "세션 생성 마법사의 GPU 티어 선택 화면. 티어마다 과금 비율이 표시됩니다",
+    "description": "티어 선택 스크린샷 대체 텍스트"
+  },
+  "home.quickstart.title": {
+    "message": "GPU 없이 먼저 둘러보기",
+    "description": "퀵스타트 섹션 제목"
+  },
+  "home.quickstart.lede": {
+    "message": "Postgres, Redis, API, 콘솔이 한 번에 올라옵니다. 실제 세션을 띄우려면 GPU 클러스터가 필요합니다.",
+    "description": "퀵스타트 섹션 설명"
+  },
+  "home.quickstart.note": {
+    "message": "콘솔은 localhost:8000, API는 localhost:8080. 정리는 make compose-down.",
+    "description": "퀵스타트 명령 아래 안내"
+  },
+  "home.map.user.title": {
+    "message": "사용자 가이드",
+    "description": "문서 바로가기 제목"
+  },
+  "home.map.user.desc": {
+    "message": "세션 만들기, 접속, 볼륨, 크레딧",
+    "description": "문서 바로가기 설명"
+  },
+  "home.map.admin.title": {
+    "message": "관리자 가이드",
+    "description": "문서 바로가기 제목"
+  },
+  "home.map.admin.desc": {
+    "message": "조직과 부서, 크레딧 배분, 자원 정책",
+    "description": "문서 바로가기 설명"
+  },
+  "home.map.ops.title": {
+    "message": "운영",
+    "description": "문서 바로가기 제목"
+  },
+  "home.map.ops.desc": {
+    "message": "배포와 업그레이드, 백업, 모니터링",
+    "description": "문서 바로가기 설명"
+  },
+  "home.map.ref.title": {
+    "message": "레퍼런스",
+    "description": "문서 바로가기 제목"
+  },
+  "home.map.ref.desc": {
+    "message": "Helm 값, API, 용어",
+    "description": "문서 바로가기 설명"
+  }
 }

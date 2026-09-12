@@ -11,6 +11,7 @@ from app.api.groups_router import list_memberships, list_organizations
 from app.auth.rbac import Principal
 from app.core import ids
 from app.db.models import Membership, Organization, Project, User
+from tests.fkseed import seed
 
 
 def _admin() -> Principal:
@@ -23,10 +24,9 @@ async def _seed(db):
     alive = User(id=ids.new("user"), email="alive@x.kr", name="Alive")
     ghost = User(id=ids.new("user"), email="ghost@x.kr", name="Ghost",
                  status="suspended", deleted_at=datetime.now(UTC))
-    db.add_all([org, grp, alive, ghost,
+    await seed(db, [org, grp, alive, ghost,
                 Membership(id=ids.new("membership"), user_id=alive.id, group_id=grp.id, role="member"),
                 Membership(id=ids.new("membership"), user_id=ghost.id, group_id=grp.id, role="member")])
-    await db.commit()
     return org, grp
 
 

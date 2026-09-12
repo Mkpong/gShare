@@ -39,9 +39,23 @@ spec:
         {{- include "gshare.selectorLabels" (dict "component" "gshare-pg") | nindent 8 }}
     spec:
       {{- include "gshare.controlPlaneNodeSelector" . | nindent 6 }}
+      automountServiceAccountToken: false
+      # The official image ships a `postgres` user as uid/gid 999 and its entrypoint runs as that
+      # user without root when started as it; fsGroup lets it create PGDATA inside the claim. The
+      # root filesystem stays read-only: the socket directory and initdb's scratch space are the
+      # only paths it writes outside PGDATA.
+      securityContext:
+        runAsNonRoot: true
+        runAsUser: 999
+        runAsGroup: 999
+        fsGroup: 999
+        seccompProfile:
+          type: RuntimeDefault
       containers:
         - name: postgres
           image: {{ .Values.postgres.image }}
+          securityContext:
+            {{- include "gshare.containerSecurityContext" . | nindent 12 }}
           {{- with .Values.postgres.resources }}
           resources:
             {{- toYaml . | nindent 12 }}
@@ -59,9 +73,15 @@ spec:
             periodSeconds: 5
           volumeMounts:
             - { name: data, mountPath: /var/lib/postgresql/data }
+            - { name: run, mountPath: /var/run/postgresql }
+            - { name: tmp, mountPath: /tmp }
       volumes:
         - name: data
           persistentVolumeClaim: { claimName: gshare-pg-data }
+        - name: run
+          emptyDir: {}
+        - name: tmp
+          emptyDir: {}
 ---
 apiVersion: v1
 kind: Service
@@ -98,9 +118,21 @@ spec:
         {{- include "gshare.selectorLabels" (dict "component" "gshare-redis") | nindent 8 }}
     spec:
       {{- include "gshare.controlPlaneNodeSelector" . | nindent 6 }}
+      automountServiceAccountToken: false
+      # The official image's `redis` user is uid/gid 999. Nothing here needs to persist (queue
+      # state and idempotency keys are rebuilt), so its working directory is scratch space.
+      securityContext:
+        runAsNonRoot: true
+        runAsUser: 999
+        runAsGroup: 999
+        fsGroup: 999
+        seccompProfile:
+          type: RuntimeDefault
       containers:
         - name: redis
           image: {{ .Values.redis.image }}
+          securityContext:
+            {{- include "gshare.containerSecurityContext" . | nindent 12 }}
           {{- with .Values.redis.resources }}
           resources:
             {{- toYaml . | nindent 12 }}
@@ -110,6 +142,11 @@ spec:
           readinessProbe:
             exec: { command: ["redis-cli", "ping"] }
             periodSeconds: 5
+          volumeMounts:
+            - { name: data, mountPath: /data }
+      volumes:
+        - name: data
+          emptyDir: {}
 ---
 apiVersion: v1
 kind: Service

@@ -10,6 +10,7 @@ from app.core import ids
 from app.core.errors import Unauthenticated
 from app.core.passwords import hash_password
 from app.db.models import User
+from tests.fkseed import seed
 
 ROOT = Principal(user_id="usr_root", global_role="super_admin", global_roles={"super_admin"})
 
@@ -21,9 +22,8 @@ class _Req:
 
 @pytest.mark.asyncio
 async def test_result_filter_narrows_to_one_outcome(db):
-    db.add(User(id=ids.new("user"), email="ce-user01@example.edu", name="u",
-                password_hash=hash_password("right-pass-1"), status="active"))
-    await db.commit()
+    await seed(db, [User(id=ids.new("user"), email="ce-user01@example.edu", name="u",
+                password_hash=hash_password("right-pass-1"), status="active")])
     with pytest.raises(Unauthenticated):
         await auth_login(_LoginRequest(email="ce-user01@example.edu", password="wrong-pass-1"), _Req(), db)
     await auth_login(_LoginRequest(email="ce-user01@example.edu", password="right-pass-1"), _Req(), db)

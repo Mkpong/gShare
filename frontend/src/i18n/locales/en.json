@@ -527,6 +527,7 @@
       "devicePage": "Page {{page}}",
       "storageShareAll": "shared",
       "storageCapacityUnknown": "not measured",
+      "storageUnplaced": "Not yet provisioned (on no server yet): {{gb}} GB",
       "storageSource": {
         "csi": "measured by the CSI driver",
         "manual": "stated by an administrator",
@@ -1151,7 +1152,7 @@
       "resetPassword": "Reset password",
       "resetPasswordHint": "only changed when filled in",
       "resetPasswordPlaceholder": "New temporary password (at least 8 characters)",
-      "rolesNote": "Roles: Super Admin is global; Organization Admin covers one organization; Group Admin, Member, and Guest belong to a group. Global roles are granted in system settings, organization admins under Organizations, and group roles under Groups.",
+      "rolesNote": "Roles: super admin (global) / organization admin (organization) / group admin, member, guest (group). Organization admins are appointed under Organizations, group roles under Groups. The super admin is the bootstrap account set at install.",
       "saving": "Saving…",
       "searchPlaceholder": "Search by name or email",
       "selectGroup": "Select a group",
@@ -1194,7 +1195,10 @@
       "forceDeleteBody": "Sessions are still mounting this volume. Force-deleting terminates every one of them, then deletes the volume. The audit log records which sessions were cut off.",
       "forceDeleteConsequence": "Every session mounting this volume is terminated immediately; unsaved work in them is lost.",
       "forceDelete": "Terminate sessions and delete",
-      "forceDeleted": "Sessions terminated and volume deleted"
+      "forceDeleted": "Sessions terminated and volume deleted",
+      "tabVolumes": "Volumes",
+      "tabPools": "Storage pools",
+      "colStorage": "Storage"
     },
     "gpus": {
       "aliasBody": "Up to 32 characters, unique within the cluster. Leave empty to remove the name; the card then shows as model and position again.",
@@ -1317,6 +1321,57 @@
         "appliesNote": "Applies from the next placement. Running sessions keep the card they are on.",
         "saved": "Placement policy saved"
       }
+    },
+    "storagePools": {
+      "title": "Storage pools",
+      "register": "Register pool",
+      "registerTitle": "Register a storage pool",
+      "editTitle": "Edit pool",
+      "colPool": "Pool",
+      "colClass": "StorageClass",
+      "colNode": "Node",
+      "colShare": "Shared with",
+      "colCapacity": "Capacity",
+      "shareAll": "All clusters",
+      "shareSelected": "Selected clusters only",
+      "shareNone": "No cluster selected",
+      "source": {
+        "csi": "CSI",
+        "manual": "manual",
+        "node_disk": "node disk",
+        "none": "unknown"
+      },
+      "reportedAt": "Last capacity report from the CSI driver",
+      "empty": "No storage pool registered",
+      "emptyDescription": "Volumes cannot be admitted against capacity until a pool is registered. Label the storage node (gshare.io/role=storage), install the CSI driver, then register the pool.",
+      "name": "Pool name",
+      "nameHint": "Only for a server the cluster never sees as a node (an external appliance). Link a node instead when there is one.",
+      "namePlaceholder": "e.g. nas-01",
+      "clusterHint": "The cluster the storage server sits in.",
+      "clusterFixed": "A pool stays in the cluster its server sits in.",
+      "storageClass": "StorageClass",
+      "storageClassHint": "The class that provisions from this server — the same name the operator was given as --volume-storage-class.",
+      "node": "Storage node",
+      "nodeHint": "Optional. Links the node labelled gshare.io/role=storage; its disk is the fallback capacity.",
+      "nodeNone": "(none)",
+      "nodeStorageTag": "storage",
+      "manualCapacity": "Stated capacity (GB)",
+      "manualCapacityHint": "The pool's real size, used until the CSI driver publishes one. Leave empty to fall back to the node's disk.",
+      "manualCapacityPlaceholder": "e.g. 4000",
+      "share": "Sharing",
+      "shareHint": "all: every cluster in the fleet may place volumes here (one NFS export to all). selected: only the clusters ticked below, plus this one.",
+      "sharedWith": "Clusters allowed to use this pool",
+      "noOtherClusters": "There is no other cluster to share with.",
+      "blockerSharedWith": "Tick at least one cluster",
+      "blockerCapacity": "Capacity must be a whole number of GB",
+      "registered": "Pool {{name}} registered.",
+      "updated": "Pool {{name}} updated.",
+      "deleted": "Pool {{name}} removed.",
+      "confirmDeleteTitle": "Remove pool {{name}}?",
+      "confirmDeleteBody": "The server stops being counted. Nothing on the storage itself is touched.",
+      "consequenceVolumes": "Volumes already on it keep working through their StorageClass.",
+      "consequenceGate": "The capacity gate and the dashboard forget this server until it is registered again.",
+      "nameFromNode": "The linked node's hostname — the server's name everywhere in the console."
     }
   },
   "auth": {
@@ -1711,7 +1766,21 @@
     "volume_locked": "The volume is locked by its owner and takes no new mounts.",
     "volume_shrink_not_allowed": "A volume quota cannot be reduced. Create a smaller volume, move the data, then delete this one.",
     "topup_request_org_only": "Top-up requests are raised by an organization administrator on the organization wallet. Departments ask their organization; users ask their department.",
-    "privileged_not_allowed": "Your resource policy does not grant privileged sessions. Ask an administrator."
+    "privileged_not_allowed": "Your resource policy does not grant privileged sessions. Ask an administrator.",
+    "bad_request": "The request could not be understood. Refresh and try again.",
+    "method_not_allowed": "That action is not supported here. Refresh and try again.",
+    "payload_too_large": "The upload is too large.",
+    "unsupported_media_type": "The file type is not supported.",
+    "http_error": "The request failed. Try again in a moment.",
+    "build_handoff_failed": "The image build could not be handed to the cluster. Try again in a moment.",
+    "no_cluster": "No cluster is available to build images right now.",
+    "node_busy": "This node still carries live sessions. Drain it first, then try again.",
+    "pool_in_use": "This pool still has nodes or grants attached. Remove them first.",
+    "storage_capacity_exceeded": "The storage pool does not have enough free space for that size.",
+    "volume_on_another_cluster": "The selected volume's data lives on a different cluster. Pick that cluster, or a volume from this one.",
+    "cluster_credential_missing": "The cluster has no credential registered, so nothing can be scheduled on it. Ask an administrator.",
+    "cluster_credential_unavailable": "The cluster credential could not be read. Ask an administrator.",
+    "monitoring_unavailable": "The metrics backend is unreachable right now. Try again in a moment."
   },
   "nav": {
     "admin": {
@@ -2059,7 +2128,9 @@
     "lockedTag": "Locked",
     "lockedTitle": "No new session can mount this volume until it is unlocked.",
     "quotaNoShrink": "A quota cannot be reduced below its current {{current}} — storage only grows. To use less, create a smaller volume, move the data, and delete this one.",
-    "quotaNoShrinkShort": "cannot be reduced"
+    "quotaNoShrinkShort": "cannot be reduced",
+    "storageLabel": "Storage",
+    "storageUnprovisioned": "not provisioned yet — created when a session first mounts it"
   },
   "wallet": {
     "amountHint": "In credits. Your administrators see this alongside the reason.",

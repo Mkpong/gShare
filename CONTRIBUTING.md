@@ -11,15 +11,17 @@ vulnerabilities follow [SECURITY.md](./SECURITY.md) instead of the public issue 
 - **Bugs and features** — open an issue first for anything beyond a small fix. It saves
   you from building something that conflicts with work already in flight.
 - **Scope** — GShare is interactive-session only. There is deliberately no API key, CLI,
-  SDK, or batch-job surface, and MIG partitioning is out of scope. Proposals that move
-  those boundaries are welcome, but argue the case in an issue first.
+  SDK, or batch-job surface, and a user-selectable MIG session mode is out of scope
+  (`mode=mig` is rejected); MIG exists only as an admin-operated per-card pool that
+  fractional requests may land on. Proposals that move those boundaries are welcome, but
+  argue the case in an issue first.
 
 ## Development environment
 
 | Component | Runtime | Directory |
 |---|---|---|
 | `gshare-api`, `gshare-worker` | Python 3.12 + FastAPI | `backend/` |
-| `gshare-operator` | Go 1.22 + controller-runtime | `operator/` |
+| `gshare-operator` | Go 1.25 + controller-runtime | `operator/` |
 | Console | Node 20 + Vite + React | `frontend/` |
 
 You need `docker`. For deployment work you also need `kubectl` and `helm` v3.

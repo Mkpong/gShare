@@ -1350,6 +1350,16 @@ async def metrics_cluster(
     vol_alloc = int(await db.scalar(
         select(func.coalesce(func.sum(StorageVolume.quota_gb), 0)).where(StorageVolume.deleted_at.is_(None))
     ) or 0)
+    # Per-pool allocation: every live volume whose PVC landed on the pool's (cluster, StorageClass),
+    # the same key the volume list resolves a pool by. Volumes whose PVC has not been created yet
+    # carry no placement and are reported apart, so the per-pool figures and the total still meet.
+    placed_rows = (await db.execute(
+        select(StorageVolume.cluster_id, StorageVolume.storage_class, func.coalesce(func.sum(StorageVolume.quota_gb), 0))
+        .where(StorageVolume.deleted_at.is_(None), StorageVolume.cluster_id.is_not(None))
+        .group_by(StorageVolume.cluster_id, StorageVolume.storage_class)
+    )).all()
+    used_by_key = {(cid, sc): int(gb or 0) for cid, sc, gb in placed_rows}
+    unplaced_gb = vol_alloc - sum(used_by_key.values())
     pool_cluster_names = dict(
         (await db.execute(select(Cluster.id, Cluster.name))).all()
     ) if pools else {}
@@ -1364,6 +1374,11 @@ async def metrics_cluster(
             "source": bound_source or "unknown",
         },
         "node_count": len(pools),
+        # Fleet-wide figures for the tile's header: capacity summed over the pools in view (a
+        # picture of the whole, not the placement bound — `disk_gb.total` stays the largest pool,
+        # which is what one volume can actually get) and the quota not yet pinned to any pool.
+        "capacity_gb": sum(pool_capacity_gb(p)[0] or 0 for p in pools),
+        "unplaced_gb": max(0, unplaced_gb),
         # A pool serving more than the cluster in view: the figure is not this cluster's own.
         "shared": any(p.cluster_id != cluster_id for p in pools) if cluster_id else False,
         "pools": [
@@ -1378,6 +1393,7 @@ async def metrics_cluster(
                 "capacity_gb": pool_capacity_gb(p)[0],
                 "capacity_source": pool_capacity_gb(p)[1],
                 "capacity_reported_at": p.capacity_reported_at,
+                "used_gb": used_by_key.get((p.cluster_id, p.storage_class), 0),
             }
             for p in pools
         ],

@@ -48,29 +48,9 @@
   --docusaurus-highlighted-code-line-bg: rgba(69, 196, 232, 0.12);
 }
 
-/* Hero: the console's dark surface with the teal reserved for the call to action, instead of a
-   solid block of primary colour. */
-.hero.hero--primary {
-  --ifm-hero-background-color: #14171c;
-  --ifm-hero-text-color: #e7eaee;
-  border-bottom: 1px solid #262b33;
-}
-[data-theme='dark'] .hero.hero--primary {
-  --ifm-hero-background-color: #0c0e11;
-}
-.hero .button--secondary {
-  --ifm-button-background-color: var(--ifm-color-primary);
-  --ifm-button-border-color: var(--ifm-color-primary);
-  color: #fff;
-}
-.hero .button--outline.button--secondary {
-  --ifm-button-background-color: transparent;
-  color: #e7eaee;
-  border-color: #3a414b;
-}
-.hero .button--outline.button--secondary:hover {
-  background: #1b1f26;
-}
+/* The landing hero is a CSS module (src/pages/index.module.css) built on the tokens above, so it
+   follows the site theme instead of forcing a dark band into a light page. Infima's own
+   .hero--primary is left alone for any page that still wants it. */
 
 /* Sidebar: quieter category rows, a clear active mark. */
 .menu__link {
@@ -93,11 +73,8 @@ table thead tr {
   border: 1px solid var(--ifm-color-emphasis-300);
 }
 
-/* Dark mode: the bright teal needs dark text on it, and the footer sits on the console's surface
-   instead of Docusaurus's slate, so the page is one ground from top to bottom. */
-[data-theme='dark'] .hero .button--secondary:not(.button--outline) {
-  color: #0c0e11;
-}
+/* The footer sits on the console's surface instead of Docusaurus's slate, so the page is one
+   ground from top to bottom. */
 .footer--dark {
   --ifm-footer-background-color: #14171c;
   border-top: 1px solid #262b33;

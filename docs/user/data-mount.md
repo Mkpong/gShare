@@ -49,8 +49,9 @@ Click a volume in the list to expand it.
 
 ![Sessions holding the volume](/img/screens/data-mounts.png)
 
-The panel lists the sessions that hold the volume **right now**, with their owner and mount
-mode. It is also the answer when a delete is refused: a volume with an active mount cannot be
+The panel first says **where the volume's data lives** — the storage server it was created on,
+or *not provisioned yet* if nothing has mounted it — and then lists the sessions that hold the
+volume **right now**, with their owner and mount mode. It is also the answer when a delete is refused: a volume with an active mount cannot be
 deleted, and this is where you find out which session to end first.
 
 ## Changing what a running session mounts

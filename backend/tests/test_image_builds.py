@@ -10,6 +10,7 @@ from app.cluster.crd import GShareImageBuildCRD
 from app.core import ids
 from app.db.models import Cluster, Image, ImageBuild, Membership, Organization, Project, User
 from app.internal.imagebuild_status_router import BuildStatusEvent, report_build_status
+from tests.fkseed import seed
 
 
 def _p(uid, *, super_admin=False, memberships=None):
@@ -27,9 +28,8 @@ async def _seed(db):
     user = User(id=ids.new("user"), email="b@x.kr", name="B")
     clu = Cluster(id=ids.new("cluster"), name="c1", role="primary", api_server="https://x",
                   runtime="containerd", status="ready", kubeconfig_secret_ref="sec/kc")
-    db.add_all([org, grp, user, clu,
+    await seed(db, [org, grp, user, clu,
                 Membership(id=ids.new("membership"), user_id=user.id, group_id=grp.id, role="member")])
-    await db.commit()
     return grp, user, clu
 
 
@@ -64,13 +64,13 @@ async def test_member_build_lifecycle(db, no_handoff):
 
     # operator: running -> succeeded (Image row minted once, private, owned)
     await report_build_status(out["id"], BuildStatusEvent(phase="running", log_tail="step 1/2"),
-                              _claims={}, db=db)
+                              claims={}, db=db)
     await report_build_status(
         out["id"], BuildStatusEvent(phase="succeeded", image_ref=out["image_ref"], log_tail="done"),
-        _claims={}, db=db)
+        claims={}, db=db)
     await report_build_status(  # retried callback must not regress or duplicate
         out["id"], BuildStatusEvent(phase="succeeded", image_ref=out["image_ref"]),
-        _claims={}, db=db)
+        claims={}, db=db)
     build = await db.get(ImageBuild, out["id"])
     assert build.status == "succeeded" and build.started_at and build.finished_at
     img = await db.get(Image, build.image_id)

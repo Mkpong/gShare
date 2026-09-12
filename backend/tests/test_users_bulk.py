@@ -8,6 +8,7 @@ from app.api.users_router import BulkUserCreate, BulkUserRow, bulk_create_users
 from app.auth.rbac import Principal
 from app.core import ids
 from app.db.models import CreditWallet, Membership, Organization, Project, User
+from tests.fkseed import seed
 
 
 def _admin() -> Principal:
@@ -17,8 +18,7 @@ def _admin() -> Principal:
 async def _group(db) -> Project:
     org = Organization(id=ids.new("org"), name="school")
     group = Project(id=ids.new("group"), org_id=org.id, name="cs500")
-    async with db.begin():
-        db.add_all([org, group])
+    await seed(db, [org, group])
     return group
 
 
@@ -26,8 +26,7 @@ async def _group(db) -> Project:
 async def test_bulk_create_partial_success(db):
     group = await _group(db)
     existing = User(id=ids.new("user"), email="old@u.ac.kr", name="Old")
-    async with db.begin():
-        db.add(existing)
+    await seed(db, [existing])
 
     body = BulkUserCreate(group_id=group.id, rows=[
         BulkUserRow(email="a@u.ac.kr", name="A"),

@@ -75,7 +75,7 @@ spec:
         seccompProfile: { type: RuntimeDefault }
       containers:
         - name: agent
-          image: {{ .Values.images.agent.repository }}:{{ .Values.images.agent.tag | default .Chart.AppVersion }}
+          image: {{ include "gshare.image" (dict "img" .Values.images.agent "root" $) }}
           imagePullPolicy: {{ .Values.images.agent.pullPolicy | default "IfNotPresent" }}
           # No privileges of any kind: cgroup v2 files are world-readable, so a read-only bind of
           # the host hierarchy is all the agent needs.

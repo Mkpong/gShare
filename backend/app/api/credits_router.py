@@ -643,6 +643,19 @@ async def allocate(
     }
 
 
+def _credit_grant_increase(db: AsyncSession, wallet: CreditWallet, new_amount: Decimal) -> None:
+    """Raise the balance to the new grant and put the difference on the ledger.
+
+    The immediate credit used to move ``balance`` with no CreditTransaction, so the transaction
+    history no longer summed to the wallet — the one invariant the ledger exists to keep."""
+    delta = new_amount - wallet.balance
+    wallet.balance = new_amount
+    db.add(_make_txn(
+        wallet, "adjust", delta, ref="monthly_grant",
+        key=f"grant:{wallet.id}:{ids.new('transaction')}",
+    ))
+
+
 async def _grant_scope(
     db: AsyncSession, principal: Principal, wallet: CreditWallet
 ) -> tuple[CreditWallet | None, list[str]]:
@@ -711,8 +724,8 @@ async def set_monthly_grant(
     """Set a child wallet's monthly automatic refill, as the administrator one level up.
 
     The siblings' grants must sum within the parent's grant; 0 disables refills for that wallet. The
-    refill itself — resetting balance to grant at the start of each month, use-it-or-lose-it — is
-    performed by the credit_refill worker."""
+    refill itself — topping the balance up to the grant at the start of each month, never taking
+    a surplus away — is performed by the credit_refill worker."""
     wallet = await _lock_wallet(db, wallet_id)
     parent, sibling_ids = await _grant_scope(db, principal, wallet)
     new_amount = body.amount
@@ -732,7 +745,7 @@ async def set_monthly_grant(
     # An increase is credited immediately so it is usable at once; a decrease takes effect at the
     # next monthly refill. The system wallet only holds the ceiling and needs no balance.
     if wallet.owner_type != "system" and new_amount > wallet.balance:
-        wallet.balance = new_amount
+        _credit_grant_increase(db, wallet, new_amount)
     wallet.version = wallet.version + 1
     await AuditService(db).record(
         actor=principal.user_id, action="credit.set_monthly_grant",
@@ -881,7 +894,7 @@ async def bulk_monthly_grant(
     for w in wallets:
         w.monthly_grant = body.amount
         if body.amount > w.balance:
-            w.balance = body.amount
+            _credit_grant_increase(db, w, body.amount)
         w.version = w.version + 1
     await AuditService(db).record(
         actor=principal.user_id, action="credit.bulk_monthly_grant", target=parent.id,

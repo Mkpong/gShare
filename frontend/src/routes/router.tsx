@@ -64,7 +64,9 @@ export const router = createBrowserRouter(
             { path: 'orgs', element: <RequireRole role="super_admin">{lazyPage(() => import('@/features/admin/Orgs'), 'AdminOrgs')}</RequireRole> }, // organizations
             { path: 'orgs/:orgId/admins', element: <RequireRole role="super_admin">{lazyPage(() => import('@/features/admin/Orgs'), 'OrgAdminsPage')}</RequireRole> },
             { path: 'users', element: <RequireRole min="group_admin">{lazyPage(() => import('@/features/admin/Users'), 'AdminUsers')}</RequireRole> },
-            { path: 'users/bulk', element: <RequireRole min="group_admin">{lazyPage(() => import('@/features/admin/UsersBulkImport'), 'UsersBulkImportPage')}</RequireRole> },
+            // user.create is org_admin and above, so the import page is gated the same way as the
+            // button that leads to it.
+            { path: 'users/bulk', element: <RequireRole min="org_admin">{lazyPage(() => import('@/features/admin/UsersBulkImport'), 'UsersBulkImportPage')}</RequireRole> },
             { path: 'users/:userId/delete', element: <RequireRole min="group_admin">{lazyPage(() => import('@/features/admin/Users'), 'DeleteUserPage')}</RequireRole> },
             { path: 'groups', element: <RequireRole min="group_admin">{lazyPage(() => import('@/features/admin/Groups'), 'AdminGroups')}</RequireRole> },
             { path: 'groups/:groupId/admins', element: <RequireRole min="group_admin">{lazyPage(() => import('@/features/admin/Groups'), 'GroupAdminsPage')}</RequireRole> },
@@ -76,8 +78,9 @@ export const router = createBrowserRouter(
             { path: 'policies/:policyId/edit', element: <RequireRole role="super_admin">{lazyPage(() => import('@/features/admin/Resources'), 'EditPolicyPage')}</RequireRole> },
             { path: 'clusters', element: <RequireRole role="super_admin">{lazyPage(() => import('@/features/admin/Clusters'), 'AdminClusters')}</RequireRole> },
             // org_admin reaches this page for the node-pools tab only (pool.read); the node inventory
-            // itself is super_admin.
-            { path: 'nodes', element: <RequireRole role="super_admin">{lazyPage(() => import('@/features/admin/Nodes'), 'AdminNodes')}</RequireRole> },
+            // itself is super_admin and the page hides it. The guard has to admit org_admin here, or
+            // the nav entry they are shown lands on /403.
+            { path: 'nodes', element: <RequireRole min="org_admin">{lazyPage(() => import('@/features/admin/Nodes'), 'AdminNodes')}</RequireRole> },
             { path: 'gpus', element: <RequireRole role="super_admin">{lazyPage(() => import('@/features/admin/Gpus'), 'AdminGpus')}</RequireRole> },
             { path: 'nodes/:nodeId/drain', element: <RequireRole role="super_admin">{lazyPage(() => import('@/features/admin/Nodes'), 'DrainNodePage')}</RequireRole> },
             { path: 'nodes/:nodeId/devices', element: <RequireRole role="super_admin">{lazyPage(() => import('@/features/admin/Nodes'), 'NodeDevicesPage')}</RequireRole> },

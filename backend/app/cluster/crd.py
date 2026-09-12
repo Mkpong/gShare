@@ -87,6 +87,28 @@ _CRD_KEY_MAP = {
 }
 
 
+# Every spec key the desired state may carry. A re-apply of an existing custom resource is a JSON
+# merge-patch, and a merge-patch only touches the keys it names — so a key the new desired state
+# no longer carries has to be sent as null explicitly, or the value from the previous run stays
+# on the object (a borrowed card, a pinned UUID, an excluded node, a paused flag).
+_MERGE_PATCH_CLEARABLE = tuple(_CRD_KEY_MAP.values()) + ("migProfile", "connect", "volumes")
+MERGE_PATCH_CONTENT_TYPE = "application/merge-patch+json"
+
+
+def _as_merge_patch(body: dict[str, Any]) -> dict[str, Any]:
+    """The body for re-applying an existing object: the same desired state, with every clearable
+    spec key present (null when absent) and the lifetime-cap annotation nulled when no cap is
+    resolved, so the merge removes what the previous apply set."""
+    spec = dict(body.get("spec") or {})
+    for key in _MERGE_PATCH_CLEARABLE:
+        spec.setdefault(key, None)
+    metadata = dict(body.get("metadata") or {})
+    annotations = dict(metadata.get("annotations") or {})
+    annotations.setdefault(f"{GROUP}/max-runtime-sec", None)
+    metadata["annotations"] = annotations
+    return {**body, "metadata": metadata, "spec": spec}
+
+
 def _cr_name(session_id: str) -> str:
     """Convert a session id to a Kubernetes object name (RFC 1123).
 
@@ -465,11 +487,11 @@ class GShareSessionCRD:
         self, cluster_id: str, session_id: str, owner: str | None, group_id: str | None,
         resource_class: str | None = None,
     ) -> None:
-        """Merge-patch a live CR's idle/max-runtime annotations from the CURRENT policy.
+        """JSON-patch a live CR's idle/max-runtime annotations from the CURRENT policy.
 
         Called on policy writes so a policy edit reaches RUNNING sessions immediately (not only
-        on the next resume). A dict body makes the client send merge-patch; a null value removes
-        the max-runtime annotation when the cap is lifted."""
+        on the next resume). The body is a JSON-patch list (a dict would be sent as a strategic
+        merge patch, which custom resources reject); "0" stands for "no cap" when it is lifted."""
         from app.core.config import settings  # lazy: keep module import-light
 
         spec_like = {"owner": owner, "group_id": group_id, "resource_class": resource_class}
@@ -503,12 +525,14 @@ class GShareSessionCRD:
     async def apply(
         self, cluster_id: str, spec: dict[str, Any], traceparent: str | None = None
     ) -> None:
-        """Apply (create/patch) the GShareSession CR to the target cluster.
+        """Apply (create, or merge-patch on 409) the GShareSession CR to the target cluster.
 
         Loads the cluster's bootstrap kubeconfig/SA (from secret ref), builds an async
-        CustomObjectsApi, and server-side-applies gshare.io/v1 gsharesessions. CR apply ONLY.
-        Idempotent: server-side apply (force=True, our field manager) creates or patches the same
-        named object, so repeated handoffs converge to the desired spec.
+        CustomObjectsApi and creates the gshare.io/v1 gsharesession; when the object already
+        exists (409) it is JSON merge-patched with the full desired state, absent keys sent as
+        null, so repeated handoffs converge to the desired spec. CR apply ONLY — no workload API.
+        Server-side apply is not used: it needs the apply-patch content type, which the custom
+        objects client does not select for a dict body.
         """
         cluster = await self._load_cluster(cluster_id)
         # Resolve the idle timeout and lifetime cap through the policy hierarchy (user, group,
@@ -522,9 +546,9 @@ class GShareSessionCRD:
         body = self.build_object(spec, traceparent)
         name = body["metadata"]["name"]
         async with await self._client_factory(cluster) as api:
-            # Idempotent create-or-patch: create when new, merge-patch on a 409. Server-side apply
-            # is not used because it requires the apply content type, which merge patch rejects with
-            # 422.
+            # Idempotent create-or-patch: create when new, merge-patch on a 409. The content type
+            # is forced: kubernetes_asyncio sends a dict body as a strategic merge patch, which
+            # custom resources do not support (415), so without it the 409 path never succeeded.
             try:
                 await api.create_namespaced_custom_object(
                     group=GROUP, version=VERSION, namespace=SESSION_NAMESPACE, plural=PLURAL,
@@ -534,7 +558,8 @@ class GShareSessionCRD:
                 if getattr(exc, "status", None) == 409:   # AlreadyExists: update the existing object
                     await api.patch_namespaced_custom_object(
                         group=GROUP, version=VERSION, namespace=SESSION_NAMESPACE, plural=PLURAL,
-                        name=name, body=body,
+                        name=name, body=_as_merge_patch(body),
+                        _content_type=MERGE_PATCH_CONTENT_TYPE,
                     )
                 else:
                     raise

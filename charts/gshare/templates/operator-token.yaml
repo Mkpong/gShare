@@ -199,6 +199,9 @@ spec:
               valueFrom: { secretKeyRef: { name: gshare-jwt-signing, key: active_kid } }
           volumeMounts:
             - { name: mint, mountPath: /mint, readOnly: true }
+          resources:
+            requests: { cpu: 50m, memory: 64Mi }
+            limits: { cpu: 500m, memory: 256Mi }
       volumes:
         - name: mint
           configMap:
@@ -252,6 +255,9 @@ spec:
                   valueFrom: { secretKeyRef: { name: gshare-jwt-signing, key: active_kid } }
               volumeMounts:
                 - { name: mint, mountPath: /mint, readOnly: true }
+              resources:
+                requests: { cpu: 50m, memory: 64Mi }
+                limits: { cpu: 500m, memory: 256Mi }
           volumes:
             - name: mint
               configMap:

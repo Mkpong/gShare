@@ -15,6 +15,7 @@ from app.api.users_router import UserPatch, _assert_grantable_role
 from app.auth.rbac import Principal
 from app.core.errors import Forbidden
 from app.core.validation import clean_text
+from tests.fkseed import seed
 
 
 # ── BUG-001 / BUG-002: 이름 검증 ────────────────────────────────────────────────
@@ -85,12 +86,10 @@ async def test_session_may_spend_its_own_reservation(db):
 
     wallet = CreditWallet(id=ids.new("wallet"), owner_type="user", owner_id="usr_x",
                           balance=Decimal("60"), reserved=Decimal("60"))
-    db.add(wallet)
     sess = SimpleNamespace(id="ses_x", billing_wallet_id=wallet.id, started_at=None)
-    db.add(CreditTransaction(
+    await seed(db, [wallet, CreditTransaction(
         id=ids.new("txn"), wallet_id=wallet.id, type="hold", amount=Decimal("60"),
-        balance_after=Decimal("60"), ref=sess.id, idempotency_key=f"hold:{sess.id}"))
-    await db.commit()
+        balance_after=Decimal("60"), ref=sess.id, idempotency_key=f"hold:{sess.id}")])
 
     engine = CreditEngine(db)
     # The wallet-wide figure says nothing is left...
@@ -111,13 +110,11 @@ async def test_a_second_session_does_not_get_the_first_ones_reservation(db):
 
     wallet = CreditWallet(id=ids.new("wallet"), owner_type="user", owner_id="usr_y",
                           balance=Decimal("100"), reserved=Decimal("100"))
-    db.add(wallet)
     a = SimpleNamespace(id="ses_a", billing_wallet_id=wallet.id, started_at=None)
     b = SimpleNamespace(id="ses_b", billing_wallet_id=wallet.id, started_at=None)
-    db.add(CreditTransaction(
+    await seed(db, [wallet, CreditTransaction(
         id=ids.new("txn"), wallet_id=wallet.id, type="hold", amount=Decimal("100"),
-        balance_after=Decimal("100"), ref=a.id, idempotency_key=f"hold:{a.id}"))
-    await db.commit()
+        balance_after=Decimal("100"), ref=a.id, idempotency_key=f"hold:{a.id}")])
 
     engine = CreditEngine(db)
     assert await engine.available_for(wallet, a) == Decimal("100")   # its own hold
@@ -150,7 +147,7 @@ async def test_admin_cannot_reach_a_user_of_another_organization(db):
     org_a, org_b = ids.new("org"), ids.new("org")
     grp_a, grp_b = ids.new("group"), ids.new("group")
     victim, outsider = ids.new("user"), ids.new("user")
-    db.add_all([
+    await seed(db, [
         Organization(id=org_a, name="A"), Organization(id=org_b, name="B"),
         Project(id=grp_a, org_id=org_a, name="ga"), Project(id=grp_b, org_id=org_b, name="gb"),
         User(id=victim, email="v@example.edu", name="v", status="active"),
@@ -158,7 +155,6 @@ async def test_admin_cannot_reach_a_user_of_another_organization(db):
         Membership(id=ids.new("membership"), user_id=victim, group_id=grp_a, role="member"),
         Membership(id=ids.new("membership"), user_id=outsider, group_id=grp_b, role="org_admin"),
     ])
-    await db.commit()
 
     attacker = Principal(user_id=outsider, global_role=None, global_roles=set(),
                          memberships={grp_b: "org_admin"}, org_admin_orgs={org_b})
@@ -167,11 +163,10 @@ async def test_admin_cannot_reach_a_user_of_another_organization(db):
 
     # The same administrator still reaches their own organization's users.
     insider = ids.new("user")
-    db.add_all([
+    await seed(db, [
         User(id=insider, email="i@example.edu", name="i", status="active"),
         Membership(id=ids.new("membership"), user_id=insider, group_id=grp_b, role="member"),
     ])
-    await db.commit()
     await _assert_target_in_scope(db, attacker, insider)
 
     # super_admin is global, and everyone reaches themselves.
@@ -189,11 +184,10 @@ async def test_admin_cannot_enroll_a_user_into_another_organizations_group(db):
 
     org_a, org_b = ids.new("org"), ids.new("org")
     grp_a, grp_b = ids.new("group"), ids.new("group")
-    db.add_all([
+    await seed(db, [
         Organization(id=org_a, name="A"), Organization(id=org_b, name="B"),
         Project(id=grp_a, org_id=org_a, name="ga"), Project(id=grp_b, org_id=org_b, name="gb"),
     ])
-    await db.commit()
     foreign = await db.get(Project, grp_a)
     own = await db.get(Project, grp_b)
 
@@ -230,9 +224,8 @@ async def test_account_without_a_password_hash_cannot_log_in(db):
     from app.core.errors import Unauthenticated
     from app.db.models import User
 
-    db.add(User(id=ids.new("user"), email="nohash@example.edu", name="n",
-                password_hash=None, status="active"))
-    await db.commit()
+    await seed(db, [User(id=ids.new("user"), email="nohash@example.edu", name="n",
+                password_hash=None, status="active")])
 
     class _Req:
         headers = {"x-forwarded-for": "10.0.0.1"}
@@ -258,12 +251,11 @@ async def test_finished_session_is_not_resurrected_by_a_late_running_report(db):
     now = datetime.now(UTC)
     for finished in ("terminated", "error"):
         sid = ids.new("session")
-        db.add(SessionModel(
+        await seed(db, [SessionModel(
             id=sid, owner_user_id="usr_x", cluster_id="clu_1", offering_id="off_1",
             image_id="img_1", resource_class="gpu", mode="fractional",
             gpu_mem_mb=1024, gpu_cores=10, status=finished, terminated_at=now,
-        ))
-        await db.commit()
+        )])
 
         ev = OperatorStatusEvent(phase="running", ts=now, pod_ref="ns/pod", node_name="node-1")
         await StatusSync(db).on_status(sid, ev)

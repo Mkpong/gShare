@@ -62,3 +62,9 @@ spec:
           spec:
             containers:
               - image: "ghcr.io/gshare/* | registry.gshare.internal/* | registry.gshare.internal/prj_*"
+            # `=(...)`: checked when the field is present. Without these two an init or ephemeral
+            # container pulled the image from anywhere it liked while the rule still passed.
+            =(initContainers):
+              - image: "ghcr.io/gshare/* | registry.gshare.internal/* | registry.gshare.internal/prj_*"
+            =(ephemeralContainers):
+              - image: "ghcr.io/gshare/* | registry.gshare.internal/* | registry.gshare.internal/prj_*"

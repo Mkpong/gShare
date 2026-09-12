@@ -8,18 +8,18 @@ from app.api.policies_router import _policy_view
 from app.core import ids
 from app.db.models import ResourcePolicy
 from app.domain.policy import resolve_effective_policy
+from tests.fkseed import seed
 
 
 @pytest.mark.asyncio
 async def test_grant_resolves_most_specific_first_and_defaults_off(db):
-    db.add_all([
+    await seed(db, [
         ResourcePolicy(id=ids.new("policy"), scope="global", scope_id="*", max_concurrent=3, limits={}),
         ResourcePolicy(id=ids.new("policy"), scope="user", scope_id="usr_root_ok", max_concurrent=2,
                        limits={"allow_privileged": True}),
         ResourcePolicy(id=ids.new("policy"), scope="user", scope_id="usr_denied", max_concurrent=2,
                        limits={"allow_privileged": False}),
     ])
-    await db.commit()
     assert (await resolve_effective_policy(db, "usr_root_ok", None)).limits.get("allow_privileged") is True
     assert not (await resolve_effective_policy(db, "usr_denied", None)).limits.get("allow_privileged")
     assert not (await resolve_effective_policy(db, "usr_plain", None)).limits.get("allow_privileged")

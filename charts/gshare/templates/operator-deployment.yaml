@@ -43,6 +43,10 @@ spec:
             - "--leader-elect"
             # Namespace the session children live in (--session-namespace, env SESSION_NAMESPACE).
             - "--session-namespace={{ .Values.global.namespaces.sessions }}"
+            # Namespace for the privileged node Jobs (checkpoint/restore, mig-agent, kaniko). The
+            # RBAC in operator-rbac.yaml confines Job and pod writes to this namespace, so it must
+            # follow global.namespaces.infra rather than the flag's built-in default.
+            - "--lossless-namespace={{ .Values.global.namespaces.infra }}"
             # Session ingress: one domain, path-based, on the console host at /proxy/{cr}, with
             # forward-auth for the connect token. session-domain is the console domain. The auth-url
             # has to be a fully qualified name (.svc.cluster.local); the nginx resolver cannot look

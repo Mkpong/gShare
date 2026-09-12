@@ -9,6 +9,7 @@ from app.api.schemas.internal import OperatorGpuDeviceUpsert
 from app.cluster.inventory_sync import InventorySync
 from app.core import ids
 from app.db.models import Cluster, GpuDevice, GpuNode
+from tests.fkseed import seed
 
 
 def _report(cluster_id: str, status: str) -> OperatorGpuDeviceUpsert:
@@ -26,8 +27,7 @@ async def test_inventory_never_resurrects_a_faulted_card(db):
     node = GpuNode(id=ids.new("node"), hostname="n1", cluster_id=cluster.id, status="ready")
     dev = GpuDevice(id="GPU-x", node_id=node.id, cluster_id=cluster.id, model="A100",
                     gpu_uuid="GPU-x", total_mem_mb=16000, status="unhealthy", mode="fractional")
-    async with db.begin():
-        db.add_all([cluster, node, dev])
+    await seed(db, [cluster, node, dev])
 
     sync = InventorySync(db)
     # the card is physically fine and says so; the fault was a decision, so it must stand

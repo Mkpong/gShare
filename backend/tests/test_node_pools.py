@@ -31,6 +31,7 @@ from app.db.models import (
 from app.db.models import Session as SessionRow
 from app.domain.node_pools import assert_may_grant, resolve_pool_access
 from app.domain.scheduler import SchedulerService
+from tests.fkseed import seed
 
 pytestmark = pytest.mark.asyncio
 
@@ -77,8 +78,7 @@ async def _fleet(db, *, shared_nodes: int = 1) -> Fleet:
         )
         rows += [node, dev]
         (f.pool_devs if in_pool else f.shared_devs).append(dev.id)
-    async with db.begin():
-        db.add_all(rows)
+    await seed(db, rows)
     return f
 
 
@@ -102,8 +102,8 @@ def _req(f: Fleet, group: Project, mem_mb: int = 8000) -> SessionCreate:
 async def _reserve(db, f, user_id, group, mem_mb=8000) -> str | None:
     """reserve_slice for one session; returns the device it landed on (None = no fit)."""
     sess = _session(f, user_id, group, mem_mb)
+    await seed(db, [sess])
     async with db.begin():
-        db.add(sess)
         ok = await SchedulerService(db).reserve_slice(sess, _req(f, group, mem_mb))
         if not ok:
             return None
@@ -114,16 +114,22 @@ async def _reserve(db, f, user_id, group, mem_mb=8000) -> str | None:
 
 
 async def _fill(db, dev_id: str) -> None:
-    """Occupy a card completely (used = total)."""
+    """Occupy a card completely (used = total) on behalf of some other tenant's session."""
+    dev = await db.get(GpuDevice, dev_id)
+    resident = SessionRow(
+        id=ids.new("session"), owner_user_id=ids.new("user"), cluster_id=dev.cluster_id,
+        offering_id=ids.new("offering"), image_id=ids.new("image"), resource_class="gpu",
+        mode="fractional", status="running",
+    )
+    await seed(db, [resident, Allocation(
+        id=ids.new("allocation"), session_id=resident.id, device_id=dev.id,
+        gpu_uuid=dev.gpu_uuid, gpu_mem_mb=dev.total_mem_mb, gpu_cores=dev.total_cores,
+        status="bound",
+    )])
     async with db.begin():
         dev = await db.get(GpuDevice, dev_id)
         dev.used_mem_mb = dev.total_mem_mb
         dev.used_cores = dev.total_cores
-        db.add(Allocation(
-            id=ids.new("allocation"), session_id=ids.new("session"), device_id=dev.id,
-            gpu_uuid=dev.gpu_uuid, gpu_mem_mb=dev.total_mem_mb, gpu_cores=dev.total_cores,
-            status="bound",
-        ))
 
 
 # 1
@@ -148,10 +154,11 @@ async def test_org_a_prefers_pool_then_falls_back_to_shared(db):
 # 3
 async def test_shared_pool_policy_blocks_fallback(db):
     f = await _fleet(db)
-    async with db.begin():
-        db.add(ResourcePolicy(
-            id=ids.new("policy"), scope="org", scope_id=f.org_a.id, limits={"shared_pool": False}
-        ))
+    await seed(db, [
+        ResourcePolicy(
+        id=ids.new("policy"), scope="org", scope_id=f.org_a.id, limits={"shared_pool": False}
+        ),
+    ])
     await _fill(db, f.pool_devs[0])
     await _fill(db, f.pool_devs[1])
     assert await _reserve(db, f, f.user_a, f.g1) is None
@@ -162,10 +169,11 @@ async def test_shared_pool_policy_blocks_fallback(db):
 # 4
 async def test_group_sub_grant_tier_order(db):
     f = await _fleet(db)
-    async with db.begin():
-        db.add(NodePoolGrant(
-            id=ids.new("pool_grant"), pool_id=f.pool.id, scope="group", scope_id=f.g1.id
-        ))
+    await seed(db, [
+        NodePoolGrant(
+        id=ids.new("pool_grant"), pool_id=f.pool.id, scope="group", scope_id=f.g1.id
+        ),
+    ])
     a1 = await resolve_pool_access(db, cluster_id=f.cluster_id, user_id=f.user_a, group_id=f.g1.id)
     assert a1.tier_of(f.pool.id) == 0 and a1.tier_of(None) == 1
     assert a1.pools[0] == {"id": f.pool.id, "name": "P", "kind": "dedicated", "tier": "group"}
@@ -201,11 +209,10 @@ async def test_unserviceable_when_only_matching_cards_are_dedicated(db):
 # 7
 async def test_dashboard_regions_exclude_dedicated_vram_for_org_b(db):
     f = await _fleet(db)
-    async with db.begin():
-        db.add_all([
-            Membership(id=ids.new("membership"), user_id=f.user_b, group_id=f.gb.id, role="member"),
-            Membership(id=ids.new("membership"), user_id=f.user_a, group_id=f.g1.id, role="member"),
-        ])
+    await seed(db, [
+        Membership(id=ids.new("membership"), user_id=f.user_b, group_id=f.gb.id, role="member"),
+        Membership(id=ids.new("membership"), user_id=f.user_a, group_id=f.g1.id, role="member"),
+    ])
     out_b = await dashboard_summary(principal=Principal(user_id=f.user_b), db=db)
     assert [r["total_mb"] for r in out_b["regions"]] == [CARD_MB]
     assert out_b["pools"] == [{"id": None, "name": "shared", "kind": "shared", "tier": "shared"}]
@@ -250,17 +257,17 @@ async def _resident_on(db, f, dev_id: str, user_id: str, group: Project) -> Sess
         resource_class="gpu", mode="exclusive", pause_mode="yield", priority=0,
         status="running",
     )
+    dev = await db.get(GpuDevice, dev_id)
+    await seed(db, [resident, Allocation(
+        id=ids.new("allocation"), session_id=resident.id, device_id=dev.id,
+        gpu_uuid=dev.gpu_uuid, gpu_mem_mb=dev.total_mem_mb, gpu_cores=dev.total_cores,
+        status="bound", kind="resident",
+    )])
     async with db.begin():
         dev = await db.get(GpuDevice, dev_id)
         dev.mode = "exclusive"
         dev.used_mem_mb = dev.total_mem_mb
         dev.used_cores = dev.total_cores
-        db.add(resident)
-        db.add(Allocation(
-            id=ids.new("allocation"), session_id=resident.id, device_id=dev.id,
-            gpu_uuid=dev.gpu_uuid, gpu_mem_mb=dev.total_mem_mb, gpu_cores=dev.total_cores,
-            status="bound", kind="resident",
-        ))
     return resident
 
 
@@ -288,8 +295,7 @@ async def test_preemption_skips_residents_on_pools_the_requester_cannot_use(db, 
     svc = SchedulerService(db)
 
     pre_b = _preemptor(f, f.user_b, f.gb)
-    async with db.begin():
-        db.add(pre_b)
+    await seed(db, [pre_b])
     req = SessionCreate(
         offering_id=f.offering.id, image_id=f.image.id, resource_class="gpu",
         cluster_id=f.cluster_id, group_id=f.gb.id, mode="exclusive",
@@ -300,8 +306,7 @@ async def test_preemption_skips_residents_on_pools_the_requester_cannot_use(db, 
     assert fresh.status == "running"
 
     pre_a = _preemptor(f, f.user_a2, f.g2)
-    async with db.begin():
-        db.add(pre_a)
+    await seed(db, [pre_a])
     req_a = req.model_copy(update={"group_id": f.g2.id})
     assert await svc._preempt_lower_priority(pre_a, req_a) is True
     assert stopped == [(resident.id, "preempted")]
@@ -314,11 +319,10 @@ async def test_wizard_availability_hides_dedicated_models(db):
     from app.api.sessions_router import gpu_availability
 
     f = await _fleet(db)
-    async with db.begin():
-        db.add_all([
-            Membership(id=ids.new("membership"), user_id=f.user_b, group_id=f.gb.id, role="member"),
-            Membership(id=ids.new("membership"), user_id=f.user_a, group_id=f.g1.id, role="member"),
-        ])
+    await seed(db, [
+        Membership(id=ids.new("membership"), user_id=f.user_b, group_id=f.gb.id, role="member"),
+        Membership(id=ids.new("membership"), user_id=f.user_a, group_id=f.g1.id, role="member"),
+    ])
     out_b = await gpu_availability(
         principal=Principal(user_id=f.user_b, memberships={f.gb.id: "member"}), db=db)
     assert [m["gpu_model"] for m in out_b["data"]] == ["SHARED-CARD"] or all(

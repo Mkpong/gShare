@@ -8,6 +8,7 @@ from app.api.schemas.internal import OperatorGpuDeviceUpsert
 from app.cluster.inventory_sync import align_offering_models
 from app.core import ids
 from app.db.models import AuditLog, GpuDevice, GpuNode, Offering
+from tests.fkseed import cluster_row, seed
 
 
 def _offering(name, model, mem=98304) -> Offering:
@@ -23,16 +24,14 @@ def _device(node_id, model) -> GpuDevice:
 @pytest.fixture
 async def node(db):
     n = GpuNode(id=ids.new("node"), cluster_id="clu_t", hostname="gpu-a", status="ready")
-    async with db.begin():
-        db.add(n)
+    await seed(db, [cluster_row("clu_t"), n])
     return n
 
 
 @pytest.mark.asyncio
 async def test_seeded_marketing_name_adopts_the_reported_sku(db, node):
     off = _offering("RTX PRO 6000", "NVIDIA RTX PRO 6000 Blackwell")
-    async with db.begin():
-        db.add(off)
+    await seed(db, [off])
     async with db.begin():
         await align_offering_models(db, "NVIDIA RTX PRO 6000 Blackwell Max-Q Workstation Edition")
     db.expunge_all()
@@ -49,8 +48,7 @@ async def test_seeded_marketing_name_adopts_the_reported_sku(db, node):
 ])
 async def test_alignment_leaves_other_cases_alone(db, node, reported):
     off = _offering("RTX PRO 6000", "NVIDIA RTX PRO 6000 Blackwell")
-    async with db.begin():
-        db.add(off)
+    await seed(db, [off])
     async with db.begin():
         await align_offering_models(db, reported)
     db.expunge_all()
@@ -61,8 +59,7 @@ async def test_alignment_leaves_other_cases_alone(db, node, reported):
 async def test_alignment_never_guesses_between_two_candidates(db, node):
     a = _offering("A", "NVIDIA RTX PRO 6000")
     b = _offering("B", "NVIDIA RTX PRO 6000 Blackwell")
-    async with db.begin():
-        db.add_all([a, b])
+    await seed(db, [a, b])
     async with db.begin():
         await align_offering_models(db, "NVIDIA RTX PRO 6000 Blackwell Max-Q Workstation Edition")
     db.expunge_all()
@@ -73,8 +70,7 @@ async def test_alignment_never_guesses_between_two_candidates(db, node):
 @pytest.mark.asyncio
 async def test_alignment_keeps_a_name_other_cards_still_report(db, node):
     off = _offering("RTX PRO 6000", "NVIDIA RTX PRO 6000 Blackwell")
-    async with db.begin():
-        db.add_all([off, _device(node.id, "NVIDIA RTX PRO 6000 Blackwell")])
+    await seed(db, [off, _device(node.id, "NVIDIA RTX PRO 6000 Blackwell")])
     async with db.begin():
         await align_offering_models(db, "NVIDIA RTX PRO 6000 Blackwell Max-Q Workstation Edition")
     db.expunge_all()
@@ -84,10 +80,8 @@ async def test_alignment_keeps_a_name_other_cards_still_report(db, node):
 @pytest.mark.asyncio
 async def test_device_report_triggers_alignment(db, node, monkeypatch):
     from app.cluster.inventory_sync import InventorySync
-    from app.db.models import Cluster
     off = _offering("RTX PRO 6000", "NVIDIA RTX PRO 6000 Blackwell")
-    async with db.begin():
-        db.add_all([off, Cluster(id="clu_t", name="t", api_server="https://t:6443", runtime="k8s", kubeconfig_secret_ref="s")])
+    await seed(db, [off])   # the `node` fixture already put cluster clu_t on the ledger
     await InventorySync(db).upsert_device(OperatorGpuDeviceUpsert(
         node_id="gpu-a", uuid="GPU-1", model="NVIDIA RTX PRO 6000 Blackwell Max-Q Workstation Edition",
         total_mem_mb=97887, total_cores=100, mode="fractional", status="ready", node_ready=True,

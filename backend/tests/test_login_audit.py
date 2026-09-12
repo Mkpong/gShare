@@ -8,6 +8,7 @@ from app.api.users_router import _LoginRequest, auth_login
 from app.core import ids
 from app.core.errors import Unauthenticated
 from app.db.models import AuditLog, User
+from tests.fkseed import seed
 
 
 class _Req:
@@ -24,12 +25,12 @@ async def _rows(db) -> list[AuditLog]:
 @pytest.mark.asyncio
 async def test_unknown_account_is_recorded_as_failed(db):
     with pytest.raises(Unauthenticated):
-        await auth_login(_LoginRequest(email="nobody@dankook.ac.kr", password="whatever1"),
+        await auth_login(_LoginRequest(email="nobody@example.com", password="whatever1"),
                          _Req(), db)
     rows = await _rows(db)
     assert len(rows) == 1
     assert rows[0].result == "failed"
-    assert rows[0].actor == "nobody@dankook.ac.kr"
+    assert rows[0].actor == "nobody@example.com"
     assert rows[0].detail["reason"] == "unknown_account"
     assert rows[0].detail["ip"] == "10.0.0.9"
 
@@ -37,10 +38,9 @@ async def test_unknown_account_is_recorded_as_failed(db):
 @pytest.mark.asyncio
 async def test_wrong_password_and_then_success_are_both_recorded(db):
     from app.core.passwords import hash_password
-    user = User(id=ids.new("user"), email="ce-user01@dankook.ac.kr", name="u",
+    user = User(id=ids.new("user"), email="ce-user01@example.com", name="u",
                 password_hash=hash_password("correct-horse"), status="active")
-    async with db.begin():
-        db.add(user)
+    await seed(db, [user])
 
     with pytest.raises(Unauthenticated):
         await auth_login(_LoginRequest(email=user.email, password="wrong-one"), _Req(), db)
@@ -55,10 +55,9 @@ async def test_wrong_password_and_then_success_are_both_recorded(db):
 @pytest.mark.asyncio
 async def test_a_suspended_account_is_recorded_as_failed(db):
     from app.core.passwords import hash_password
-    user = User(id=ids.new("user"), email="gone@dankook.ac.kr", name="g",
+    user = User(id=ids.new("user"), email="gone@example.com", name="g",
                 password_hash=hash_password("correct-horse"), status="suspended")
-    async with db.begin():
-        db.add(user)
+    await seed(db, [user])
     with pytest.raises(Unauthenticated):
         await auth_login(_LoginRequest(email=user.email, password="correct-horse"), _Req(), db)
     rows = await _rows(db)

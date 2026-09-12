@@ -13,27 +13,28 @@ from app.auth.rbac import Principal
 from app.core import ids
 from app.db.models import Allocation, CreditWallet, GpuDevice, GpuNode, Image, Offering, Project
 from app.domain.scheduler import SchedulerService
+from tests.fkseed import seed, user_row
 
 MODEL = "NVIDIA RTX PRO 5000 Blackwell"
 
 
 async def _user(db):
     """A user with their own personal wallet (billing must target the requester's wallet)."""
-    user_id = ids.new("user")
+    user = user_row()
     wallet = CreditWallet(
-        id=ids.new("wallet"), owner_type="user", owner_id=user_id,
+        id=ids.new("wallet"), owner_type="user", owner_id=user.id,
         balance=Decimal("1000"), reserved=Decimal("0"),
     )
-    async with db.begin():
-        db.add(wallet)
-    return user_id, wallet
+    await seed(db, [user, wallet])
+    return user.id, wallet
 
 
 async def _fleet(db, *nodes):
     """Build a cluster of (mem_gb, cpu) nodes, one fractional 48G card each. Returns the ids."""
     org_id = ids.new("org")
     group = Project(id=ids.new("group"), org_id=org_id, name="p")
-    user_id = ids.new("user")
+    user = user_row()
+    user_id = user.id
     wallet = CreditWallet(
         id=ids.new("wallet"), owner_type="user", owner_id=user_id,
         balance=Decimal("1000"), reserved=Decimal("0"),
@@ -45,7 +46,7 @@ async def _fleet(db, *nodes):
         cpu=4, mem_gb=8, disk_gb=50,
     )
     image = Image(id=ids.new("image"), name="pytorch")
-    rows = [group, wallet, offering, image]
+    rows = [user, group, wallet, offering, image]
     devs = []
     for i, (mem, cpu) in enumerate(nodes):
         node = GpuNode(id=ids.new("node"), cluster_id=cluster_id, hostname=f"n{i}",
@@ -56,8 +57,7 @@ async def _fleet(db, *nodes):
         )
         rows += [node, dev]
         devs.append(dev.id)
-    async with db.begin():
-        db.add_all(rows)
+    await seed(db, rows)
     return cluster_id, offering, image, group, wallet, user_id, devs
 
 
@@ -147,8 +147,7 @@ async def test_cpu_session_needs_a_cpu_node(db, fake_handoff):
     cpu_off = _Offering(id=ids.new("offering"), name="cpu", resource_class="cpu",
                         credit_per_hour=Decimal("0"), cpu=2, mem_gb=4, disk_gb=10)
     img = _Image(id=ids.new("image"), name="ubuntu")
-    async with db.begin():
-        db.add_all([cpu_off, img])
+    await seed(db, [cpu_off, img])
     svc = SchedulerService(db)
     svc.handoff = fake_handoff
     req = SessionCreate(offering_id=cpu_off.id, image_id=img.id, resource_class="cpu",

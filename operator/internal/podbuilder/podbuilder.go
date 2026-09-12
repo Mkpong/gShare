@@ -92,6 +92,24 @@ func labels(s *gsharev1.GShareSession) map[string]string {
 	return map[string]string{"gshare.io/session": s.Name}
 }
 
+// podLabels: what labels() carries, plus the two selectors the shipped NetworkPolicies match on
+// (deploy/security/networkpolicy-*.yaml, and the chart's networkPolicy templates). Nothing set
+// them before, so those allowlists selected no pod at all while the default-deny beside them
+// selected every pod — applying the documented baseline cut every session off from DNS, storage
+// and the ingress controller.
+//
+// They are deliberately NOT added to labels(), which is also the Service's selector: a pod that
+// was already running when the operator was upgraded does not carry them, and a Service whose
+// selector demanded them would stop routing to its own pod until the session was recreated.
+func podLabels(s *gsharev1.GShareSession) map[string]string {
+	l := labels(s)
+	l["gshare.io/workload"] = "session"
+	if rc := s.Spec.ResourceClass; rc != "" {
+		l["gshare.io/resource-class"] = rc
+	}
+	return l
+}
+
 // BuildPod builds the session Pod, switching by mode.
 func (b *Builder) BuildPod(s *gsharev1.GShareSession) *corev1.Pod {
 	limits := corev1.ResourceList{}
@@ -263,7 +281,7 @@ func (b *Builder) BuildPod(s *gsharev1.GShareSession) *corev1.Pod {
 		ObjectMeta: metav1.ObjectMeta{
 			Name:        podName(s),
 			Namespace:   b.ns(s),
-			Labels:      labels(s),
+			Labels:      podLabels(s),
 			Annotations: podAnnos,
 		},
 		Spec: spec,

@@ -99,8 +99,11 @@ class CreditEngine:
             async with self._atomic():
                 yield
         except IntegrityError as exc:
+            # Postgres names the constraint (credit_transaction_idempotency_key_key); SQLite names
+            # the column (credit_transaction.idempotency_key). Both carry the column name, and no
+            # other table has one — any other unique violation is a real failure.
             detail = str(exc.orig or exc).lower()
-            if "idempotency" not in detail and "uq_" not in detail and "unique" not in detail:
+            if "idempotency_key" not in detail:
                 raise
 
     async def hold(self, wallet_id: str, amount: Decimal, key: str) -> None:
@@ -144,6 +147,12 @@ class CreditEngine:
         async with self._keyed_atomic():
             if await self._txn_exists(key):
                 return  # per-minute dedupe (idempotent retry / operator restart)
+            # A settled session is terminal (terminated, or an error row whose stranded hold was
+            # refunded) and its hold is already released. A late tick that lands after settle —
+            # a delayed billing batch, a status callback replayed out of order — must not reopen
+            # billing: the charge would have no settle left to reconcile it.
+            if await self._txn_exists(f"settle:{session.id}"):
+                return
             wallet = await self.db.get(
                 CreditWallet, session.billing_wallet_id, with_for_update=True
             )

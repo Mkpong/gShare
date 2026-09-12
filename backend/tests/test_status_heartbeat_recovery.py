@@ -16,14 +16,14 @@ from app.api.schemas.internal import OperatorStatusEvent
 from app.cluster.status_sync import StatusSync
 from app.core import ids
 from app.db.models import Session as SessionModel
+from tests.fkseed import seed
 
 
 async def _session(db, status: str) -> SessionModel:
     sess = SessionModel(id=ids.new("session"), owner_user_id="usr_1", cluster_id="clu_a",
                         offering_id="off_1", image_id="img_1", resource_class="cpu",
                         status=status)
-    async with db.begin():
-        db.add(sess)
+    await seed(db, [sess])
     return sess
 
 

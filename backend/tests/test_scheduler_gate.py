@@ -28,6 +28,7 @@ from app.db.models import (
     ResourcePolicy,
 )
 from app.domain.scheduler import SchedulerService
+from tests.fkseed import seed, user_row
 
 
 @pytest.mark.asyncio
@@ -41,7 +42,8 @@ async def test_gate_order_policy_then_budget_then_hold(db, fake_handoff):
     """
     org_id = ids.new("org")
     group = Project(id=ids.new("group"), org_id=org_id, name="p")
-    user_id = ids.new("user")
+    owner = user_row()
+    user_id = owner.id
     # Personal billing wallet (owner = requester) with no available credit: a hold, if reached,
     # raises 402.
     wallet = CreditWallet(
@@ -76,8 +78,7 @@ async def test_gate_order_policy_then_budget_then_hold(db, fake_handoff):
         id=ids.new("device"), node_id=ids.new("node"), cluster_id=cluster_id,
         model="A100", gpu_uuid=ids.new("device"), total_mem_mb=16000, status="ready",
     )
-    async with db.begin():
-        db.add_all([group, wallet, budget, offering, image, device])
+    await seed(db, [owner, group, wallet, budget, offering, image, device])
 
     svc = SchedulerService(db)
     svc.handoff = fake_handoff  # never reached, but keep the live cluster out of the test
@@ -120,7 +121,8 @@ async def test_hold_is_reached_when_budget_passes(db, fake_handoff):
     empty wallet surfaces InsufficientCredit. (Complements the order assertion above.)
     """
     group = Project(id=ids.new("group"), org_id=ids.new("org"), name="p")
-    user_id = ids.new("user")
+    owner = user_row()
+    user_id = owner.id
     wallet = CreditWallet(
         id=ids.new("wallet"),
         owner_type="user",
@@ -144,8 +146,7 @@ async def test_hold_is_reached_when_budget_passes(db, fake_handoff):
         id=ids.new("device"), node_id=ids.new("node"), cluster_id=cluster_id,
         model="A100", gpu_uuid=ids.new("device"), total_mem_mb=16000, status="ready",
     )
-    async with db.begin():
-        db.add_all([group, wallet, offering, image, device])
+    await seed(db, [owner, group, wallet, offering, image, device])
 
     svc = SchedulerService(db)
     svc.handoff = fake_handoff
@@ -184,15 +185,15 @@ async def test_lossless_gate_eligible_when_offering_and_node_capable(db):
         id=ids.new("node"), cluster_id=cluster_id, hostname="n1",
         status="ready", lossless_capable=True,
     )
-    async with db.begin():
-        db.add_all([offering, image, node])
+    owner = user_row()
+    await seed(db, [offering, image, node, owner])
 
     svc = SchedulerService(db)
     req = SessionCreate(
         offering_id=offering.id, image_id=image.id, resource_class="gpu",
         cluster_id=cluster_id, mode="exclusive",
     )
-    sess = await svc._persist_pending(req, Principal(user_id=ids.new("user")))
+    sess = await svc._persist_pending(req, Principal(user_id=owner.id))
     assert sess.lossless_pause is True
 
 
@@ -211,15 +212,15 @@ async def test_lossless_gate_blocked_without_capable_node(db):
         id=ids.new("node"), cluster_id=cluster_id, hostname="n1",
         status="ready", lossless_capable=False,
     )
-    async with db.begin():
-        db.add_all([offering, image, node])
+    owner = user_row()
+    await seed(db, [offering, image, node, owner])
 
     svc = SchedulerService(db)
     req = SessionCreate(
         offering_id=offering.id, image_id=image.id, resource_class="gpu",
         cluster_id=cluster_id, mode="exclusive",
     )
-    sess = await svc._persist_pending(req, Principal(user_id=ids.new("user")))
+    sess = await svc._persist_pending(req, Principal(user_id=owner.id))
     assert sess.lossless_pause is False
 
 
@@ -355,8 +356,7 @@ async def test_resource_sum_uses_request_disk_override(db):
     pol = ResourcePolicy(
         id=ids.new("pol"), scope="user", scope_id=user_id, limits={"storage_gb": 100},
     )
-    async with db.begin():
-        db.add_all([offering, pol])
+    await seed(db, [offering, pol])
 
     svc = SchedulerService(db)
     req = SessionCreate(
@@ -381,8 +381,7 @@ async def test_resource_sum_falls_back_to_offering_when_no_override(db):
     pol = ResourcePolicy(
         id=ids.new("pol"), scope="user", scope_id=user_id, limits={"storage_gb": 100},
     )
-    async with db.begin():
-        db.add_all([offering, pol])
+    await seed(db, [offering, pol])
 
     svc = SchedulerService(db)
     req = SessionCreate(
@@ -400,8 +399,7 @@ async def test_max_runtime_resolved_and_stamped_seconds(db):
     gshare.io/max-runtime-sec."""
     owner = ids.new("user")
     pol = ResourcePolicy(id=ids.new("pol"), scope="user", scope_id=owner, max_runtime=60)
-    async with db.begin():
-        db.add(pol)
+    await seed(db, [pol])
     crd = GShareSessionCRD(db=db)
     spec = {"session_id": "ses_test", "owner": owner, "group_id": None}
     max_sec = await crd._resolve_max_runtime_sec(spec)

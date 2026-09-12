@@ -53,7 +53,7 @@ sitting on it.
 | Path | Contents |
 |---|---|
 | `backend/` | `gshare-api` (FastAPI control plane) and `gshare-worker` (billing, queue, and reaper batch). Python 3.12 |
-| `operator/` | `gshare-operator`, the per-cluster controller that reconciles `GShareSession` resources. Go 1.22 + controller-runtime |
+| `operator/` | `gshare-operator`, the per-cluster controller that reconciles `GShareSession` resources. Go 1.25 + controller-runtime |
 | `frontend/` | The console: a React + TypeScript single-page app with live updates over SSE |
 | `charts/gshare/` | The Helm chart for the whole platform |
 | `deploy/` | Values overlays (`values/`), security baselines, monitoring, supply-chain policy, secret examples |
@@ -91,7 +91,7 @@ The custom resource is the source of truth for desired session state. The API de
 | Namespace | Purpose | Pod Security Admission |
 |---|---|---|
 | `gshare-system` | Control plane: api, worker, operator, Postgres, Redis, ingress | `baseline` |
-| `gshare-sessions` | Tenant session pods | **`restricted` (enforce)** |
+| `gshare-sessions` | Tenant session pods | **`baseline` (enforce), `restricted` (audit/warn)** — session pods keep the `restricted` shape; only a policy-granted privileged session relaxes it |
 | `gshare-infra` | Privileged DaemonSets | `privileged` |
 
 ### Reference production configuration
@@ -125,7 +125,8 @@ memberships. The top bar has an admin-mode toggle that switches between the two 
 
 **Credits** start at zero for a new user. They are allocated down the hierarchy —
 super-admin to organization to group to user — and no level can hand out more than it
-received. Monthly refills are supported and are use-it-or-lose-it. A session is always
+received. Monthly refills are supported: at the start of each month a wallet is topped up to its
+monthly grant (a balance already above the grant is left alone). A session is always
 billed to the requester's own personal wallet; charging someone else's wallet or a group
 wallet is rejected. **Credits are a GPU-only concept**: CPU-class sessions and storage volumes
 are free, and are governed by resource-policy quotas instead.

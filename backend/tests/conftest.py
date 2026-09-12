@@ -19,14 +19,27 @@ import os
 # here.
 os.environ.setdefault("GSHARE_USER_JWT_SECRET", "test-secret-not-for-prod")
 
+import subprocess
+import sys
+from pathlib import Path
+
 import pytest
 import pytest_asyncio
+from sqlalchemy import text
 from sqlalchemy.dialects.postgresql import JSONB
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker, create_async_engine
 from sqlalchemy.ext.compiler import compiles
 from sqlalchemy.pool import StaticPool
 
 from app.db.base import Base
+
+# Opt-in Postgres backend (hypothesis H-7: the SQLite fixture cannot exercise FOR UPDATE, CHECK
+# constraints as migrated, enforced foreign keys, or real concurrency). Set
+# ``GSHARE_TEST_DATABASE_URL`` to an asyncpg URL and the ``db`` fixture binds to that database
+# instead: the schema is created ONCE per session with ``alembic upgrade head`` (the production
+# path, not create_all) and every table is truncated after each test. Unset, nothing below
+# changes the SQLite behaviour.
+PG_TEST_URL = os.environ.get("GSHARE_TEST_DATABASE_URL")
 
 
 # SQLite has no JSONB; render it as plain JSON (text-backed) so create_all works off the same
@@ -36,14 +49,42 @@ def _compile_jsonb_sqlite(type_, compiler, **kw):  # noqa: ANN001, ANN202
     return "JSON"
 
 
-@pytest_asyncio.fixture
-async def db() -> AsyncSession:
-    """AsyncSession bound to an in-memory SQLite.
+@pytest.fixture(scope="session")
+def pg_schema() -> str | None:
+    """Migrate the opt-in Postgres test database to head once per session (``alembic upgrade
+    head`` in a subprocess so env.py's own asyncio.run stays out of the test loop), and start
+    from empty tables. Returns the URL, or None when the SQLite default is in force."""
+    if not PG_TEST_URL:
+        return None
+    backend_dir = Path(__file__).resolve().parents[1]
+    env = {**os.environ, "GSHARE_DATABASE_URL": PG_TEST_URL}
+    subprocess.run(
+        [sys.executable, "-m", "alembic", "upgrade", "head"],
+        cwd=backend_dir, env=env, check=True, capture_output=True,
+    )
+    return PG_TEST_URL
 
-    A single connection-pooled in-memory engine; schema created via run_sync(create_all). Yields one
-    session per test (rolled back / disposed at teardown). Postgres partial-UNIQUE indexes carry a
-    ``postgresql_where`` that SQLite simply ignores, which is fine for these logic tests.
-    """
+
+async def _truncate_all(engine) -> None:
+    names = ", ".join(f'"{t.name}"' for t in reversed(Base.metadata.sorted_tables))
+    async with engine.begin() as conn:
+        await conn.execute(text(f"TRUNCATE TABLE {names} CASCADE"))
+
+
+@pytest_asyncio.fixture
+async def db_engine(pg_schema):
+    """The engine behind ``db``. On Postgres this is a real pool, so a test may open several
+    independent sessions on it (concurrency tests); on SQLite it is the single shared in-memory
+    connection."""
+    if pg_schema:
+        engine = create_async_engine(pg_schema, pool_size=20, max_overflow=20)
+        await _truncate_all(engine)
+        try:
+            yield engine
+        finally:
+            await _truncate_all(engine)
+            await engine.dispose()
+        return
     # StaticPool shares one connection across every session, so the in-memory database survives
     # between them and the connection stays consistent after an exception inside begin(). With the
     # default pool the async adapter can be left in a broken state.
@@ -54,13 +95,27 @@ async def db() -> AsyncSession:
     )
     async with engine.begin() as conn:
         await conn.run_sync(Base.metadata.create_all)
-    sessionmaker = async_sessionmaker(engine, expire_on_commit=False)
+    try:
+        yield engine
+    finally:
+        await engine.dispose()
+
+
+@pytest_asyncio.fixture
+async def db(db_engine) -> AsyncSession:
+    """AsyncSession bound to an in-memory SQLite (default) or the opt-in Postgres (``db_engine``).
+
+    SQLite: a single connection-pooled in-memory engine; schema created via run_sync(create_all).
+    Yields one session per test (rolled back / disposed at teardown). Postgres partial-UNIQUE
+    indexes carry a ``postgresql_where`` that SQLite simply ignores, which is fine for these logic
+    tests.
+    """
+    sessionmaker = async_sessionmaker(db_engine, expire_on_commit=False)
     session = sessionmaker()
     try:
         yield session
     finally:
         await session.close()
-        await engine.dispose()
 
 
 class FakeHandoff:

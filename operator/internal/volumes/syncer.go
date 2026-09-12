@@ -177,6 +177,11 @@ func (s *Syncer) Tick(ctx context.Context) error {
 			CapacityGb: requestGb(p),
 			Mounted:    mounted[p.Name],
 		}
+		if p.Spec.StorageClassName != nil && *p.Spec.StorageClassName != "" {
+			o.StorageClass = *p.Spec.StorageClassName
+		} else {
+			o.StorageClass = s.StorageClass // claims we created name the configured class
+		}
 		if used, ok := usage[p.Name]; ok {
 			u := used
 			o.UsedBytes = &u

@@ -236,6 +236,14 @@ class SessionService:
         is_yield = sess.pause_mode == "yield"
         # Close our read tx so credit.consume owns a clean per-wallet FOR UPDATE tx.
         await self.db.commit()
+        # The operator is told to tear the pod down (or yield its VRAM) FIRST, while the ledger
+        # still holds the card. Releasing the reservation before this patch was applied meant a
+        # failed handoff (cluster unreachable, custom resource gone) left a row that said paused
+        # over a pod that kept computing — for free, on a card the ledger now offered to the next
+        # session. If the patch lands and the steps below fail instead, the operator's Paused
+        # report converges the row (status_sync treats it as an operator-driven pause).
+        await self.handoff.set_paused(sess, True)
+        await self.db.commit()   # set_paused's cluster lookup autobegan a transaction
         # Event-correction: charge the remaining (unbilled) running time up to now.
         await self.credit.consume(sess, _minute_bucket(now), now)
         # Return GPU capacity (DB) — operator releases the physical pod via spec.paused below.
@@ -272,9 +280,8 @@ class SessionService:
         )
         await publish_session_event(sess.id, {"phase": "paused", "status": "paused"})
         await self.db.commit()
-        # The operator tears the pod down and returns the physical GPU, reporting Paused rather than
-        # terminated. The custom resource stays.
-        await self.handoff.set_paused(sess, True)
+        # The custom resource stays (spec.paused=true was applied above); the operator reports
+        # Paused rather than terminated once the pod is gone.
         return sess
 
     async def demote(self, session_id: str):

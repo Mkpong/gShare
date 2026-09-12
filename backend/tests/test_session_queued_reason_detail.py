@@ -14,6 +14,7 @@ from app.auth.rbac import Principal
 from app.core import ids
 from app.db.models import Session as SessionModel
 from app.db.models import SessionEvent
+from tests.fkseed import seed
 
 
 @pytest.mark.asyncio
@@ -21,11 +22,8 @@ async def test_detail_reports_the_same_queued_reason_as_the_list(db):
     sess = SessionModel(id=ids.new("session"), owner_user_id="usr_q", cluster_id="clu_a",
                         offering_id="off_1", image_id="img_1", resource_class="gpu",
                         mode="fractional", status="pending")
-    async with db.begin():
-        db.add(sess)
-        await db.flush()
-        db.add(SessionEvent(id=ids.new("session_event"), session_id=sess.id, kind="queued",
-                            reason="no_vram"))
+    await seed(db, [sess, SessionEvent(id=ids.new("session_event"), session_id=sess.id,
+                                       kind="queued", reason="no_vram")])
     p = Principal(user_id="usr_q")
     detail = await get_session(sess.id, p, db)
     assert detail.queued_reason == "no_vram"

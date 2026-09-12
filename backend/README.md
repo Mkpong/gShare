@@ -33,7 +33,9 @@ app/
   domain/            scheduler, credit_engine, session/volume/budget services, connection_token
   cluster/           handoff, crd (GShareSession apply), status_sync — apply only, no workload calls
   db/                base (engine and session), models
-  workers/           runner plus billing, budget_rollup, credit_refill, token_expiry, queue_ticker
+  workers/           runner plus billing, budget_rollup, credit_refill, token_expiry, queue_ticker,
+                     grace_enforcer, audit_retention, webhook_dispatcher, pool_rebalancer,
+                     node_liveness, session_liveness
 alembic/             env.py and versions/
 tests/               pytest against in-memory SQLite; real-GPU e2e lives in /test/e2e
 ```
@@ -45,12 +47,16 @@ just the API by hand:
 
 ```bash
 pip install -e ".[dev]"
-cp ../.env.example .env                    # set GSHARE_BOOTSTRAP_ADMIN_* and INTERNAL_JWT_PRIVATE_KEY
+cp ../.env.example .env                    # set GSHARE_BOOTSTRAP_ADMIN_* and GSHARE_INTERNAL_JWT_PRIVATE_KEY
 docker compose up -d postgres redis        # datastores only
 alembic upgrade head                       # apply the schema
+alembic check                              # models vs schema: must report no new operations
 uvicorn app.main:app --reload --port 8080  # docs at http://localhost:8080/api/v1/docs
-python -m app.workers.runner               # billing, budget rollup, credit refill, token expiry, queue ticker
+python -m app.workers.runner               # billing, budget rollup, credit refill, token expiry, queue ticker, and the other loops in workers/runner.py
 ```
+`downgrade` walks back one revision at a time, but **not all the way to base**: `0051_drop_boards`
+refuses to run backwards, because the notice and inquiry tables were dropped with their data by
+decision. Restore from a backup instead of downgrading past that revision.
 
 Port 8080 matches what Compose and the frontend proxy expect.
 

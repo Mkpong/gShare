@@ -11,6 +11,7 @@ from app.core import ids
 from app.core.errors import DomainError
 from app.db.models import Allocation, GpuDevice, GpuNode
 from app.db.models import Session as SessionRow
+from tests.fkseed import seed
 
 
 async def _node_with_card(db, hostname="gpu-x"):
@@ -19,8 +20,7 @@ async def _node_with_card(db, hostname="gpu-x"):
     dev = GpuDevice(id=ids.new("device"), node_id=node.id, cluster_id=node.cluster_id,
                     model="RTX PRO 6000", gpu_uuid=ids.new("dev"),
                     total_mem_mb=97887, total_cores=100)
-    async with db.begin():
-        db.add_all([node, dev])
+    await seed(db, [node, dev])
     return node, dev
 
 
@@ -42,10 +42,11 @@ async def test_delete_node_refuses_while_an_allocation_is_live(db):
         offering_id=ids.new("offering"), image_id=ids.new("image"), resource_class="gpu",
         mode="fractional", status="running", gpu_mem_mb=4096, gpu_cores=10,
     )
-    async with db.begin():
-        db.add(sess)
-        db.add(Allocation(id=ids.new("allocation"), session_id=sess.id, device_id=dev.id,
-                          gpu_uuid=dev.gpu_uuid, gpu_mem_mb=4096, gpu_cores=10, status="bound"))
+    await seed(db, [
+        sess,
+        Allocation(id=ids.new("allocation"), session_id=sess.id, device_id=dev.id,
+                      gpu_uuid=dev.gpu_uuid, gpu_mem_mb=4096, gpu_cores=10, status="bound"),
+    ])
 
     with pytest.raises(DomainError) as err:
         await delete_node(node.id, principal=_Principal(), db=db)
@@ -67,8 +68,7 @@ async def test_delete_node_detaches_history_and_clears_the_cards(db):
     alloc = Allocation(id=ids.new("allocation"), session_id=sess.id, device_id=dev.id,
                        gpu_uuid=dev.gpu_uuid, gpu_mem_mb=4096, gpu_cores=10,
                        status="released", ended_at=datetime.now(UTC))
-    async with db.begin():
-        db.add_all([sess, alloc])
+    await seed(db, [sess, alloc])
 
     await delete_node(node.id, principal=_Principal(), db=db)
 

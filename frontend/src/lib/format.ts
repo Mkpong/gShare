@@ -29,10 +29,15 @@ export const accessModeLabel = _label('accessMode');
 export const sessionStatusLabel = _label('sessionStatus');
 export const reqStatusLabel = _label('reqStatus');
 
-/** Credits, which are whole units. */
-export function formatCredit(amount?: number | null): string {
-  if (amount == null) return '-';
-  return new Intl.NumberFormat(currentLocale()).format(amount);
+/**
+ * Credits. The ledger keeps two decimals (the backend quantizes to a cent), so a rendered amount
+ * never shows more than that; the API sends Decimal amounts as strings, which are accepted here.
+ */
+export function formatCredit(amount?: number | string | null): string {
+  if (amount == null || amount === '') return '-';
+  const n = typeof amount === 'string' ? Number(amount) : amount;
+  if (!Number.isFinite(n)) return '-';
+  return new Intl.NumberFormat(currentLocale(), { maximumFractionDigits: 2 }).format(n);
 }
 
 /** ISO timestamp to the viewer's local time, in their language. */

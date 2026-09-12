@@ -2,48 +2,36 @@
 sidebar_position: 3
 title: 클러스터 연결
 ---
+
 # 클러스터 연결
 
-> **두 번째 클러스터를 붙이나요?** [multi-cluster.md](multi-cluster.md)와
-> `hack/attach-cluster.sh`를 쓰세요. 이 문서는 개념과 단일 클러스터·Compose 토폴로지를 다루고,
-> 저 문서는 맨 GPU 클러스터를 위한 운영자 런북입니다.
+> **다중 클러스터(Multi-Cluster) 환경을 구성 중이신가요?**  
+> 상세 운영 런북은 [multi-cluster.md](multi-cluster.md) 및 `hack/attach-cluster.sh` 스크립트를 참고하세요. 본 문서는 클러스터 연결 아키텍처 개요 및 단일 클러스터/Compose 토폴로지 연결 방법을 안내합니다.
 
 > 📚 [문서 홈](./README.md)
 
-[`cluster-setup.md`](./cluster-setup.md)가 GPU 클러스터를 **만드는** 곳이라면, 이 페이지는 그것을
-gShare **제어 플레인**에 **붙이는** 곳입니다. 제어 플레인은 클러스터에 무관합니다. 등록된
-kubeconfig로 외부 GPU 클러스터에 `GShareSession` 커스텀 리소스를 적용하고, 각 클러스터의
-오퍼레이터가 이를 재조정해 상태와 인벤토리를 콜백합니다.
+[`cluster-setup.md`](./cluster-setup.md)가 신규 GPU 클러스터를 **구축**하는 절차라면, 본 문서는 구축된 클러스터를 gShare **제어 플레인(Control Plane)**에 **연결**하는 절차를 다룹니다. 제어 플레인은 클러스터 위치에 종속되지 않으며, 등록된 `kubeconfig`를 기반으로 외부 GPU 클러스터에 `GShareSession` 커스텀 리소스(CR)를 적용합니다. 이후 각 클러스터의 오퍼레이터가 이를 재조정(Reconcile)하여 자원 인벤토리 및 세션 상태를 콜백으로 동기화합니다.
 
-## 개념
+## 핵심 개념
 
-| 주체 | 위치 | 책임 |
+| 주체 | 위치 | 주요 역할 및 기능 |
 |---|---|---|
-| 제어 플레인(`api`, `worker`) | Compose 또는 Kubernetes | 클러스터 등록, kubeconfig로 커스텀 리소스 적용, 오퍼레이터 콜백 검증. 내부 JWT를 서명·검증하고 JWKS를 발행 |
-| 오퍼레이터 | 각 GPU 클러스터 | `GShareSession` 재조정, 인벤토리·상태 보고. 내부 JWT 보유 |
+| **제어 플레인 (`api`, `worker`)** | Compose 또는 Kubernetes | 클러스터 등록 관리, `kubeconfig` 기반 CR 적용, 오퍼레이터 콜백 검증, 내부 RS256 JWT 서명/검증 및 JWKS 발행 |
+| **오퍼레이터 (Operator)** | 각 GPU 클러스터 | `GShareSession` CR 재조정, GPU 자원 인벤토리 및 세션 상태 보고 (내부 JWT 인증) |
 
-- **`cluster_id`** — 등록 시 제어 플레인이 발급하는 `clu_…` ULID. 오퍼레이터의 `--cluster-id`는
-  **반드시 이와 같아야** 합니다. 아니면 인벤토리와 세션 외래 키가 맞지 않습니다. 협상은 없습니다.
-  등록이 돌려준 id를 오퍼레이터 배포에 넣으세요.
-- **내부 JWT** — 오퍼레이터→제어 플레인 콜백을 인증합니다(RS256, `aud=gshare-internal`). 제어
-  플레인이 서명·검증하고 공개 검증 키를 `GET /.well-known/gshare-internal-jwks.json`에 발행합니다.
-- **kubeconfig** — 데이터베이스에 평문으로 저장되지 않습니다. 제어 플레인은 투영된 파일만
-  읽습니다. Kubernetes에서는 external-secrets, Compose나 베어메탈에서는 직접 마운트. 경로는
-  `GSHARE_CLUSTER_KUBECONFIG_DIR` 아래 `<cluster_id>/kubeconfig`.
+- **`cluster_id`:** 클러스터 등록 시 제어 플레인이 발급하는 고유 식별자(`clu_…` ULID)입니다. 오퍼레이터 실행 파라미터의 `--cluster-id` 설정값은 발급된 ID와 **정확히 일치**해야 합니다.
+- **내부 JWT:** 오퍼레이터에서 제어 플레인으로 전달되는 상태 보고 콜백을 인증하는 RS256 서명 토큰(`aud=gshare-internal`)입니다. 공개 검증 키는 `GET /.well-known/gshare-internal-jwks.json` 엔드포인트를 통해 발행됩니다.
+- **`kubeconfig` 관리:** `kubeconfig` 보안을 위해 데이터베이스에 평문으로 저장되지 않으며, 파일 보안 마운트 방식(Kubernetes: External Secrets, Compose: 로컬 파일 마운트)을 사용합니다. 접근 경로는 `GSHARE_CLUSTER_KUBECONFIG_DIR` 설정값 하위의 `<cluster_id>/kubeconfig`입니다.
 
-## A. 클러스터 내 올인원 — 자동 등록
+## A. 클러스터 내 올인원 (In-Cluster All-in-One)
 
-`make deploy-incluster`는 `bootstrapLocalCluster: true`를 설정해 시작 시 고정 id `clu_local`의
-`Cluster` 행을 보장하고, 차트의 `operator.clusterId: clu_local`이 그것을 가리킵니다. 오퍼레이터는
-같은 클러스터의 자기 ServiceAccount로 Kubernetes에 접근하므로 등록할 kubeconfig가 없습니다.
-**할 일 없음.**
+`make deploy-incluster` 실행 시 `bootstrapLocalCluster: true` 옵션이 설정되어 고정 ID(`clu_local`)를 가진 클러스터 항목이 자동 생성되며, Helm 차트의 `operator.clusterId: clu_local` 설정이 이를 참조합니다. 오퍼레이터는 동일 클러스터 내부의 ServiceAccount 권한으로 Kubernetes API에 직접 접근하므로 별도의 `kubeconfig` 등록 절차가 필요하지 않습니다.
 
 ## B. 외부 클러스터 등록
 
-등록 프로브는 대상 클러스터가 닿는지, RuntimeClass `nvidia`가 있는지, HAMi의 `nvidia.com/gpumem`을
-광고하는지 확인합니다. 그런 클러스터를 만드는 법은 [`cluster-setup.md`](./cluster-setup.md).
+클러스터 등록 시 제어 플레인은 대상 클러스터 통신 여부, `nvidia` RuntimeClass 존재 여부, HAMi의 `nvidia.com/gpumem` 리소스 할당 가능 여부를 검증 프로브로 확인합니다. 사전 환경 구축 방법은 [`cluster-setup.md`](./cluster-setup.md)를 참고하세요.
 
-콘솔의 **관리자 → 클러스터**에서 이름과 kubeconfig를 붙여 넣어 등록하거나 API로:
+관리자 콘솔의 **관리자 → 클러스터** 메뉴에서 이름과 `kubeconfig`를 입력하여 등록하거나, REST API를 통해 직접 등록할 수 있습니다.
 
 ```bash
 curl -sX POST https://<console>/api/v1/clusters \
@@ -51,133 +39,92 @@ curl -sX POST https://<console>/api/v1/clusters \
   -d "{\"name\":\"gpu-a\",\"role\":\"primary\",\"kubeconfig_b64\":\"$(base64 -w0 <kubeconfig)\"}"
 ```
 
-프로브가 성공하면 `clu_…` id를 돌려줍니다. 시크릿 참조만 저장되며, kubeconfig는 검증에 한 번
-쓰이고 이후 모든 I/O는 투영된 파일이나 오퍼레이터의 ServiceAccount를 거칩니다.
+검증 프로브 통과 시 `clu_…` 형태의 ID가 반환됩니다. `kubeconfig` 정보는 최초 검증 시에만 활용되며, 이후 모든 I/O 작업은 마운트된 보안 파일 또는 ServiceAccount 권한을 통해 처리됩니다.
 
 ## C. Compose 제어 플레인 + 외부 GPU 클러스터
 
-Compose는 일반 HTTP를 제공하며 앞에 TLS 종단 리버스 프록시를 기대합니다
-([`docker-compose.yml`](../docker-compose.yml)의 주석 참고). 제어 플레인의 `/internal/*`
-엔드포인트와 JWKS는 **외부 클러스터에서 닿아야** 합니다. `/internal`은 내부 JWT로 보호되고, JWKS는
-공개이며 검증 전용입니다.
+Docker Compose 환경은 기본 HTTP 서비스를 제공하므로 전면에 TLS 종단 리버스 프록시가 배치되어야 합니다 ([`docker-compose.yml`](../docker-compose.yml) 참고). 제어 플레인의 `/internal/*` 엔드포인트 및 JWKS 경로는 외부 GPU 클러스터에서 네트워크 접근이 가능해야 합니다.
 
-> **여기서는 세션 라우팅이 중요합니다.** 세션 URL은
-> `{GSHARE_SESSION_DOMAIN}/proxy/{cr}/{code|lab|terminal}`인데, 이 토폴로지에서는 콘솔(Compose
-> 프런트엔드)과 세션 앱(외부 클러스터의 ingress-nginx)이 *다른 백엔드*입니다. 따라서 리버스
-> 프록시는 **`/proxy/`만** 클러스터 인그레스로, 나머지는 콘솔로 보내야 합니다. 이 분리가 없으면
-> `/proxy/…`가 콘솔 SPA에 떨어져 사용자는 클라이언트 404를 봅니다. nginx라면:
+> **세션 트래픽 라우팅 설정**
+>
+> 세션 접속 URL 포맷은 `{GSHARE_SESSION_DOMAIN}/proxy/{cr}/{code|lab|terminal}` 구조를 가집니다. Compose 콘솔 프런트엔드와 외부 클러스터의 Ingress-Nginx는 서로 다른 백엔드이므로, 리버스 프록시에서 **`/proxy/` 경로 요청만** 외부 클러스터 인그레스로 라우팅해야 합니다.
+>
+> Nginx 라우팅 설정 예시:
 >
 > ```nginx
-> location /proxy/ {                          # 세션 앱 → 클러스터 인그레스(NodePort 30080)
+> location /proxy/ {                          # 세션 웹앱 → 외부 클러스터 인그레스 (예: NodePort 30080)
 >     proxy_pass http://<cluster-node>:30080;
->     proxy_set_header Host $host;            # GSHARE_SESSION_DOMAIN과 같아야 함, 인그레스가 매칭
->     proxy_http_version 1.1;                 # code-server와 터미널은 WebSocket 사용
+>     proxy_set_header Host $host;            # GSHARE_SESSION_DOMAIN과 동일해야 함
+>     proxy_http_version 1.1;                 # WebSocket 프로토콜 지원 (VS Code / 터미널)
 >     proxy_set_header Upgrade $http_upgrade;
 >     proxy_set_header Connection "upgrade";
 >     proxy_read_timeout 3600s;
 > }
-> location / { proxy_pass http://<compose-host>:8000; }   # 콘솔
+> location / { proxy_pass http://<compose-host>:8000; }   # 콘솔 프런트엔드
 > ```
 >
-> 더 단순한 대안은 전용 세션 도메인 — 예: `sessions.example.com` — 을 클러스터 인그레스로 직접
-> 향하게 하고 `GSHARE_SESSION_DOMAIN`과 오퍼레이터의 `SESSION_DOMAIN`을 그것으로 두는 것입니다.
-> 그러면 호스트로 분리되므로 경로 규칙이 필요 없습니다.
+> 경로 분리 방식 외에도 전용 세션 도메인(예: `sessions.example.com`)을 외부 클러스터 인그레스로 직접 연결하고, `GSHARE_SESSION_DOMAIN` 및 오퍼레이터의 `SESSION_DOMAIN`을 해당 도메인으로 동일하게 설정하여 관리할 수 있습니다.
 >
-> **가장 쉬운 선택**은 콘솔이 중계하게 하는 것입니다. 프록시가 경로로 분리할 수 없으면 `.env`에
-> `GSHARE_SESSION_INGRESS=<cluster-node>:30080`을 두세요. Compose 프런트엔드(nginx)가 `/proxy/`를
-> WebSocket 포함해 그 클러스터 인그레스로 중계하고, 외부 프록시는 모든 것을 프런트엔드로
-> 전달하기만 하면 됩니다. 외부 클러스터 하나를 처리하며, 클러스터 인그레스가 `/proxy/`를 직접
-> 라우팅하는 올인원 Kubernetes 설치에서는 비워 둡니다.
+> 프록시 단에서 경로 분리가 어려운 경우 Compose `.env` 파일에 `GSHARE_SESSION_INGRESS=<cluster-node>:30080`을 지정하면 Compose Nginx 프런트엔드가 `/proxy/` 트래픽을 해당 외부 클러스터 인그레스로 자동 중계합니다.
+>
+> **프록시 환경에서의 클라이언트 IP 추적:**  
+> 로그인 보안 감사 및 IP 기반 차단 정책을 위해 `X-Forwarded-For` 헤더를 수집합니다. 프록시 경유 단계에 맞춰 `.env` 파일의 `GSHARE_TRUSTED_PROXY_HOPS` 설정값(기본값: `1`)을 조정하세요. (Helm 차트의 경우 `api.trustedProxyHops`)
 
-1. **내부 콜백 활성화** — RS256 키를 생성한 뒤 시작:
+### 구축 순서
 
+1. **내부 인증 키 생성:** RS256 키를 생성한 후 서비스를 시작합니다.
    ```bash
-   ./hack/gen-secrets.sh   # GSHARE_INTERNAL_JWT_PRIVATE_KEY와 KID를 .env에 기록
-   make compose-up         # 키가 없으면 둘러보기 전용: 어떤 오퍼레이터도 붙을 수 없음
+   ./hack/gen-secrets.sh   # .env 파일에 GSHARE_INTERNAL_JWT_PRIVATE_KEY 및 KID 기록
+   make compose-up
    ```
-
-2. **클러스터 등록**(B절)하고 `clu_id`를 적어 둡니다.
-
-3. **kubeconfig 제공** — 제어 플레인이 커스텀 리소스를 적용할 수 있도록:
-
+2. **클러스터 등록:** B절의 등록 절차를 수행하고 발급된 `clu_id`를 확인합니다.
+3. **`kubeconfig` 마운트:** 제어 플레인이 CR을 발급할 수 있도록 지정된 경로에 파일을 배치합니다.
    ```bash
    mkdir -p deploy/clusters/<clu_id> && cp <kubeconfig> deploy/clusters/<clu_id>/kubeconfig
    ```
+   *Note: Compose 환경은 해당 디렉터리를 `/run/gshare/clusters` 경로에 읽기 전용으로 자동 마운트합니다.*
 
-   Compose는 그 디렉터리를 `/run/gshare/clusters`에 읽기 전용으로 마운트합니다 —
-   [`deploy/clusters/README.md`](../deploy/clusters/README.md) 참고. 파일은 git 무시됩니다.
-
-4. **GPU 클러스터에 데이터 플레인 배포.** 클러스터가 이미 [`cluster-setup.md`](./cluster-setup.md)
-   대로 준비되었다고 가정합니다(`cluster-bootstrap.sh up`, 즉 GPU, HAMi, CRIU 노드 준비 완료).
-
-   **권장 — 전체 기능의 Helm 데이터 플레인.** 올인원 설치와 같은 차트에서 제어 플레인만
-   끕니다(`controlPlane.enabled=false`). 오퍼레이터, CRD, Pod Security가 적용된 네임스페이스, RBAC,
-   HAMi 모니터 유휴 회수, 무손실 에이전트, lend-guard 웹훅 — 올인원과 똑같이. 이 명령은 Compose
-   API로 토큰도 발급해 시크릿을 주입합니다.
-
+4. **데이터 플레인 배포:**
+   
+   **권장: Helm 기반 데이터 플레인 배포**  
+   제어 플레인 기능을 제외한(`controlPlane.enabled=false`) 데이터 플레인 전용 Helm 차트를 배포합니다.
    ```bash
    KUBECONFIG=<target cluster kubeconfig> \
      make deploy-dataplane CLUSTER_ID=<clu_id> CONTROL_PLANE_URL=http://<compose-host>:8080
    ```
+   `CONTROL_PLANE_URL`은 오퍼레이터 파드 및 Ingress-Nginx에서 접근 가능한 주소여야 합니다. 토큰 기본 유효기간은 7일(`JWT_TTL`)이며, 만료 전 `make dataplane-token CLUSTER_ID=<clu_id>` 명령으로 시크릿을 갱신합니다.
 
-   `CONTROL_PLANE_URL`은 **오퍼레이터 파드와 ingress-nginx 양쪽에서** 닿아야 합니다. 오퍼레이터는
-   상태 콜백에, 인그레스는 세션 forward-auth에 씁니다. 세션 도메인은
-   `-f deploy/values/domain.yaml` 또는 `--set global.domains.console=`로 설정합니다. 토큰 TTL
-   기본값은 7일(`JWT_TTL`)이며, 만료 전에 `make dataplane-token CLUSTER_ID=<clu_id>`로 시크릿만
-   갱신합니다.
-
-   **대안 — 최소 단일 스크립트.** 유휴 회수, 무손실 일시정지, 웹훅 없이 코어 세션 + 콜드
-   일시정지만 빠르게 구성할 때.
-   [`hack/deploy-operator.sh`](../hack/deploy-operator.sh)가 CRD, 네임스페이스, ServiceAccount,
-   RBAC, 시크릿, 디플로이먼트를 `kubectl` 한 번에 적용합니다.
-
+   **대안: 경량화 배포 스크립트**  
+   유휴 자원 자동 회수, 무손실 일시정지, 웹훅 기능 없이 기본 세션 실행 환경만 구성하는 경우 경량 배포 스크립트를 사용할 수 있습니다.
    ```bash
-   TOKEN=$(make -s compose-operator-token CLUSTER_ID=<clu_id>)   # 내부 JWT, 24h TTL
+   TOKEN=$(make -s compose-operator-token CLUSTER_ID=<clu_id>)   # 내부 JWT 발급 (24시간 유효)
    CLUSTER_ID=<clu_id> SOT_ENDPOINT=https://<public control-plane URL> OPERATOR_TOKEN="$TOKEN" \
-     KUBECONFIG=<target cluster kubeconfig> SESSION_DOMAIN=<제어 플레인의 GSHARE_SESSION_DOMAIN과 동일> \
+     KUBECONFIG=<target cluster kubeconfig> SESSION_DOMAIN=<GSHARE_SESSION_DOMAIN과 동일 설정> \
      ./hack/deploy-operator.sh
    ```
+   > ⚠️ `SESSION_DOMAIN`은 제어 플레인의 `GSHARE_SESSION_DOMAIN`과 **반드시 동일하게 설정**해야 합니다. 값이 일치하지 않을 경우 인그레스 호스트 매칭 실패로 접속 시 404 오류가 발생합니다.
 
-   `connect-verify-url`과 `internal-jwks-url`은 `SOT_ENDPOINT`에서 도출되며, 오퍼레이터 이미지는
-   `IMAGE`로 바꿉니다.
+5. **연결 상태 검증:** 오퍼레이터 로그에서 콜백 응답 코드 `200`을 확인하고, 관리자 콘솔의 클러스터 상태가 `connected`로 변경되었는지 및 GPU 인벤토리가 수집되었는지 확인합니다.
 
-   > ⚠️ **`SESSION_DOMAIN`은 제어 플레인의 `GSHARE_SESSION_DOMAIN`과 같아야 합니다.** 세션 인그레스
-   > 호스트가 여기서 생성되고, 제어 플레인도 같은 값으로 연결 URL을 만듭니다. 다르면 인그레스
-   > 호스트가 절대 매칭되지 않아 모든 연결 시도가 404입니다. `SESSION_DOMAIN`을 비우면 스크립트가
-   > 제어 플레인 `.env`의 `GSHARE_SESSION_DOMAIN`을 쓰므로 비워 두는 것이 가장 안전합니다. 기존
-   > 세션은 만들 때의 인그레스를 유지하므로 도메인을 바꾼 뒤에는 다시 만들어야 합니다.
+### 토큰 자동 회전 (Token Rotation)
 
-5. **확인** — 오퍼레이터 로그에서 콜백이 200을 돌려주고, 콘솔에서 클러스터가 `connected`로
-   보이고, 노드·GPU 인벤토리가 나타나고, 세션을 만들면 그 클러스터에 커스텀 리소스가 적용됩니다.
+내부 인증 JWT 토큰은 만료 전 주기적으로 갱신해야 합니다.
 
-### 토큰 회전
-
-내부 JWT는 만료 전에 갱신해야 합니다. Compose 제어 플레인은 자동으로 회전하지 않습니다.
-
-- Helm 데이터 플레인: `make dataplane-token CLUSTER_ID=<clu_id>` — 시크릿 재주입, 7일 TTL.
-- 최소 스크립트: 새 `compose-operator-token`(24시간 TTL)으로 `./hack/deploy-operator.sh` 재실행.
-  시크릿을 갱신하고 롤아웃을 재시작합니다.
+- **Helm 배포 환경:** `make dataplane-token CLUSTER_ID=<clu_id>` 실행 (7일 주기 갱신 권장)
+- **스크립트 배포 환경:** 새 토큰 발급 후 `./hack/deploy-operator.sh` 재실행
 
 ```bash
-# 예: Compose 호스트 crontab에서 매일 02:00 회전(Helm 데이터 플레인)
+# 예시: Compose 호스트 crontab 등록 (매일 02:00 자동 회전)
 0 2 * * * cd /path/to/gShare && KUBECONFIG=<target cluster kubeconfig> make -s dataplane-token CLUSTER_ID=<clu_id>
 ```
 
 ## D. Kubernetes 제어 플레인 + 추가 외부 클러스터
 
-제어 플레인 자체가 Kubernetes에서 돌 때는 external-secrets가 각 kubeconfig를
-`GSHARE_CLUSTER_KUBECONFIG_DIR` 아래에 투영합니다. 추가 클러스터마다 차트로 오퍼레이터를 배포하되
-`operator.clusterId`를 등록된 id로, 그리고 `operator.internalJwksUrl`과
-`operator.internalJwtSecret`을 설정합니다.
+제어 플레인이 Kubernetes 클러스터 상에서 실행되는 경우 External Secrets Operator가 각 외부 클러스터의 `kubeconfig`를 `GSHARE_CLUSTER_KUBECONFIG_DIR` 경로 하위에 자동 투영합니다. 신규 외부 클러스터 추가 시 Helm 차트를 이용하여 오퍼레이터만 배포하며, `operator.clusterId`, `operator.controlPlaneUrl`, `operator.internalJwtSecret` 값을 지정합니다.
 
-## 보안과 제한
+## 보안 및 제약 사항
 
-- **kubeconfig는 데이터베이스에 평문으로 저장되지 않습니다** — 마운트된 파일에서 읽습니다
-  (Compose에서는 `deploy/clusters/`, git 무시).
-- `/internal/*`과 모든 콜백은 `aud=gshare-internal`인 RS256 내부 JWT가 필요합니다. JWKS는 공개,
-  검증 전용이며 개인 키를 절대 노출하지 않습니다.
-- Compose + 외부 클러스터에서는 제어 플레인의 `/internal` 엔드포인트와 JWKS가 그 클러스터에서
-  닿아야 합니다 — TLS 프록시 뒤의 공개 URL. 사내망, 방화벽, split-horizon DNS는 별도 처리(VPN, 내부
-  DNS 뷰)가 필요합니다.
-- 내부 JWT 자동 회전은 차트의 Job과 CronJob을 통한 Kubernetes 경로에만 있습니다. Compose에서는
-  만료 전에 수동으로 재발급하세요.
+- **`kubeconfig` 보안:** 데이터베이스 내에 평문으로 저장되지 않으며 읽기 전용 보안 마운트 파일로 관리됩니다.
+- **인증 보안:** `/internal/*` 엔드포인트 및 모든 콜백 통신은 `aud=gshare-internal` 클레임을 포함하는 RS256 서명 토큰을 요구합니다.
+- **네트워크 접근성:** Compose 제어 플레인 사용 시 `/internal` 엔드포인트 및 JWKS URL이 외부 GPU 클러스터 파드에서 상호 통신 가능하도록 방화벽 및 DNS 설정이 구성되어야 합니다.
+- **토큰 자동 갱신:** Kubernetes 환경에서는 CronJob을 통해 토큰이 자동 회전되며, Compose 환경에서는 수동 갱신 스크립트 또는 Crontab 설정이 필요합니다.

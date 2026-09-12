@@ -5,47 +5,43 @@ title: 관리자 가이드
 
 # 관리자 가이드
 
-**관리자 콘솔**에서는 조직·부서·사용자를 관리하고, 크레딧을 배분하고 요청을 처리하고, 세션을
-관제하며 — 플랫폼 관리자라면 — GPU 카탈로그, 정책, 클러스터, 노드, 스토리지, 이미지, 시스템 설정을
-구성합니다.
+**관리자 콘솔**에서는 조직·부서·사용자 관리, 크레딧 배분 및 요청 처리, 세션 모니터링을 수행할 수 있습니다. 플랫폼 관리자는 추가로 GPU 카탈로그, 자원 정책, 클러스터 및 노드, 스토리지, 이미지, 시스템 전반의 설정을 구성할 수 있습니다.
 
-먼저 [역할과 범위](./admin/roles.md)를 읽어 보세요. 각 관리자 역할이 무엇을 보는지가 이후 모든
-페이지의 열쇠입니다.
+작업 전 [역할과 범위](./admin/roles.md) 안내를 먼저 확인하세요. 관리자 역할별 접근 권한 및 관리 범위에 대해 다룹니다.
 
 ## 테넌트 관리
 
-조직·부서 관리자의 일상입니다.
+조직 및 부서 관리자를 위한 주요 관리 기능입니다.
 
-- [대시보드](./admin/dashboard.md) — 내 범위에서 무엇이 돌고 있는지
-- [조직](./admin/organizations.md) — 트리의 꼭대기, 관리자와 예산
-- [부서](./admin/groups.md) — 팀, 구성원, 부서 관리자
-- [사용자](./admin/users.md) — 계정 목록과 소속이 정하는 것
-  - [사용자 추가](./admin/users-add.md) — 한 명씩, CSV 일괄, 가입 승인
-  - [계정 관리](./admin/users-manage.md) — 역할, 비밀번호 초기화, 비활성화, 삭제
-- [크레딧](./admin/credits.md) — 계층과 과금 대상
-  - [크레딧 배분](./admin/credits-allocate.md) — 풀, 내려주기, 회수, 월 리필
-  - [크레딧 요청 관리](./admin/credits-requests.md) — 요청 체인, 승인과 반려
-  - [정산 리포트](./admin/credits-settlement.md) — 실제로 소비된 양
-- [세션 관제](./admin/monitoring.md) — 실시간 화면과 스스로 끝나는 규칙
-  - [개입하기](./admin/monitoring-control.md) — 강제 종료, 일괄 정리, 대기열
-- [감사 로그](./admin/audit.md) — 필터, 내보내기, 통하는 조사 방법
+- [대시보드](./admin/dashboard.md) — 관리 범위 내 자원 및 세션 현황 모니터링
+- [조직](./admin/organizations.md) — 최상위 조직 구조, 관리자 지정 및 예산 관리
+- [부서](./admin/groups.md) — 부서(팀) 생성, 구성원 및 부서 관리자 관리
+- [사용자](./admin/users.md) — 계정 목록 및 소속별 권한 관리
+  - [사용자 추가](./admin/users-add.md) — 개별 생성, CSV 일괄 등록, 가입 승인
+  - [계정 관리](./admin/users-manage.md) — 역할 변경, 비밀번호 초기화, 계정 비활성화 및 삭제
+- [크레딧](./admin/credits.md) — 크레딧 체계 및 과금 대상
+  - [크레딧 배분](./admin/credits-allocate.md) — 크레딧 풀 관리, 하위 배분, 회수, 월간 자동 충전
+  - [크레딧 요청 관리](./admin/credits-requests.md) — 요청 승인 체인, 승인 및 반려 처리
+  - [정산 리포트](./admin/credits-settlement.md) — 실크레딧 소비량 및 정산 리포트
+- [세션 관제](./admin/monitoring.md) — 실시간 세션 모니터링 및 자동 종료 규칙 설정
+  - [개입하기](./admin/monitoring-control.md) — 세션 강제 종료, 일괄 정리, 대기열 관리
+- [감사 로그](./admin/audit.md) — 시스템 조작 이력 필터링, 데이터 내보내기, 감사를 위한 추적 방법
 
 ## 플랫폼 관리
 
-시스템 관리자 전용입니다.
+시스템 전체를 관리하는 최고 관리자 전용 기능입니다.
 
-- [자원과 정책](./admin/resources.md) — 카탈로그와 쿼터의 구분
-  - [오퍼링](./admin/resources-offerings.md) — GPU 모델, 모델 문자열, 단가
-  - [프리셋](./admin/resources-presets.md) — 컴퓨트 형태와 GPU 티어
-  - [자원 정책](./admin/resources-policies.md) — 쿼터, 시간 제한, 증액 요청
-- [클러스터](./admin/clusters.md) — 등록, 세션 도메인, 등록 해제
-  - [노드](./admin/nodes.md) — 생존 판정, 차단, 비우기, 삭제
-  - [노드 풀](./admin/node-pools.md) — 전용 하드웨어와 넘침 문제
-- [GPU 디바이스](./admin/gpus.md) — 별칭, 장애 카드, 할당과 사용률
-- [스토리지](./admin/storage.md) — 풀, 전체 볼륨, 공간 부족 대응
-- [이미지](./admin/images.md) — 가져오기, 빌드, 카탈로그 관리
-- [지표](./admin/platform-monitoring.md) — DCGM·호스트 지표가 알려 주는 것
-- [시스템 설정](./admin/system.md) — 브랜딩, 가입 정책, GPU 배치
+- [자원과 정책](./admin/resources.md) — 자원 카탈로그 및 쿼터 정책 구성
+  - [오퍼링](./admin/resources-offerings.md) — GPU 모델, 식별 문자열, 시간당 단가 설정
+  - [프리셋](./admin/resources-presets.md) — 컴퓨트 스펙 및 GPU 티어 구성
+  - [자원 정책](./admin/resources-policies.md) — 쿼터 한도, 시간 제한, 증액 요청 처리
+- [클러스터](./admin/clusters.md) — 클러스터 등록, 세션 도메인 설정, 등록 해제
+  - [노드](./admin/nodes.md) — 노드 상태 헬스체크, 스케줄링 차단(Cordon), 노드 비우기(Drain), 삭제
+  - [노드 풀](./admin/node-pools.md) — 전용 하드웨어 풀 구성 및 오버플로우 관리
+- [GPU 디바이스](./admin/gpus.md) — 디바이스 에일리어스, 결함 카드 관리, 할당량 및 사용률 모니터링
+- [스토리지](./admin/storage.md) — 스토리지 풀 관리, 공용 볼륨, 용량 부족 대응
+- [이미지](./admin/images.md) — 컨테이너 이미지 가져오기, 빌드, 카탈로그 관리
+- [지표](./admin/platform-monitoring.md) — DCGM 및 호스트 인프라 메트릭 모니터링
+- [시스템 설정](./admin/system.md) — 브랜딩 설정, 회원가입 정책, GPU 스케줄링 배치 정책
 
-플랫폼 자체의 설치·스토리지·모니터링·업그레이드·백업은 **운영** 탭의
-[시작하기](./getting-started.md)부터 다룹니다.
+플랫폼 자체의 인프라 설치, 스토리지 구성, 모니터링 구축, 시스템 업그레이드 및 백업에 대한 내용은 **운영** 가이드의 [시작하기](./getting-started.md) 문서를 참고하세요.

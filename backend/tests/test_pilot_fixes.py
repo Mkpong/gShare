@@ -31,13 +31,15 @@ from app.db.models import (
 from app.db.models import Session as SessionRow
 from app.domain.scheduler import SchedulerService
 from app.domain.session_service import SessionService
+from tests.fkseed import add_ordered, seed, user_row
 
 
 def _seed(db_objs):
     """Common catalogue seed: org/group, funded wallet, offering, image, one fractional device."""
     org_id = ids.new("org")
     group = Project(id=ids.new("group"), org_id=org_id, name="p")
-    user_id = ids.new("user")
+    user = user_row()
+    user_id = user.id
     wallet = CreditWallet(
         id=ids.new("wallet"), owner_type="user", owner_id=user_id,
         balance=Decimal("1000"), reserved=Decimal("0"),
@@ -53,11 +55,11 @@ def _seed(db_objs):
         model="A100", gpu_uuid=ids.new("device"), total_mem_mb=16000, status="ready",
         mode="fractional",
     )
-    db_objs.extend([group, wallet, offering, image, device])
+    db_objs.extend([user, group, wallet, offering, image, device])
     return group, user_id, wallet, cluster_id, offering, image, device
 
 
-def _occupy_fully(db, dev, offering, image, cluster_id):
+async def _occupy_fully(db, dev, offering, image, cluster_id):
     """Fill the card with a real running session + reserved Allocation so the scheduler's
     drift reconciliation (which recomputes used_* from allocations) keeps it full."""
     resident = SessionRow(
@@ -71,7 +73,7 @@ def _occupy_fully(db, dev, offering, image, cluster_id):
     )
     dev.used_mem_mb = dev.total_mem_mb
     dev.used_cores = 100
-    db.add_all([resident, alloc])
+    await add_ordered(db, [resident, alloc])
 
 
 def _gpu_req(offering, image, cluster_id, group, wallet, *, mode, mem, cores):
@@ -88,8 +90,7 @@ async def test_exclusive_without_matching_pool_is_unserviceable(db, fake_handoff
     `unserviceable` — not a queue entry that could never be dequeued."""
     objs: list = []
     group, user_id, wallet, cluster_id, offering, image, _dev = _seed(objs)
-    async with db.begin():
-        db.add_all(objs)
+    await seed(db, objs)
 
     svc = SchedulerService(db)
     svc.handoff = fake_handoff
@@ -116,8 +117,8 @@ async def test_full_fractional_pool_still_queues(db, fake_handoff):
     objs: list = []
     group, user_id, wallet, cluster_id, offering, image, dev = _seed(objs)
     async with db.begin():
-        db.add_all(objs)
-        _occupy_fully(db, dev, offering, image, cluster_id)
+        await add_ordered(db, objs)
+        await _occupy_fully(db, dev, offering, image, cluster_id)
 
     svc = SchedulerService(db)
     svc.handoff = fake_handoff
@@ -136,8 +137,8 @@ async def test_stop_on_pending_session_cancels(db, fake_handoff):
     objs: list = []
     group, user_id, wallet, cluster_id, offering, image, dev = _seed(objs)
     async with db.begin():
-        db.add_all(objs)
-        _occupy_fully(db, dev, offering, image, cluster_id)
+        await add_ordered(db, objs)
+        await _occupy_fully(db, dev, offering, image, cluster_id)
 
     svc = SchedulerService(db)
     svc.handoff = fake_handoff
@@ -161,8 +162,7 @@ async def test_stop_on_pending_session_cancels(db, fake_handoff):
 async def test_image_registry_patch_and_delete(db):
     admin = Principal(user_id=ids.new("user"), global_roles=["super_admin"])
     img = Image(id=ids.new("image"), name="temp", registry="a/b:1")
-    async with db.begin():
-        db.add(img)
+    await seed(db, [img])
     image_id = img.id
 
     out = await update_image(image_id, ImageUpdate(registry="a/b:2"), principal=admin, db=db)
@@ -180,14 +180,12 @@ async def test_image_delete_refused_with_session_history(db):
     offering = Offering(
         id=ids.new("offering"), name="cpu", resource_class="cpu", credit_per_hour=Decimal("0"),
     )
-    async with db.begin():
-        db.add_all([img, offering])
+    await seed(db, [img, offering])
     sess = SessionRow(
         id=ids.new("session"), owner_user_id=ids.new("user"), cluster_id=ids.new("cluster"),
         offering_id=offering.id, image_id=img.id, resource_class="cpu", status="terminated",
     )
-    async with db.begin():
-        db.add(sess)
+    await seed(db, [sess])
 
     with pytest.raises(DomainError) as excinfo:
         await delete_image(img.id, principal=admin, db=db)

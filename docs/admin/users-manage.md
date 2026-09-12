@@ -23,7 +23,7 @@ Sessions already running are unaffected until they end.
 **Roles are not set here.** Group and organization administrators are appointed from the
 [group](./groups.md#group-administrators) and [organization](./organizations.md#organization-administrators)
 pages, and a role can only be granted at or below your own, within your scope. Global roles
-(super_admin) are a super_admin action.
+(super_admin) are a super_admin action, done through the API — the console has no control for them.
 
 The dialog also shows the account's **usage** — sessions, GPU and host resources held, volumes,
 wallet — so you can see what deactivating or deleting would affect before you do it.

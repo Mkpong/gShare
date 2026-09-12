@@ -18,6 +18,7 @@ from sqlalchemy import select
 from app.core import ids
 from app.db.models import CreditTransaction, CreditWallet
 from app.domain.credit_engine import CreditEngine
+from tests.fkseed import seed
 
 pytestmark = pytest.mark.asyncio
 
@@ -37,10 +38,11 @@ async def test_sum_consumed_interval_scoping(db):
     t0 = datetime(2026, 1, 1, 0, 0, tzinfo=UTC)   # interval 1 charge
     t2 = datetime(2026, 1, 1, 2, 0, tzinfo=UTC)   # interval 2 charge (after resume)
     resume = datetime(2026, 1, 1, 1, 0, tzinfo=UTC)  # started_at re-based here
-    async with db.begin():
-        db.add(wallet)
-        db.add(_consume_row(wallet.id, "sesX", "-100", t0, "c1"))
-        db.add(_consume_row(wallet.id, "sesX", "-60", t2, "c2"))
+    await seed(db, [
+        wallet,
+        _consume_row(wallet.id, "sesX", "-100", t0, "c1"),
+        _consume_row(wallet.id, "sesX", "-60", t2, "c2"),
+    ])
 
     engine = CreditEngine(db)
     sess = SimpleNamespace(id="sesX", billing_wallet_id=wallet.id, started_at=resume)
@@ -53,8 +55,7 @@ async def test_settle_releases_only_own_hold(db):
     """Two sessions hold on one wallet; settling A frees only A's slice, leaving B's hold intact."""
     wallet = CreditWallet(id=ids.new("wallet"), owner_type="user", owner_id=ids.new("user"),
                           balance=Decimal("1000"), reserved=Decimal("0"))
-    async with db.begin():
-        db.add(wallet)
+    await seed(db, [wallet])
 
     engine = CreditEngine(db)
     await engine.hold(wallet.id, Decimal("100"), key="hold:sesA")

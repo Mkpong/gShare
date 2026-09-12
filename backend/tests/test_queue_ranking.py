@@ -29,6 +29,7 @@ from app.db.models import Session as SessionRow
 from app.domain import queue_ranking
 from app.domain.scheduler import SchedulerService
 from app.workers import queue_ticker
+from tests.fkseed import add_ordered, seed, user_row
 
 
 def _entry(session_id: str, *, priority: int = 0, waited_min: float = 0.0) -> QueueEntry:
@@ -60,8 +61,7 @@ async def test_rank_orders_desc_with_fifo_tiebreak(db):
     e_low = _entry("s-low", priority=0, waited_min=10)
     e_high = _entry("s-high", priority=5, waited_min=1)
     e_old = _entry("s-old", priority=0, waited_min=60)
-    async with db.begin():
-        db.add_all([e_low, e_high, e_old])
+    await seed(db, [e_low, e_high, e_old])
     ranked = await queue_ranking.rank(db)
     assert [e.session_id for e, _ in ranked] == ["s-high", "s-old", "s-low"]
 
@@ -69,7 +69,8 @@ async def test_rank_orders_desc_with_fifo_tiebreak(db):
 def _seed(db_objs):
     org_id = ids.new("org")
     group = Project(id=ids.new("group"), org_id=org_id, name="p")
-    user_id = ids.new("user")
+    user = user_row()
+    user_id = user.id
     wallet = CreditWallet(
         id=ids.new("wallet"), owner_type="user", owner_id=user_id,
         balance=Decimal("1000"), reserved=Decimal("0"),
@@ -85,11 +86,11 @@ def _seed(db_objs):
         model="A100", gpu_uuid=ids.new("device"), total_mem_mb=16000, status="ready",
         mode="fractional",
     )
-    db_objs.extend([group, wallet, offering, image, device])
+    db_objs.extend([user, group, wallet, offering, image, device])
     return group, user_id, wallet, cluster_id, offering, image, device
 
 
-def _occupy_fully(db, dev, offering, image, cluster_id):
+async def _occupy_fully(db, dev, offering, image, cluster_id):
     resident = SessionRow(
         id=ids.new("session"), owner_user_id=ids.new("user"), cluster_id=cluster_id,
         offering_id=offering.id, image_id=image.id, resource_class="gpu",
@@ -101,7 +102,7 @@ def _occupy_fully(db, dev, offering, image, cluster_id):
     )
     dev.used_mem_mb = dev.total_mem_mb
     dev.used_cores = 100
-    db.add_all([resident, alloc])
+    await add_ordered(db, [resident, alloc])
     return resident, alloc
 
 
@@ -111,8 +112,8 @@ async def test_enqueue_preserves_session_priority(db, fake_handoff):
     objs: list = []
     group, user_id, wallet, cluster_id, offering, image, dev = _seed(objs)
     async with db.begin():
-        db.add_all(objs)
-        _occupy_fully(db, dev, offering, image, cluster_id)
+        await add_ordered(db, objs)
+        await _occupy_fully(db, dev, offering, image, cluster_id)
 
     svc = SchedulerService(db)
     svc.handoff = fake_handoff
@@ -138,8 +139,8 @@ async def test_ticker_admits_in_rank_order_when_capacity_returns(db, fake_handof
     objs: list = []
     group, user_id, wallet, cluster_id, offering, image, dev = _seed(objs)
     async with db.begin():
-        db.add_all(objs)
-        resident, alloc = _occupy_fully(db, dev, offering, image, cluster_id)
+        await add_ordered(db, objs)
+        resident, alloc = await _occupy_fully(db, dev, offering, image, cluster_id)
 
     svc = SchedulerService(db)
     svc.handoff = fake_handoff
@@ -240,8 +241,7 @@ async def test_rank_penalizes_owner_with_active_session(db):
                         enqueued_at=now - timedelta(minutes=10))
     e_idle = QueueEntry(id=ids.new("queue"), session_id=q_idle.id, session_req={}, priority=0,
                         enqueued_at=now - timedelta(minutes=10))
-    async with db.begin():
-        db.add_all([offering, image, running, q_busy, q_idle, e_busy, e_idle])
+    await seed(db, [offering, image, running, q_busy, q_idle, e_busy, e_idle])
 
     ranked = await queue_ranking.rank(db)
     assert [e.session_id for e, _ in ranked] == [q_idle.id, q_busy.id]

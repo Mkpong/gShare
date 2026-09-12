@@ -16,7 +16,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.api.deps import Pagination, get_current_principal
 from app.api.schemas.session import QueueList, QueueMineList
 from app.auth.rbac import Principal
-from app.core.errors import DomainError, NotFound
+from app.core.errors import DomainError, Forbidden, NotFound
 from app.core.redis import get_redis
 from app.db.base import get_db
 from app.db.models import Offering, QueueEntry, Session, SessionEvent, User
@@ -24,6 +24,7 @@ from app.domain import queue_ranking
 from app.domain.audit_service import AuditService
 from app.domain.credit_engine import CreditEngine
 from app.domain.session_events import record_session_event
+from app.domain.tenancy import managed_owner_filter, session_is_managed
 
 router = APIRouter(prefix="/queue", tags=["queue"])
 
@@ -110,6 +111,19 @@ async def list_queue(
 ):
     principal.require(action="queue.read")
     ranked = await _ranked(db)
+
+    # ``queue.read`` only says the caller administers a group somewhere; the entries they may see
+    # are those whose session OWNER they manage (managed_owner_filter — the same predicate the
+    # session monitor and dashboard use). Without this an administrator of one organization read
+    # every other tenant's waiting sessions, owners and requests.
+    managed = managed_owner_filter(principal, "managed")
+    if managed is not None and ranked:
+        visible = set((await db.scalars(
+            select(Session.id).where(
+                Session.id.in_([e.session_id for e, _ in ranked]), managed
+            )
+        )).all())
+        ranked = [(e, sc) for e, sc in ranked if e.session_id in visible]
 
     if cluster_id is not None:
         # A queue entry has no cluster of its own; it inherits the one from its session. Without
@@ -199,9 +213,13 @@ async def cancel_queue_entry(
     if session is None:
         raise NotFound("session not found")
 
-    # Owner or group_admin+.
+    # Owner or group_admin+ over the session's tenant. The group check alone let a session created
+    # without a group (group_id=None) be cancelled by any group_admin of any organization, so the
+    # owner's tenancy decides as well.
     if session.owner_user_id != principal.user_id:
         principal.require(action="queue.update", group_id=session.group_id)
+        if not await session_is_managed(db, principal, session.id):
+            raise Forbidden("not permitted: queue.update")
 
     # Already assigned/scheduled -> cannot cancel from the queue (409).
     if session.status not in ("pending", "preparing"):
@@ -255,6 +273,9 @@ async def update_priority(
 
     if session.group_id is not None:
         principal.require(action="queue.update", group_id=session.group_id)
+    # An ungrouped session is not nobody's: the owner's tenancy must be the caller's.
+    if not await session_is_managed(db, principal, session.id):
+        raise Forbidden("not permitted: queue.update")
 
     entry.priority = body.priority
     await db.flush()

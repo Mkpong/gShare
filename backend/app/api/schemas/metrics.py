@@ -133,6 +133,8 @@ class ClusterStoragePool(BaseModel):
     capacity_gb: int | None = None
     capacity_source: str | None = None      # csi | manual
     capacity_reported_at: datetime | None = None
+    # Provisioned quota of the live volumes placed on this pool (GB) — allocation, not bytes.
+    used_gb: int = 0
 
 
 class ClusterStorageDisk(BaseModel):
@@ -144,6 +146,11 @@ class ClusterStorageDisk(BaseModel):
 class ClusterStorage(BaseModel):
     disk_gb: ClusterStorageDisk
     node_count: int = 0
+    # Capacity summed over the pools listed (GB): the fleet picture. `disk_gb.total` is the
+    # placement bound (largest pool) and is what one volume can actually be created on.
+    capacity_gb: int = 0
+    # Quota of live volumes whose PVC has not been created yet, so they sit on no pool.
+    unplaced_gb: int = 0
     # True under a cluster filter: the pool is fleet-wide, not this cluster's own.
     shared: bool = False
     # The registered pools, each with the cluster it belongs to.

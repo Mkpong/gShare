@@ -28,9 +28,11 @@ from app.core.errors import (
 )
 from app.db.base import get_db
 from app.db.models import (
+    Cluster,
     Project,
     Session,
     StorageFolder,
+    StoragePool,
     StorageVolume,
     User,
     VolumeMount,
@@ -282,6 +284,7 @@ async def list_volumes(
             (await db.execute(select(Project.id, Project.name).where(Project.id.in_(group_owner_ids)))).all()
         )
         owner_names.update(gnames)
+    placement = await _placement_of(db, vols)
     return [
         VolumeRead.model_validate(v).model_copy(
             update={
@@ -289,10 +292,36 @@ async def list_volumes(
                 "owner_id": _owner_key(v),
                 "owner_name": owner_names.get(_owner_key(v)),
                 "shared_count": int(shared_counts.get(v.id, 0)),
+                **placement.get(v.id, {}),
             }
         )
         for v in vols
     ]
+
+
+async def _placement_of(db: AsyncSession, vols: list[StorageVolume]) -> dict[str, dict]:
+    """Name where each volume's data lives: its cluster, and the registered pool for
+    (cluster, StorageClass) when there is one. One query per kind, not per volume."""
+    placed = [v for v in vols if v.cluster_id]
+    if not placed:
+        return {}
+    cluster_ids = {v.cluster_id for v in placed}
+    cluster_names = dict(
+        (await db.execute(select(Cluster.id, Cluster.name).where(Cluster.id.in_(cluster_ids)))).all()
+    )
+    pools = (await db.execute(
+        select(StoragePool.id, StoragePool.name, StoragePool.cluster_id, StoragePool.storage_class)
+        .where(StoragePool.cluster_id.in_(cluster_ids), StoragePool.deleted_at.is_(None))
+    )).all()
+    pool_by_key = {(cid, sc): (pid, pname) for pid, pname, cid, sc in pools}
+    out: dict[str, dict] = {}
+    for v in placed:
+        pid, pname = pool_by_key.get((v.cluster_id, v.storage_class), (None, None))
+        out[v.id] = {
+            "cluster_id": v.cluster_id, "cluster_name": cluster_names.get(v.cluster_id),
+            "storage_class": v.storage_class, "pool_id": pid, "pool_name": pname,
+        }
+    return out
 
 
 @router.get("/quota-usage")
@@ -305,7 +334,19 @@ async def storage_quota_usage(
     """Per-scope storage limit, usage, and headroom, for the limit warning on the new-volume form.
 
     Reads the same (scope, scope_id) policy and volume quota sum that _assert_storage_quota uses at
-    creation time. has_limit=false means unlimited: no policy, or a limit of 0."""
+    creation time. has_limit=false means unlimited: no policy, or a limit of 0.
+
+    The scope must be one the caller could create a volume in or belongs to: their own user scope,
+    a group they are a member of, or the global scope. Another tenant's limit and provisioned total
+    are not theirs to read."""
+    if "super_admin" not in principal.global_roles:
+        allowed = (
+            scope == "global"
+            or (scope == "user" and scope_id == principal.user_id)
+            or (scope == "group" and scope_id in principal.memberships)
+        )
+        if not allowed:
+            raise Forbidden("not permitted: storage quota of another scope")
     limit, allocated = await _storage_usage(db, scope, scope_id)
     cap, pool_alloc = await _physical_storage(db)
     physical = {"physical_remaining_gb": max(0, cap - pool_alloc)} if cap is not None else {}
@@ -472,9 +513,11 @@ async def get_volume(
             Session.status.notin_(("terminated", "error")),
         )
     )).all()
+    placement = await _placement_of(db, [vol])
     return VolumeRead.model_validate(vol).model_copy(
         update={
             "role": role, "owner_id": owner_key, "owner_name": owner_name,
+            **placement.get(vol.id, {}),
             "active_mounts": [
                 {"session_id": sid, "name": nm, "status": st,
                  "mount_path": mp, "mode": md, "owner_user_id": ou, "owner_name": on}
@@ -608,6 +651,28 @@ async def list_folders(
     }
 
 
+async def _assert_volume_write(db: AsyncSession, principal: Principal, vol: StorageVolume) -> None:
+    """Authorize changing a volume's contents metadata (folders): read access is not enough.
+
+    Owner, group member, super_admin, or a grantee holding rw/owner; a read-only grantee and a
+    plain reader of a global volume may look but not add."""
+    if "super_admin" in principal.global_roles:
+        return
+    if vol.scope == "user" and vol.scope_id == principal.user_id:
+        return
+    if vol.scope == "group" and vol.scope_id in principal.memberships:
+        return
+    role = await db.scalar(
+        select(VolumePermission.role).where(
+            VolumePermission.volume_id == vol.id,
+            VolumePermission.user_id == principal.user_id,
+        )
+    )
+    if role in ("owner", "rw"):
+        return
+    raise Forbidden("not permitted: read-only access to this volume")
+
+
 @router.post("/{volume_id}/folders", status_code=status.HTTP_201_CREATED)
 async def create_folder(
     volume_id: str,
@@ -617,7 +682,7 @@ async def create_folder(
 ):
     """Create a folder (absolute path) under a volume."""
     vol = await _load_volume(db, volume_id)
-    await _assert_volume_access(db, principal, vol)
+    await _assert_volume_write(db, principal, vol)
     path = body.get("path")
     if not path or not isinstance(path, str) or not path.startswith("/"):
         raise _ValidationFailed("path must be an absolute string")

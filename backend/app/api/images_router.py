@@ -171,6 +171,11 @@ async def list_images(
     catalogue passes no filter and sees both public and private images.
     """
     base = select(Image)
+    # Only the catalogue administrators (image.create) see every row. Everyone else is limited to
+    # the shared catalogue plus their own private images, whatever filter they pass — a private
+    # image built by another user (its registry path included) is not theirs to list.
+    if not rbac_allows(principal, "image.create"):
+        base = base.where(or_(Image.public.is_(True), Image.owner_user_id == principal.user_id))
     if kind is not None:
         if kind not in _IMAGE_KINDS:
             raise _Validation("invalid kind", {"kind": kind})
@@ -271,9 +276,13 @@ async def get_image(
     principal: Principal = Depends(get_current_principal),
     db: AsyncSession = Depends(get_db),
 ):
-    """Image detail. any authenticated."""
+    """Image detail. any authenticated, for the shared catalogue and one's own images; another
+    user's private image answers 404 so its existence is not confirmed either."""
     img = await db.get(Image, image_id)
     if img is None:
+        raise NotFound("image", {"image_id": image_id})
+    if not img.public and img.owner_user_id != principal.user_id \
+            and not rbac_allows(principal, "image.create"):
         raise NotFound("image", {"image_id": image_id})
     return _serialize_image(img)
 

@@ -117,7 +117,7 @@ preemptive lending (lossless hand-off and resume), and hierarchical limit manage
 | Namespace | Purpose |
 |---|---|
 | `gshare-system` | Control plane: api, worker, operator, Postgres, Redis, ingress |
-| `gshare-sessions` | Tenant session pods, under `restricted` Pod Security Admission |
+| `gshare-sessions` | Tenant session pods; Pod Security Admission enforces `baseline` and audits/warns at `restricted` |
 | `gshare-infra` | Privileged DaemonSets: node-problem-detector, Spegel, image pre-puller |
 
 ## Per-node metrics agent (optional)

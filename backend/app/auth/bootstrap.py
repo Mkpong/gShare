@@ -377,4 +377,4 @@ async def seed_bootstrap_admin() -> None:
                 if not user.password_hash:
                     user.password_hash = hash_password(password)
                     user.must_change_password = True
-                    log.info("bootstrap admin password seeded: %s", email)
+                    log.info("bootstrap admin account seeded with an initial password: %s", email)

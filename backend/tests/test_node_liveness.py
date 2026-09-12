@@ -13,6 +13,7 @@ from app.core.config import settings
 from app.db.models import Cluster, GpuNode, Notification, User
 from app.db.models import Session as SessionRow
 from app.workers import node_liveness
+from tests.fkseed import seed
 
 
 async def _node(db, *, status, seen_delta_sec, cluster_id=None, hostname=None):
@@ -21,8 +22,7 @@ async def _node(db, *, status, seen_delta_sec, cluster_id=None, hostname=None):
         hostname=hostname or ids.new("node"), status=status,
         last_seen_at=datetime.now(UTC) - timedelta(seconds=seen_delta_sec),
     )
-    async with db.begin():
-        db.add(n)
+    await seed(db, [n])
     return n
 
 
@@ -33,8 +33,7 @@ def _naive(dt):
 
 async def _root(db) -> User:
     root = User(id=ids.new("user"), email=f"{ids.new('user')}@t", name="root", global_role="super_admin")
-    async with db.begin():
-        db.add(root)
+    await seed(db, [root])
     return root
 
 
@@ -58,8 +57,9 @@ async def test_stale_node_goes_offline_and_cordon_is_left_alone(db, monkeypatch)
 async def test_not_ready_report_marks_offline_at_once_and_ready_report_restores(db):
     root = await _root(db)
     cid = ids.new("cluster")
-    async with db.begin():
-        db.add(Cluster(id=cid, name="c", api_server="https://t:6443", runtime="k8s", kubeconfig_secret_ref="sec"))
+    await seed(db, [
+        Cluster(id=cid, name="c", api_server="https://t:6443", runtime="k8s", kubeconfig_secret_ref="sec"),
+    ])
     node = await _node(db, status="ready", seen_delta_sec=1, cluster_id=cid, hostname="gpu-x")
     seen_before = node.last_seen_at
 
@@ -84,8 +84,9 @@ async def test_not_ready_report_marks_offline_at_once_and_ready_report_restores(
 @pytest.mark.asyncio
 async def test_old_operator_without_the_field_still_heartbeats(db):
     cid = ids.new("cluster")
-    async with db.begin():
-        db.add(Cluster(id=cid, name="c", api_server="https://t:6443", runtime="k8s", kubeconfig_secret_ref="sec"))
+    await seed(db, [
+        Cluster(id=cid, name="c", api_server="https://t:6443", runtime="k8s", kubeconfig_secret_ref="sec"),
+    ])
     node = await _node(db, status="ready", seen_delta_sec=120, cluster_id=cid, hostname="gpu-y")
     seen_before = node.last_seen_at
     await InventorySync(db).upsert_node(OperatorNodeUpsert(node_id="gpu-y"), cid)
@@ -108,8 +109,7 @@ async def test_sessions_on_an_offline_node_are_terminated(db, monkeypatch):
         offering_id="off_t", image_id="img_t", resource_class="gpu", mode="fractional",
         status="paused", node_hostname="gpu-dead", gpu_mem_mb=1024, gpu_cores=10,
     )
-    async with db.begin():
-        db.add_all([running, paused])
+    await seed(db, [running, paused])
 
     calls: list[tuple[str, str]] = []
 

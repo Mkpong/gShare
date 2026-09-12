@@ -9,6 +9,7 @@ from sqlalchemy import select
 from app.core import ids
 from app.db.models import CreditTransaction, CreditWallet, Organization, Project
 from app.domain.welcome_credit import grant_welcome_credit
+from tests.fkseed import seed
 
 
 @pytest.mark.asyncio
@@ -19,8 +20,7 @@ async def test_grant_once_and_idempotent(db):
     user_id = ids.new("user")
     wallet = CreditWallet(id=ids.new("wallet"), owner_type="user", owner_id=user_id,
                           balance=Decimal("0"), reserved=Decimal("0"))
-    async with db.begin():
-        db.add_all([org, grp, wallet])
+    await seed(db, [org, grp, wallet])
 
     async with db.begin():
         granted = await grant_welcome_credit(db, user_id, grp)
@@ -49,7 +49,6 @@ async def test_zero_setting_grants_nothing(db):
     user_id = ids.new("user")
     wallet = CreditWallet(id=ids.new("wallet"), owner_type="user", owner_id=user_id,
                           balance=Decimal("0"), reserved=Decimal("0"))
-    async with db.begin():
-        db.add_all([org, grp, wallet])
+    await seed(db, [org, grp, wallet])
     async with db.begin():
         assert await grant_welcome_credit(db, user_id, grp) is None

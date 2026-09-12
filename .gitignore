@@ -71,6 +71,9 @@ hack/storage-csi-key.pub
 test/e2e/ux/out/
 test/e2e/ux/out-*/
 
+# Beta-test findings and their run logs: the same kind of point-in-time artefact.
+beta-report/
+
 # ── Local assistant/agent tooling: workstation config, not project source. ──
 .claude/
 .agents/

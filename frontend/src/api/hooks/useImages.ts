@@ -1,7 +1,6 @@
 import { fetchRestOfPages, pageTotal, PAGE_MAX } from '@/api/paging';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
-import { api, idemKey } from '@/api/client';
-import type { components } from '@/api/schema';
+import { api } from '@/api/client';
 
 // The image and template registry, plus image builds.
 // The list response envelope is { data, pagination }.
@@ -127,32 +126,4 @@ export function useImageBuilds(filter: ImageBuildFilter = {}) {
   });
 }
 
-export interface CreateBuildBody {
-  group_id: string;
-  name: string;
-  source: 'dockerfile' | 'git';
-  dockerfile?: string;
-  git_url?: string;
-  git_ref?: string;
-  context?: string;
-  build_args?: Record<string, string>;
-  target_tag?: string;
-}
 
-// POST /image-builds — start a build from a Dockerfile or a git source; asynchronous, returns 202.
-export function useCreateBuild() {
-  const qc = useQueryClient();
-  return useMutation({
-    mutationFn: async (body: CreateBuildBody) => {
-      // git_ref and context have backend defaults (main and .), so they are optional here and cast
-      // to satisfy the schema, which marks them required.
-      const { data } = await api.POST('/api/v1/image-builds', {
-        body: body as components['schemas']['BuildCreate'],
-        headers: { 'Idempotency-Key': idemKey() },
-      });
-      return data;
-    },
-    onSuccess: () =>
-      qc.invalidateQueries({ queryKey: ['image-builds'] }),
-  });
-}

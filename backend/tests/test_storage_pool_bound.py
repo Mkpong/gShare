@@ -14,15 +14,15 @@ from app.api.volumes_router import _physical_storage
 from app.core import ids
 from app.core.config import settings
 from app.db.models import GpuNode, StorageVolume
+from tests.fkseed import seed
 
 
 async def _servers(db, *disks: int) -> None:
-    async with db.begin():
-        db.add_all([
-            GpuNode(id=ids.new("node"), cluster_id="clu_a", hostname=f"store{i}", status="ready",
-                    role="storage", disk=d)
-            for i, d in enumerate(disks)
-        ])
+    await seed(db, [
+        GpuNode(id=ids.new("node"), cluster_id="clu_a", hostname=f"store{i}", status="ready",
+                role="storage", disk=d)
+        for i, d in enumerate(disks)
+    ])
 
 
 @pytest.mark.asyncio
@@ -58,12 +58,11 @@ async def test_no_storage_server_means_no_gate(db):
 @pytest.mark.asyncio
 async def test_allocation_counts_every_live_volume(db):
     await _servers(db, 2000)
-    async with db.begin():
-        db.add_all([
-            StorageVolume(id=ids.new("volume"), scope="user", scope_id="usr_1", type="home",
-                          access_mode="RWO", quota_gb=40, used_gb=0),
-            StorageVolume(id=ids.new("volume"), scope="user", scope_id="usr_2", type="home",
-                          access_mode="RWO", quota_gb=60, used_gb=0),
-        ])
+    await seed(db, [
+        StorageVolume(id=ids.new("volume"), scope="user", scope_id="usr_1", type="home",
+                      access_mode="RWO", quota_gb=40, used_gb=0),
+        StorageVolume(id=ids.new("volume"), scope="user", scope_id="usr_2", type="home",
+                      access_mode="RWO", quota_gb=60, used_gb=0),
+    ])
     _, allocated = await _physical_storage(db)
     assert allocated == 100

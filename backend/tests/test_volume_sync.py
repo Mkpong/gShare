@@ -18,6 +18,7 @@ from app.core import ids
 from app.core.config import settings
 from app.db.models import Image, Notification, Offering, StorageVolume
 from app.db.models import Session as SessionRow
+from tests.fkseed import cluster_row, seed
 
 GIB = 1024**3
 
@@ -27,8 +28,7 @@ async def _volume(db, *, quota_gb=10, deleted_at=None):
         id=ids.new("volume"), scope="user", scope_id=ids.new("user"), type="home",
         name="home", access_mode="RWO", quota_gb=quota_gb, used_gb=0, deleted_at=deleted_at,
     )
-    async with db.begin():
-        db.add(vol)
+    await seed(db, [vol])
     return vol
 
 
@@ -122,8 +122,7 @@ async def _live_session(db, *, status="running"):
         offering_id=offering.id, image_id=image.id, resource_class="gpu",
         mode="fractional", status=status, gpu_mem_mb=4000, gpu_cores=25, disk_gb=20,
     )
-    async with db.begin():
-        db.add_all([offering, image, sess])
+    await seed(db, [offering, image, sess])
     return sess
 
 
@@ -211,3 +210,42 @@ async def test_session_disk_report_is_scoped_to_the_reporting_cluster(db, fake_r
     ))
     assert await fake_redis.get(f"sess:diskuse:{sess.id}") == f"{17 * GIB}:{20 * GIB}"
     assert len(await _disk_warnings(db, sess)) == 1
+
+
+# ── placement: where the data lives is learned from the first report and never moved ───────
+
+@pytest.mark.asyncio
+async def test_first_report_pins_the_volume_to_its_cluster_and_class(db):
+    vol = await _volume(db)
+    # the reporting clusters are real rows: the volume's cluster_id is a foreign key
+    await seed(db, [cluster_row("clu_a"), cluster_row("clu_b")])
+    await VolumeSync(db).sync(OperatorVolumeSync(
+        cluster_id="clu_a", volumes=[_obs(vol, capacity_gb=10, storage_class="gshare-data")],
+    ))
+    row = await db.get(StorageVolume, vol.id)
+    assert (row.cluster_id, row.storage_class) == ("clu_a", "gshare-data")
+    assert row.provisioned_at is not None
+
+
+@pytest.mark.asyncio
+async def test_a_report_from_another_cluster_does_not_move_the_volume(db):
+    vol = await _volume(db)
+    # the reporting clusters are real rows: the volume's cluster_id is a foreign key
+    await seed(db, [cluster_row("clu_a"), cluster_row("clu_b")])
+    await VolumeSync(db).sync(OperatorVolumeSync(cluster_id="clu_a", volumes=[_obs(vol, capacity_gb=10, storage_class="gshare-data")]))
+    await VolumeSync(db).sync(OperatorVolumeSync(cluster_id="clu_b", volumes=[_obs(vol, capacity_gb=10, storage_class="other")]))
+    row = await db.get(StorageVolume, vol.id)
+    assert (row.cluster_id, row.storage_class) == ("clu_a", "gshare-data")
+
+
+@pytest.mark.asyncio
+async def test_an_old_operator_without_the_class_still_pins_the_cluster(db):
+    vol = await _volume(db)
+    # the reporting clusters are real rows: the volume's cluster_id is a foreign key
+    await seed(db, [cluster_row("clu_a"), cluster_row("clu_b")])
+    await VolumeSync(db).sync(OperatorVolumeSync(cluster_id="clu_a", volumes=[_obs(vol, capacity_gb=10)]))
+    row = await db.get(StorageVolume, vol.id)
+    assert row.cluster_id == "clu_a" and row.storage_class is None
+    # the class arrives once the operator is upgraded
+    await VolumeSync(db).sync(OperatorVolumeSync(cluster_id="clu_a", volumes=[_obs(vol, capacity_gb=10, storage_class="gshare-data")]))
+    assert (await db.get(StorageVolume, vol.id)).storage_class == "gshare-data"
