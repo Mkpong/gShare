@@ -185,7 +185,7 @@ export function UsersBulkImportPage() {
                 {invalid.length > 50 && <div>…{invalid.length - 50}</div>}
               </div>
             )}
-            <div className="max-h-56 overflow-y-auto border border-border rounded">
+            <div className="max-h-56 overflow-y-auto border border-border rounded-sm">
               <table className="w-full text-xs">
                 <thead><tr className="text-left text-muted">
                   <th className="p-1.5">{t('common.email')}</th><th className="p-1.5">{t('common.name')}</th>

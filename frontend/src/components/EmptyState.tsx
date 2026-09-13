@@ -65,7 +65,7 @@ export function TableSkeleton({ rows = 5, columns = 4 }: { rows?: number; column
       {Array.from({ length: rows }).map((_, r) => (
         <div key={r} className="flex gap-3 py-3 border-b border-border">
           {Array.from({ length: columns }).map((__, c) => (
-            <div key={c} className="h-3 rounded bg-surface-2 flex-1" style={{ maxWidth: c === 0 ? '28%' : undefined }} />
+            <div key={c} className="h-3 rounded-sm bg-surface-2 flex-1" style={{ maxWidth: c === 0 ? '28%' : undefined }} />
           ))}
         </div>
       ))}

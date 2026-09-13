@@ -120,7 +120,7 @@ function BrandingSection() {
 
       {/* What the sidebar and the sign-in screen will show, before saving. */}
       <div className="rounded-ctl border border-border p-4">
-        <p className="text-2xs uppercase tracking-[0.1em] text-muted">{t('admin.system.branding.preview')}</p>
+        <p className="text-2xs uppercase tracking-widest text-muted">{t('admin.system.branding.preview')}</p>
         <div className="flex items-center gap-2.5 mt-2.5">
           <BrandMark size={36} logo={branding?.logo} name={previewName} />
           <span className="text-lg font-bold tracking-[-0.02em]">{previewName}</span>

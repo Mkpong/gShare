@@ -1067,7 +1067,7 @@ function ReviewCell({ label, value, sub, mono }: { label: string; value: ReactNo
   return (
     <div className="min-w-0">
       <dt className="text-xs text-muted">{label}</dt>
-      <dd className="font-semibold mt-0.5 m-0 break-words">{value}</dd>
+      <dd className="font-semibold mt-0.5 m-0 wrap-break-word">{value}</dd>
       {sub && <dd className={`text-muted text-xs mt-0.5 m-0 break-all ${mono ? 'font-mono' : 'gs-num'}`}>{sub}</dd>}
     </div>
   );

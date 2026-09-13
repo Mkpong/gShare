@@ -42,8 +42,8 @@ export function ClusterSelector() {
           aria-hidden="true"
         />
       }
-      buttonClassName={`h-8 pl-2.5 pr-2 rounded-full text-sm font-semibold max-w-[13rem]
-        border transition-colors duration-150 outline-none
+      buttonClassName={`h-8 pl-2.5 pr-2 rounded-full text-sm font-semibold max-w-52
+        border transition-colors duration-150 outline-hidden
         focus-visible:ring-2 focus-visible:ring-primary/40
         ${narrowed
           ? 'bg-primary-soft border-primary/35 text-text hover:border-primary/60'

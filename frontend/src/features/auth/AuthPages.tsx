@@ -113,10 +113,10 @@ export function Login() {
         </div>
         <div className="relative my-auto py-10 lg:py-14 max-w-[600px]">
           <p className="gs-num text-2xs uppercase tracking-[0.14em] text-muted">{t('auth.eyebrow')}</p>
-          <p id="gs-auth-hero-title" className="mt-3 text-2xl md:text-3xl lg:text-[34px] font-bold leading-[1.25] tracking-[-0.02em] whitespace-pre-line [text-wrap:balance] [word-break:keep-all]">
+          <p id="gs-auth-hero-title" className="mt-3 text-2xl md:text-3xl lg:text-[34px] font-bold leading-tight tracking-[-0.02em] whitespace-pre-line text-balance break-keep">
             {t('auth.heroTitle')}
           </p>
-          <p className="text-muted mt-4 leading-relaxed max-w-[52ch] [word-break:keep-all]">{t('auth.heroSubtitle')}</p>
+          <p className="text-muted mt-4 leading-relaxed max-w-[52ch] break-keep">{t('auth.heroSubtitle')}</p>
 
           <figure className="hidden md:block mt-10" aria-label={t('auth.diagramLabel')}>
             <figcaption className="flex items-baseline justify-between gs-num text-xs text-muted">
@@ -146,7 +146,7 @@ export function Login() {
                   <f.icon size={15} weight="bold" className="text-primary" aria-hidden="true" />
                   {f.title}
                 </dt>
-                <dd className="text-xs text-muted leading-relaxed m-0 [word-break:keep-all]">{f.body}</dd>
+                <dd className="text-xs text-muted leading-relaxed m-0 break-keep">{f.body}</dd>
               </div>
             ))}
           </dl>
@@ -179,7 +179,7 @@ export function Login() {
                   role="tab"
                   aria-selected={tab === k}
                   className={`h-9 rounded-ctl text-sm font-semibold transition-colors duration-150 ${
-                    tab === k ? 'bg-surface text-text shadow-sm' : 'text-muted hover:text-text'
+                    tab === k ? 'bg-surface text-text shadow-xs' : 'text-muted hover:text-text'
                   }`}
                   onClick={() => { setTab(k); setError(null); setDone(null); }}
                 >

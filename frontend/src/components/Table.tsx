@@ -98,7 +98,7 @@ export function Table<T>({
       {/* Below this width the wrapper scrolls instead of squeezing every column thinner. A
           `w-full` table with ten columns crushes them until headers and readings break apart,
           which is worse than a horizontal scrollbar the user can see and use. */}
-      <table className="w-full min-w-[52rem] border-collapse" aria-labelledby={caption ? captionId : undefined} aria-busy={isLoading || undefined}>
+      <table className="w-full min-w-208 border-collapse" aria-labelledby={caption ? captionId : undefined} aria-busy={isLoading || undefined}>
         {caption && <caption id={captionId} className="gs-sr-only">{caption}</caption>}
         <thead>
           <tr>
@@ -196,7 +196,7 @@ export function Table<T>({
                         `px-3 ${dense ? 'py-1.5' : 'py-3'} border-b border-border group-last:border-b-0 text-sm`,
                         c.align === 'right' ? 'text-right tabular-nums' : c.align === 'center' ? 'text-center tabular-nums' : '',
                         c.hideOnMobile ? 'hidden md:table-cell' : '',
-                        c.truncate ? 'truncate max-w-[1px]' : '',
+                        c.truncate ? 'truncate max-w-px' : '',
                         c.cellClassName ?? '',
                       ].join(' ')}
                     >

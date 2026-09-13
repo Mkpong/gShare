@@ -20,7 +20,7 @@ export function Figure({ label, value, unit, foot, bar, hero, help }: {
   hero?: boolean;
 }) {
   return (
-    <div className="min-w-0 px-5 py-4 border-border md:border-l first:md:border-l-0 max-md:border-t max-md:first:border-t-0">
+    <div className="min-w-0 px-5 py-4 border-border md:border-l md:first:border-l-0 max-md:border-t max-md:first:border-t-0">
       <div className="text-muted text-xs font-semibold inline-flex items-center gap-1">
         {label}
         {help && <HelpTip text={help} />}

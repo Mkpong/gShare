@@ -303,7 +303,6 @@ export function WalletPage() {
       cur.setDate(cur.getDate() + 1);
     }
     return out;
-  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [spendQ.data, spendRange, lang]);
   const recentReqs = useMemo(
     () => [...myReqs].sort((a, b) => new Date(b.created_at ?? 0).getTime() - new Date(a.created_at ?? 0).getTime()).slice(0, 5),

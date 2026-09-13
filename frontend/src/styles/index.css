@@ -1,8 +1,398 @@
-@tailwind base;
-@tailwind components;
-@tailwind utilities;
+@import 'tailwindcss';
 
-/* ---------------------------------------------------------------------------
+@custom-variant dark (&:where([data-theme="dark"], [data-theme="dark"] *));
+
+@theme {
+  --color-bg: var(--bg);
+  --color-surface: var(--surface);
+  --color-surface-2: var(--surface-2);
+  --color-border: var(--border);
+  --color-border-strong: var(--border-strong);
+  --color-text: var(--text);
+  --color-muted: var(--muted);
+  --color-primary: var(--primary);
+  --color-primary-soft: var(--primary-soft);
+  --color-on-primary: var(--on-primary);
+  --color-free: var(--free);
+  --color-free-soft: var(--free-soft);
+  --color-warn: var(--warn);
+  --color-warn-soft: var(--warn-soft);
+  --color-danger: var(--danger);
+  --color-danger-soft: var(--danger-soft);
+
+  --radius-card: var(--radius);
+  --radius-ctl: var(--radius-control);
+  --radius-tag: var(--radius-tag);
+
+  --text-2xs: 11px;
+  --text-2xs--line-height: 1.3;
+  --text-xs: 12px;
+  --text-xs--line-height: 1.4;
+  --text-sm: 13px;
+  --text-sm--line-height: 1.5;
+  --text-base: 14px;
+  --text-base--line-height: 1.55;
+  --text-md: 15px;
+  --text-md--line-height: 1.5;
+  --text-lg: 17px;
+  --text-lg--line-height: 1.4;
+  --text-kpi: 26px;
+  --text-kpi--line-height: 1.1;
+  --text-kpi--font-weight: 700;
+
+  --shadow-card: var(--shadow);
+  --shadow-raised: var(--shadow-raised);
+
+  /* --font-sans / --font-mono: not redeclared here. The stacks live in :root below, outside any
+     cascade layer, so they win over Tailwind's defaults and font-sans / font-mono pick them up. */
+}
+
+/*
+  The default border color has changed to `currentcolor` in Tailwind CSS v4,
+  so we've added these compatibility styles to make sure everything still
+  looks the same as it did with Tailwind CSS v3.
+
+  If we ever want to remove these styles, we need to add an explicit border
+  color utility to any element that depends on these defaults.
+*/
+@layer base {
+  *,
+  ::after,
+  ::before,
+  ::backdrop,
+  ::file-selector-button {
+    border-color: var(--color-gray-200, currentcolor);
+  }
+}
+
+@utility gs-sr-only {
+  /* Assistive-technology only; the skip link becomes visible on focus. */
+  @apply absolute w-px h-px p-0 -m-px overflow-hidden whitespace-nowrap border-0;
+  clip: rect(0, 0, 0, 0);
+}
+
+@utility gs-skip-link {
+  @apply gs-sr-only;
+  &:focus {
+    @apply not-sr-only fixed top-2 left-2 z-50 w-auto h-auto m-0 p-3 rounded-ctl bg-primary text-on-primary font-bold shadow-card;
+    clip: auto;
+  }
+}
+
+@utility gs-card {
+  /* Surfaces. A card is a real container; a panel groups without claiming elevation. */
+  @apply bg-surface border border-border rounded-card p-5 shadow-card;
+}
+
+@utility gs-panel {
+  @apply bg-surface border border-border rounded-card;
+}
+
+@utility gs-form-sec {
+  /* Section heading inside a card or panel. */
+
+  /* Form section heading: bigger than the field labels it governs, with a hairline that separates
+   the group from the previous one. `-lead` is the form's first section (no divider needed). */
+  font-size: var(--text-sm, 13px);
+  font-weight: 650;
+  color: var(--text);
+  margin: 1.25rem 0 0.65rem;
+  padding-top: 1rem;
+  border-top: 1px solid var(--border);
+}
+
+@utility gs-form-sec-lead {
+  border-top: none;
+  padding-top: 0;
+  margin-top: 0;
+}
+
+@utility gs-h2 {
+  @apply text-md font-bold tracking-[-0.01em];
+}
+
+@utility gs-sub {
+  @apply text-muted text-xs;
+}
+
+@utility gs-hair {
+  /* Hairline between rows of the same kind. */
+  @apply border-b border-border last:border-b-0;
+}
+
+@utility gs-num {
+  /* Numbers that are read and compared, not prose. */
+  font-family: var(--font-mono);
+  font-variant-numeric: tabular-nums;
+  letter-spacing: -0.01em;
+}
+
+@utility gs-btn {
+  @apply inline-flex items-center justify-center gap-1.5 px-3.5 py-2 rounded-ctl border border-border-strong
+           bg-surface text-text font-semibold text-sm cursor-pointer whitespace-nowrap shrink-0
+           transition-[background-color,border-color,color,transform] duration-150;
+  &:hover:not(:disabled) {
+    @apply bg-surface-2;
+  }
+  /* Physical press. Reduced-motion users get the colour change only. */
+  &:active:not(:disabled) {
+    transform: translateY(1px);
+  }
+  &:disabled {
+    @apply cursor-not-allowed opacity-55;
+  }
+  @media (pointer: coarse), (max-width: 767px) {
+    min-height: 44px;
+  }
+}
+
+@utility gs-btn-primary {
+  @apply bg-primary border-primary text-on-primary;
+  &:hover:not(:disabled) {
+    background: color-mix(in srgb, var(--primary) 88%, var(--text));
+    border-color: color-mix(in srgb, var(--primary) 88%, var(--text));
+  }
+}
+
+@utility gs-btn-sm {
+  @apply px-2.5 py-1 text-xs rounded-ctl;
+  @media (pointer: coarse), (max-width: 767px) {
+    @apply px-3 py-2 text-sm;
+    min-height: 44px;
+  }
+}
+
+@utility gs-btn-mid {
+  /* Toolbar size: a button standing next to a search box or a select. gs-btn-sm is built for a
+     table row, where it sits among text; beside a 38px field it read as a different, lesser kind
+     of control. This lands between the two so the row has one baseline without the button
+     shouting. */
+  @apply px-3 py-1.5 text-sm rounded-ctl;
+}
+
+@utility gs-btn-danger {
+  @apply border-danger text-danger;
+  &:hover:not(:disabled) {
+    background: var(--danger-soft);
+  }
+}
+
+@utility gs-btn-ghost {
+  /* Quiet action inside a dense row: reads as a link until pointed at. */
+  @apply border-transparent bg-transparent text-muted;
+  &:hover:not(:disabled) {
+    @apply bg-surface-2 text-text;
+  }
+}
+
+@utility gs-input {
+  @apply px-3 py-2 rounded-ctl border border-border-strong bg-surface text-text text-sm
+           outline-hidden transition-colors duration-150;
+  &::placeholder {
+    color: var(--muted);
+    opacity: 1;
+  }
+  &:focus {
+    border-color: var(--primary);
+    box-shadow: 0 0 0 3px color-mix(in srgb, var(--primary) 18%, transparent);
+  }
+  &:disabled {
+    @apply bg-surface-2 cursor-not-allowed opacity-70;
+  }
+  @media (pointer: coarse), (max-width: 767px) {
+    min-height: 44px;
+  }
+}
+
+@utility gs-input-sm {
+  @apply px-2 py-1 text-xs;
+}
+
+@utility gs-pill {
+  /* Touch sizing. Width is matched as well as pointer, which emulated browsers report unreliably. */
+
+  /* Soft-tinted pill: kept ONLY where a filled status badge is still wanted (toasts, reason
+     badges). Ordinary status rendering is the StatusPill dot; metadata chips are .gs-tag. */
+  @apply inline-flex items-center gap-1 px-2 py-0.5 rounded-tag text-xs font-semibold whitespace-nowrap;
+}
+
+@utility gs-quota-band {
+  /* Sub-head inside a quota card: names a band of related ceilings without becoming a heading. */
+  /* A band names its three ceilings; it is a heading, not a boxed section, so it carries an
+     overline rather than a rule under bold text. */
+  @apply text-2xs font-semibold uppercase tracking-[0.08em] text-muted pb-2 border-b border-border;
+}
+
+@utility gs-chart-tip {
+  /* Chart hover readout: every series' value at the cursor's timestamp. Positioned by the plugin;
+     pointer-events off so it never blocks the cursor it follows. */
+  @apply pointer-events-none absolute z-20 rounded-ctl border border-border bg-surface
+           px-2.5 py-1.5 shadow-raised text-2xs whitespace-nowrap;
+}
+
+@utility gs-chart-tip-head {
+  @apply text-muted mb-1;
+}
+
+@utility gs-chart-tip-row {
+  @apply flex items-center gap-1.5 leading-relaxed;
+}
+
+@utility gs-chart-tip-name {
+  @apply text-muted mr-1;
+}
+
+@utility gs-chart-tip-swatch {
+  @apply w-2.5 h-[3px] rounded-tag shrink-0;
+}
+
+@utility gs-tag {
+  /* Quiet metadata chip: cluster, mode, pool, scope, kind, role. Never a status. */
+  @apply inline-flex items-center gap-1 px-1.5 py-0.5 rounded-tag bg-surface-2 text-muted
+           text-2xs font-medium whitespace-nowrap;
+}
+
+@utility gs-dot-pulse {
+  /* The transitional-status dot inside StatusPill. */
+  animation: gs-pulse 1.6s ease-in-out infinite;
+  @media (prefers-reduced-motion: reduce) {
+    animation: none;
+  }
+}
+
+@utility gs-stat {
+  /* KPI figures. The number is the object; the label is annotation. */
+  & .gs-label {
+    @apply text-muted text-xs font-semibold;
+  }
+  & .gs-value {
+    @apply text-kpi mt-2 mb-1 leading-none;
+    font-family: var(--font-mono);
+    font-variant-numeric: tabular-nums;
+    letter-spacing: -0.03em;
+  }
+  & .gs-value small {
+    @apply text-sm text-muted font-semibold;
+    letter-spacing: 0;
+  }
+}
+
+@utility gs-label {
+  /* KPI figures. The number is the object; the label is annotation. */
+  .gs-stat & {
+    @apply text-muted text-xs font-semibold;
+  }
+}
+
+@utility gs-value {
+  .gs-stat & {
+    @apply text-kpi mt-2 mb-1 leading-none;
+    font-family: var(--font-mono);
+    font-variant-numeric: tabular-nums;
+    letter-spacing: -0.03em;
+  }
+  .gs-stat & small {
+    @apply text-sm text-muted font-semibold;
+    letter-spacing: 0;
+  }
+}
+
+@utility gs-bar {
+  /* Meters. A thin rule that fills, not a chunky dashboard trough. */
+  @apply h-1.5 rounded-full bg-border overflow-hidden mt-2.5;
+  & > i {
+    @apply block h-full rounded-full bg-primary;
+  }
+  &.primary > i {
+    @apply bg-primary;
+  }
+  &.warn > i {
+    background: var(--warn);
+  }
+  &.free > i {
+    background: var(--free);
+  }
+  &.danger > i {
+    background: var(--danger);
+  }
+  .gs-qrow & {
+    @apply flex-1 mt-0;
+  }
+}
+
+@utility primary {
+  &.gs-bar > i {
+    @apply bg-primary;
+  }
+}
+
+@utility warn {
+  &.gs-bar > i {
+    background: var(--warn);
+  }
+}
+
+@utility free {
+  &.gs-bar > i {
+    background: var(--free);
+  }
+}
+
+@utility danger {
+  &.gs-bar > i {
+    background: var(--danger);
+  }
+}
+
+@utility gs-qrow {
+  @apply flex items-center gap-3 py-2.5 border-b border-border last:border-b-0;
+  & .gs-qn {
+    @apply w-[104px] shrink-0 text-muted font-semibold text-xs;
+  }
+  & .gs-bar {
+    @apply flex-1 mt-0;
+  }
+  /* The reading is a small table, not a sentence: ragged right edges make six rows unreadable. */
+  & .gs-qv {
+    @apply shrink-0 flex items-baseline justify-end font-semibold text-xs;
+    font-family: var(--font-mono);
+    font-variant-numeric: tabular-nums;
+  }
+}
+
+@utility gs-qn {
+  .gs-qrow & {
+    @apply w-[104px] shrink-0 text-muted font-semibold text-xs;
+  }
+}
+
+@utility gs-qv {
+  /* The reading is a small table, not a sentence: ragged right edges make six rows unreadable. */
+  .gs-qrow & {
+    @apply shrink-0 flex items-baseline justify-end font-semibold text-xs;
+    font-family: var(--font-mono);
+    font-variant-numeric: tabular-nums;
+  }
+}
+
+@utility gs-qv-used {
+  @apply w-[54px] text-right;
+}
+
+@utility gs-qv-sep {
+  @apply px-1.5 text-muted opacity-50;
+}
+
+@utility gs-qv-lim {
+  @apply w-[52px] text-left;
+}
+
+@utility gs-qv-unit {
+  @apply w-[38px] text-left text-muted font-medium;
+}
+
+@layer utilities {
+  /* ---------------------------------------------------------------------------
    gShare console theme, second pass: a dark-first infrastructure console.
 
    Direction: the developer-infrastructure language of a GPU cloud. Cool
@@ -21,342 +411,254 @@
    status meaning (running, warning, danger) and are never used decoratively.
    Every foreground below is checked for WCAG AA against the surface it sits on.
 --------------------------------------------------------------------------- */
-:root {
-  --bg: #f3f5f7;
-  --surface: #ffffff;
-  --surface-2: #e9edf1;
-  --border: #d7dde3;
-  /* Controls need a 3:1 boundary (WCAG 1.4.11); hairlines between rows do not. */
-  --border-strong: #7d8792;
-  --text: #171a1f;
-  --muted: #5b6470;
+  :root {
+    --bg: #f3f5f7;
+    --surface: #ffffff;
+    --surface-2: #e9edf1;
+    --border: #d7dde3;
+    /* Controls need a 3:1 boundary (WCAG 1.4.11); hairlines between rows do not. */
+    --border-strong: #7d8792;
+    --text: #171a1f;
+    --muted: #5b6470;
 
-  /* Deep enough to clear 4.5:1 AA for small text on every light surface it sits on,
+    /* Deep enough to clear 4.5:1 AA for small text on every light surface it sits on,
      including the tinted ones (primary-soft 5.30, surface-2 5.17, bg 5.56, surface 6.08). */
-  --primary: #0a6a8c;
-  --primary-soft: #e2f2f8;
-  /* Text sitting ON a primary fill: white passes on the light azure, near-black on the dark cyan. */
-  --on-primary: #ffffff;
-  --free: #0a6b45;
-  --free-soft: #e3f2ea;
-  --warn: #8a5a00;
-  --warn-soft: #f8f0dd;
-  --danger: #b02020;
-  --danger-soft: #fbe9e9;
-  --ok: var(--free);
+    --primary: #0a6a8c;
+    --primary-soft: #e2f2f8;
+    /* Text sitting ON a primary fill: white passes on the light azure, near-black on the dark cyan. */
+    --on-primary: #ffffff;
+    --free: #0a6b45;
+    --free-soft: #e3f2ea;
+    --warn: #8a5a00;
+    --warn-soft: #f8f0dd;
+    --danger: #b02020;
+    --danger-soft: #fbe9e9;
+    --ok: var(--free);
 
-  --shadow: 0 1px 2px rgba(23, 26, 31, 0.06);
-  --shadow-raised: 0 8px 24px -12px rgba(23, 26, 31, 0.28);
-  --radius: 6px;
-  --radius-control: 4px;
-  --radius-tag: 2px;
+    --shadow: 0 1px 2px rgba(23, 26, 31, 0.06);
+    --shadow-raised: 0 8px 24px -12px rgba(23, 26, 31, 0.28);
+    --radius: 6px;
+    --radius-control: 4px;
+    --radius-tag: 2px;
 
-  --font-sans: 'Pretendard Variable', Pretendard, ui-sans-serif, system-ui, -apple-system,
-    'Segoe UI', Roboto, 'Malgun Gothic', sans-serif;
-  --font-mono: 'JetBrains Mono', ui-monospace, 'SF Mono', SFMono-Regular, Menlo, 'Cascadia Mono',
-    'Segoe UI Mono', 'Roboto Mono', monospace;
-}
+    --font-sans:
+      'Pretendard Variable', Pretendard, ui-sans-serif, system-ui,
+      -apple-system, 'Segoe UI', Roboto, 'Malgun Gothic', sans-serif;
+    --font-mono:
+      'JetBrains Mono', ui-monospace, 'SF Mono', SFMono-Regular, Menlo,
+      'Cascadia Mono', 'Segoe UI Mono', 'Roboto Mono', monospace;
+  }
 
-/* Dark is the primary mode; the light block above mirrors it token for token. */
-html[data-theme='dark'] {
-  --bg: #0c0e11;
-  --surface: #14171c;
-  --surface-2: #1b1f26;
-  --border: #262b33;
-  --border-strong: #5d6672;
-  --text: #e7eaee;
-  --muted: #8d95a2;
+  /* Dark is the primary mode; the light block above mirrors it token for token. */
+  html[data-theme='dark'] {
+    --bg: #0c0e11;
+    --surface: #14171c;
+    --surface-2: #1b1f26;
+    --border: #262b33;
+    --border-strong: #5d6672;
+    --text: #e7eaee;
+    --muted: #8d95a2;
 
-  --primary: #45c4e8;
-  --primary-soft: #0f2a34;
-  --on-primary: #08262e;
-  --free: #41c98a;
-  --free-soft: #10281d;
-  --warn: #e0a94f;
-  --warn-soft: #2b2312;
-  --danger: #f07575;
-  --danger-soft: #2d1717;
-  --ok: var(--free);
+    --primary: #45c4e8;
+    --primary-soft: #0f2a34;
+    --on-primary: #08262e;
+    --free: #41c98a;
+    --free-soft: #10281d;
+    --warn: #e0a94f;
+    --warn-soft: #2b2312;
+    --danger: #f07575;
+    --danger-soft: #2d1717;
+    --ok: var(--free);
 
-  --shadow: 0 1px 2px rgba(0, 0, 0, 0.45);
-  --shadow-raised: 0 12px 32px -16px rgba(0, 0, 0, 0.75);
-}
+    --shadow: 0 1px 2px rgba(0, 0, 0, 0.45);
+    --shadow-raised: 0 12px 32px -16px rgba(0, 0, 0, 0.75);
+  }
 
-/* Pretendard Variable's 700 instance mis-kerns some Latin pairs ("RTX" renders as "RT X");
+  /* Pretendard Variable's 700 instance mis-kerns some Latin pairs ("RTX" renders as "RT X");
    the 650 instance is visually identical at UI sizes and kerns correctly, so bold text maps
    there. Digits (KPI figures) are unaffected either way. */
-.font-bold,
-b,
-strong {
-  font-weight: 650;
-}
+  .font-bold,
+  b,
+  strong {
+    font-weight: 650;
+  }
 
-html,
-body,
-#root {
-  height: 100%;
-}
+  html,
+  body,
+  #root {
+    height: 100%;
+  }
 
-/* The app shell scrolls its own <main>; the document itself must not, or the wheel over a
+  /* The app shell scrolls its own <main>; the document itself must not, or the wheel over a
    long admin table also drags the window and leaves an unpainted band under the shell. The
    html background matters for the same band and for overscroll bounce. */
-html {
-  background: var(--bg);
-}
-html:has(.gs-shell) {
-  overflow: hidden;
-}
-
-body {
-  margin: 0;
-  background: var(--bg);
-  color: var(--text);
-  font-size: 14px;
-  line-height: 1.55;
-  font-family: var(--font-sans);
-  font-feature-settings: 'ss01', 'tnum';
-  -webkit-font-smoothing: antialiased;
-  text-rendering: optimizeLegibility;
-}
-
-/* Headings carry hierarchy through weight and measure, not raw scale. */
-h1,
-h2,
-h3 {
-  letter-spacing: -0.014em;
-}
-
-/* Keyboard focus ring, on every control. */
-:focus-visible {
-  outline: 2px solid var(--primary);
-  outline-offset: 2px;
-  border-radius: 4px;
-}
-
-@media (prefers-reduced-motion: reduce) {
-  *,
-  *::before,
-  *::after {
-    animation-duration: 0.01ms !important;
-    animation-iteration-count: 1 !important;
-    transition-duration: 0.01ms !important;
-    scroll-behavior: auto !important;
+  html {
+    background: var(--bg);
   }
-}
-
-/* The StatusPill dot, breathing while a state is in transit. */
-@keyframes gs-pulse {
-  0%,
-  100% {
-    opacity: 1;
+  html:has(.gs-shell) {
+    overflow: hidden;
   }
-  50% {
-    opacity: 0.35;
-  }
-}
 
-/* The ONE scroller is .gs-main. Without this, any overflow-x wrapper taller than the viewport
+  body {
+    margin: 0;
+    background: var(--bg);
+    color: var(--text);
+    font-size: 14px;
+    line-height: 1.55;
+    font-family: var(--font-sans);
+    font-feature-settings: 'ss01', 'tnum';
+    -webkit-font-smoothing: antialiased;
+    text-rendering: optimizeLegibility;
+  }
+
+  /* Headings carry hierarchy through weight and measure, not raw scale. */
+  h1,
+  h2,
+  h3 {
+    letter-spacing: -0.014em;
+  }
+
+  /* Keyboard focus ring, on every control. */
+  :focus-visible {
+    outline: 2px solid var(--primary);
+    outline-offset: 2px;
+    border-radius: 4px;
+  }
+
+  @media (prefers-reduced-motion: reduce) {
+    *,
+    *::before,
+    *::after {
+      animation-duration: 0.01ms !important;
+      animation-iteration-count: 1 !important;
+      transition-duration: 0.01ms !important;
+      scroll-behavior: auto !important;
+    }
+  }
+
+  /* The StatusPill dot, breathing while a state is in transit. */
+  @keyframes gs-pulse {
+    0%,
+    100% {
+      opacity: 1;
+    }
+    50% {
+      opacity: 0.35;
+    }
+  }
+
+  /* The ONE scroller is .gs-main. Without this, any overflow-x wrapper taller than the viewport
    (a long table) re-opens a page-level scrollbar and the whole shell drags with trailing void. */
-html, body, #root { height: 100%; }
-html, body { overflow: hidden; }   /* the html box is the real page scroller — lock BOTH */
+  html,
+  body,
+  #root {
+    height: 100%;
+  }
+  html,
+  body {
+    overflow: hidden;
+  } /* the html box is the real page scroller — lock BOTH */
 
-/* Console shell. Below `md` the sidebar leaves the grid and becomes an overlay drawer. */
-.gs-shell {
-  grid-template-columns: auto 1fr;
-  grid-template-rows: 60px 1fr;
-  grid-template-areas:
-    'brand top'
-    'main main';
-}
-
-.gs-shell > .gs-brand { grid-area: brand; }
-.gs-shell > .gs-topbar { grid-area: top; }
-.gs-shell > .gs-sidenav { grid-area: nav; }
-.gs-shell > .gs-main { grid-area: main; }
-
-@media (min-width: 768px) {
+  /* Console shell. Below `md` the sidebar leaves the grid and becomes an overlay drawer. */
   .gs-shell {
-    /* 260px: room for an email in the account block without truncating the common case. */
-    grid-template-columns: 260px 1fr;
+    grid-template-columns: auto 1fr;
+    grid-template-rows: 60px 1fr;
     grid-template-areas:
       'brand top'
-      'nav main';
-    transition: grid-template-columns 160ms ease;
+      'main main';
   }
-  /* Collapsed: a thin rail of icons. Labels, section headings and the wallet line are hidden;
+
+  .gs-shell > .gs-brand {
+    grid-area: brand;
+  }
+  .gs-shell > .gs-topbar {
+    grid-area: top;
+  }
+  .gs-shell > .gs-sidenav {
+    grid-area: nav;
+  }
+  .gs-shell > .gs-main {
+    grid-area: main;
+  }
+
+  @media (min-width: 768px) {
+    .gs-shell {
+      /* 260px: room for an email in the account block without truncating the common case. */
+      grid-template-columns: 260px 1fr;
+      grid-template-areas:
+        'brand top'
+        'nav main';
+      transition: grid-template-columns 160ms ease;
+    }
+    /* Collapsed: a thin rail of icons. Labels, section headings and the wallet line are hidden;
      the brand cell keeps only the mark. Not remembered across visits by design. */
-  .gs-shell.is-collapsed { grid-template-columns: 60px 1fr; }
-  .gs-shell.is-collapsed .gs-nav-label,
-  .gs-shell.is-collapsed .gs-nav-section,
-  .gs-shell.is-collapsed .gs-nav-wallet,
-  .gs-shell.is-collapsed .gs-brand-text { display: none; }
-  /* The rail's inset belongs to the scrolling list and the foot, NOT to the sidebar as well:
+    .gs-shell.is-collapsed {
+      grid-template-columns: 60px 1fr;
+    }
+    .gs-shell.is-collapsed .gs-nav-label,
+    .gs-shell.is-collapsed .gs-nav-section,
+    .gs-shell.is-collapsed .gs-nav-wallet,
+    .gs-shell.is-collapsed .gs-brand-text {
+      display: none;
+    }
+    /* The rail's inset belongs to the scrolling list and the foot, NOT to the sidebar as well:
      stacking both insets squeezed each row to 23px, so the 17px glyph spilled out of its own
      highlight and the active row looked half-painted. */
-  .gs-shell.is-collapsed .gs-nav-scroll,
-  .gs-shell.is-collapsed .gs-nav-foot { padding-left: 0.5rem; padding-right: 0.5rem; }
-  /* A rail row is a square the width of the rail: the glyph sits in the middle of it, so the
+    .gs-shell.is-collapsed .gs-nav-scroll,
+    .gs-shell.is-collapsed .gs-nav-foot {
+      padding-left: 0.5rem;
+      padding-right: 0.5rem;
+    }
+    /* A rail row is a square the width of the rail: the glyph sits in the middle of it, so the
      active fill and the hover fill surround the icon instead of clipping it. */
-  .gs-shell.is-collapsed .gs-nav-row {
-    justify-content: center;
-    padding-left: 0;
-    padding-right: 0;
+    .gs-shell.is-collapsed .gs-nav-row {
+      justify-content: center;
+      padding-left: 0;
+      padding-right: 0;
+    }
+    /* The waiting-dot on a glyph only earns its place on the rail; expanded, the count badge says it. */
+    .gs-nav-dot {
+      display: none;
+    }
+    .gs-shell.is-collapsed .gs-nav-dot {
+      display: block;
+    }
   }
-  /* The waiting-dot on a glyph only earns its place on the rail; expanded, the count badge says it. */
-  .gs-nav-dot { display: none; }
-  .gs-shell.is-collapsed .gs-nav-dot { display: block; }
-}
-/* The navigation scrolls only when it outgrows the column, and the bar stays out of the way:
+  /* The navigation scrolls only when it outgrows the column, and the bar stays out of the way:
    thin, no track, and tinted only while the pointer is in the sidebar. */
-.gs-nav-scroll {
-  scrollbar-width: thin;
-  scrollbar-color: transparent transparent;
-  overscroll-behavior: contain;
-}
-.gs-nav-scroll:hover,
-.gs-nav-scroll:focus-within { scrollbar-color: var(--border-strong) transparent; }
-.gs-nav-scroll::-webkit-scrollbar { width: 6px; }
-.gs-nav-scroll::-webkit-scrollbar-track { background: transparent; }
-.gs-nav-scroll::-webkit-scrollbar-thumb { background: transparent; border-radius: 3px; }
-.gs-nav-scroll:hover::-webkit-scrollbar-thumb,
-.gs-nav-scroll:focus-within::-webkit-scrollbar-thumb { background: var(--border-strong); }
+  .gs-nav-scroll {
+    scrollbar-width: thin;
+    scrollbar-color: transparent transparent;
+    overscroll-behavior: contain;
+  }
+  .gs-nav-scroll:hover,
+  .gs-nav-scroll:focus-within {
+    scrollbar-color: var(--border-strong) transparent;
+  }
+  .gs-nav-scroll::-webkit-scrollbar {
+    width: 6px;
+  }
+  .gs-nav-scroll::-webkit-scrollbar-track {
+    background: transparent;
+  }
+  .gs-nav-scroll::-webkit-scrollbar-thumb {
+    background: transparent;
+    border-radius: 3px;
+  }
+  .gs-nav-scroll:hover::-webkit-scrollbar-thumb,
+  .gs-nav-scroll:focus-within::-webkit-scrollbar-thumb {
+    background: var(--border-strong);
+  }
 
-@media (prefers-reduced-motion: reduce) { .gs-shell { transition: none; } }
+  @media (prefers-reduced-motion: reduce) {
+    .gs-shell {
+      transition: none;
+    }
+  }
+}
 
 @layer components {
-  /* Assistive-technology only; the skip link becomes visible on focus. */
-  .gs-sr-only {
-    @apply absolute w-px h-px p-0 -m-px overflow-hidden whitespace-nowrap border-0;
-    clip: rect(0, 0, 0, 0);
-  }
-  .gs-skip-link {
-    @apply gs-sr-only;
-  }
-  .gs-skip-link:focus {
-    @apply not-sr-only fixed top-2 left-2 z-50 w-auto h-auto m-0 p-3 rounded-ctl bg-primary text-on-primary font-bold shadow-card;
-    clip: auto;
-  }
-
-  /* Surfaces. A card is a real container; a panel groups without claiming elevation. */
-  .gs-card {
-    @apply bg-surface border border-border rounded-card p-5 shadow-card;
-  }
-  .gs-panel {
-    @apply bg-surface border border-border rounded-card;
-  }
-  /* Section heading inside a card or panel. */
-
-/* Form section heading: bigger than the field labels it governs, with a hairline that separates
-   the group from the previous one. `-lead` is the form's first section (no divider needed). */
-.gs-form-sec {
-  font-size: var(--text-sm, 13px);
-  font-weight: 650;
-  color: var(--text);
-  margin: 1.25rem 0 0.65rem;
-  padding-top: 1rem;
-  border-top: 1px solid var(--border);
-}
-.gs-form-sec-lead {
-  border-top: none;
-  padding-top: 0;
-  margin-top: 0;
-}
-
-  .gs-h2 {
-    @apply text-md font-bold tracking-[-0.01em];
-  }
-  .gs-sub {
-    @apply text-muted text-xs;
-  }
-  /* Hairline between rows of the same kind. */
-  .gs-hair {
-    @apply border-b border-border last:border-b-0;
-  }
-  /* Numbers that are read and compared, not prose. */
-  .gs-num {
-    font-family: var(--font-mono);
-    font-variant-numeric: tabular-nums;
-    letter-spacing: -0.01em;
-  }
-
-  .gs-btn {
-    @apply inline-flex items-center justify-center gap-1.5 px-3.5 py-2 rounded-ctl border border-border-strong
-           bg-surface text-text font-semibold text-sm cursor-pointer whitespace-nowrap shrink-0
-           transition-[background-color,border-color,color,transform] duration-150;
-  }
-  .gs-btn:hover:not(:disabled) {
-    @apply bg-surface-2;
-  }
-  /* Physical press. Reduced-motion users get the colour change only. */
-  .gs-btn:active:not(:disabled) {
-    transform: translateY(1px);
-  }
-  .gs-btn:disabled {
-    @apply cursor-not-allowed opacity-55;
-  }
-  .gs-btn-primary {
-    @apply bg-primary border-primary text-on-primary;
-  }
-  .gs-btn-primary:hover:not(:disabled) {
-    background: color-mix(in srgb, var(--primary) 88%, var(--text));
-    border-color: color-mix(in srgb, var(--primary) 88%, var(--text));
-  }
-  .gs-btn-sm {
-    @apply px-2.5 py-1 text-xs rounded-ctl;
-  }
-  /* Toolbar size: a button standing next to a search box or a select. gs-btn-sm is built for a
-     table row, where it sits among text; beside a 38px field it read as a different, lesser kind
-     of control. This lands between the two so the row has one baseline without the button
-     shouting. */
-  .gs-btn-mid {
-    @apply px-3 py-1.5 text-sm rounded-ctl;
-  }
-  .gs-btn-danger {
-    @apply border-danger text-danger;
-  }
-  .gs-btn-danger:hover:not(:disabled) {
-    background: var(--danger-soft);
-  }
-  /* Quiet action inside a dense row: reads as a link until pointed at. */
-  .gs-btn-ghost {
-    @apply border-transparent bg-transparent text-muted;
-  }
-  .gs-btn-ghost:hover:not(:disabled) {
-    @apply bg-surface-2 text-text;
-  }
-
-  .gs-input {
-    @apply px-3 py-2 rounded-ctl border border-border-strong bg-surface text-text text-sm
-           outline-none transition-colors duration-150;
-  }
-  .gs-input-sm {
-    @apply px-2 py-1 text-xs;
-  }
-  .gs-input::placeholder {
-    color: var(--muted);
-    opacity: 1;
-  }
-  .gs-input:focus {
-    border-color: var(--primary);
-    box-shadow: 0 0 0 3px color-mix(in srgb, var(--primary) 18%, transparent);
-  }
-  .gs-input:disabled {
-    @apply bg-surface-2 cursor-not-allowed opacity-70;
-  }
-
-  /* Touch sizing. Width is matched as well as pointer, which emulated browsers report unreliably. */
   @media (pointer: coarse), (max-width: 767px) {
-    .gs-btn,
-    .gs-input,
-    input[type='checkbox'],
-    input[type='radio'],
-    select {
-      min-height: 44px;
-    }
-    .gs-btn-sm {
-      @apply px-3 py-2 text-sm;
-      min-height: 44px;
-    }
     input[type='checkbox'],
     input[type='radio'] {
       min-width: 24px;
@@ -364,81 +666,6 @@ html, body { overflow: hidden; }   /* the html box is the real page scroller —
       height: 24px;
     }
   }
-
-  /* Soft-tinted pill: kept ONLY where a filled status badge is still wanted (toasts, reason
-     badges). Ordinary status rendering is the StatusPill dot; metadata chips are .gs-tag. */
-  .gs-pill {
-    @apply inline-flex items-center gap-1 px-2 py-0.5 rounded-tag text-xs font-semibold whitespace-nowrap;
-  }
-
-  /* Sub-head inside a quota card: names a band of related ceilings without becoming a heading. */
-  /* A band names its three ceilings; it is a heading, not a boxed section, so it carries an
-     overline rather than a rule under bold text. */
-  .gs-quota-band {
-    @apply text-2xs font-semibold uppercase tracking-[0.08em] text-muted pb-2 border-b border-border;
-  }
-
-  /* Chart hover readout: every series' value at the cursor's timestamp. Positioned by the plugin;
-     pointer-events off so it never blocks the cursor it follows. */
-  .gs-chart-tip {
-    @apply pointer-events-none absolute z-20 rounded-ctl border border-border bg-surface
-           px-2.5 py-1.5 shadow-raised text-2xs whitespace-nowrap;
-  }
-  .gs-chart-tip-head { @apply text-muted mb-1; }
-  .gs-chart-tip-row { @apply flex items-center gap-1.5 leading-relaxed; }
-  .gs-chart-tip-name { @apply text-muted mr-1; }
-  .gs-chart-tip-swatch { @apply w-2.5 h-[3px] rounded-tag shrink-0; }
-
-  /* Quiet metadata chip: cluster, mode, pool, scope, kind, role. Never a status. */
-  .gs-tag {
-    @apply inline-flex items-center gap-1 px-1.5 py-0.5 rounded-tag bg-surface-2 text-muted
-           text-2xs font-medium whitespace-nowrap;
-  }
-
-  /* The transitional-status dot inside StatusPill. */
-  .gs-dot-pulse {
-    animation: gs-pulse 1.6s ease-in-out infinite;
-  }
-  @media (prefers-reduced-motion: reduce) {
-    .gs-dot-pulse {
-      animation: none;
-    }
-  }
-
-  /* KPI figures. The number is the object; the label is annotation. */
-  .gs-stat .gs-label { @apply text-muted text-xs font-semibold; }
-  .gs-stat .gs-value {
-    @apply text-kpi mt-2 mb-1 leading-none;
-    font-family: var(--font-mono);
-    font-variant-numeric: tabular-nums;
-    letter-spacing: -0.03em;
-  }
-  .gs-stat .gs-value small {
-    @apply text-sm text-muted font-semibold;
-    letter-spacing: 0;
-  }
-
-  /* Meters. A thin rule that fills, not a chunky dashboard trough. */
-  .gs-bar { @apply h-1.5 rounded-full bg-border overflow-hidden mt-2.5; }
-  .gs-bar > i { @apply block h-full rounded-full bg-primary; }
-  .gs-bar.primary > i { @apply bg-primary; }
-  .gs-bar.warn > i { background: var(--warn); }
-  .gs-bar.free > i { background: var(--free); }
-  .gs-bar.danger > i { background: var(--danger); }
-
-  .gs-qrow { @apply flex items-center gap-3 py-2.5 border-b border-border last:border-b-0; }
-  .gs-qrow .gs-qn { @apply w-[104px] shrink-0 text-muted font-semibold text-xs; }
-  .gs-qrow .gs-bar { @apply flex-1 mt-0; }
-  /* The reading is a small table, not a sentence: ragged right edges make six rows unreadable. */
-  .gs-qrow .gs-qv {
-    @apply shrink-0 flex items-baseline justify-end font-semibold text-xs;
-    font-family: var(--font-mono);
-    font-variant-numeric: tabular-nums;
-  }
-  .gs-qv-used { @apply w-[54px] text-right; }
-  .gs-qv-sep { @apply px-1.5 text-muted opacity-50; }
-  .gs-qv-lim { @apply w-[52px] text-left; }
-  .gs-qv-unit { @apply w-[38px] text-left text-muted font-medium; }
 }
 
 /* Phone floor: 12px text, 44px targets. Last in the sheet and specificity-raised to beat the

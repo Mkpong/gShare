@@ -427,7 +427,7 @@ export function AdminAudit() {
                     onClick={() => setDetailRow(detailRow?.id === r.id ? null : r)}
                     className="w-full text-left flex items-start gap-3 py-2.5 px-2 rounded-ctl hover:bg-surface-2 transition"
                   >
-                    <span className={`gs-pill ${m.tone} shrink-0 mt-0.5 w-[4.5rem] justify-center text-center`} title={r.result ?? ''}>{m.label}</span>
+                    <span className={`gs-pill ${m.tone} shrink-0 mt-0.5 w-18 justify-center text-center`} title={r.result ?? ''}>{m.label}</span>
                     <div className="min-w-0 flex-1">
                       <div className="flex items-baseline gap-1.5 min-w-0">
                         <span className="font-semibold shrink-0">{actionLabel(r.action)}</span>

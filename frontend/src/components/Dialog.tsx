@@ -49,7 +49,7 @@ export function Dialog({ open, title, onClose, children, wide }: {
         aria-modal="true"
         tabIndex={-1}
         className={`relative w-full ${wide ? 'max-w-2xl' : 'max-w-lg'} max-h-[85vh] flex flex-col
-                    bg-surface border border-border rounded-card shadow-raised outline-none`}
+                    bg-surface border border-border rounded-card shadow-raised outline-hidden`}
       >
         <div className="flex items-center gap-2.5 px-5 py-4 border-b border-border">
           <h2 className="font-bold text-md min-w-0 truncate">{title}</h2>
