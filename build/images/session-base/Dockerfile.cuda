@@ -1,6 +1,6 @@
 # The GShare GPU session image: a CUDA runtime plus the interactive session tools (VS Code,
 # JupyterLab, web terminal).
-# It honours the same connection contract as session-base — the same ports, paths, and entrypoint —
+# It honors the same connection contract as session-base — the same ports, paths, and entrypoint —
 # with only the base swapped for CUDA.
 # code-server is copied from its official image in a multi-stage build, bundled Node included. Runs as
 # non-root (uid 1000).

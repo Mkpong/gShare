@@ -20,7 +20,7 @@ async def _lifespan(app: FastAPI):  # noqa: ANN202
     # Validate the required secrets; an empty one fails fast.
     from app.core.config import settings
     settings.require_runtime_secrets()
-    # Bootstrap seeding: the administrator account, the all-in-one local cluster, and the catalogue.
+    # Bootstrap seeding: the administrator account, the all-in-one local cluster, and the catalog.
     # A failure here is logged but must not stop the application from starting.
     try:
         from app.auth.bootstrap import (

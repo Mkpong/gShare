@@ -50,7 +50,7 @@ import { useDecideResourceRequest, useResourceRequests } from '@/api/hooks/useRe
 
 type Tab = 'offerings' | 'presets';
 
-const CATALOGUE_PAGE = 25;
+const CATALOG_PAGE = 25;
 
 export function AdminResources() {
   const { t } = useTranslation();
@@ -92,7 +92,7 @@ function OfferingsTab() {
   const [createOpen, setCreateOpen] = useState(false);
   const [editOffering, setEditOffering] = useState<Offering | null>(null);
   const { data, isLoading, isError, error, refetch } = useOfferings();
-  // Which GPU models physically exist in the cluster right now — catalogue-only rows (A100/H100
+  // Which GPU models physically exist in the cluster right now — catalog-only rows (A100/H100
   // price entries with no hardware) get no tag, so the two kinds read apart at a glance.
   // Fleet-wide: pool grants must not hide a model that physically exists in the cluster.
   const availModels = new Set((useGpuAvailability({ fleet: true, clusterId: clusterInfo.id ?? undefined }).data ?? []).map((m) => m.gpu_model));
@@ -163,14 +163,14 @@ function OfferingsTab() {
     },
   ];
 
-  // CPU is quota-governed, not billed — the catalogue lists what carries a price. The CPU
+  // CPU is quota-governed, not billed — the catalog lists what carries a price. The CPU
   // offering row stays in the DB (admission for CPU sessions references it); when compute
   // billing lands, drop this filter to surface it again.
   const all = ((data ?? []) as Offering[]).filter((o) => o.resource_class !== 'cpu');
   const match = (o: Offering) => `${o.name} ${o.gpu_model ?? ''}`.toLowerCase();
   const matched = all.filter((r) => !table.query.trim() || match(r).includes(table.query.trim().toLowerCase()));
   const sorted = sortRows(matched, sortAccessor(columns, table.sort), table.dir);
-  const rows = sorted.slice((table.page - 1) * CATALOGUE_PAGE, table.page * CATALOGUE_PAGE);
+  const rows = sorted.slice((table.page - 1) * CATALOG_PAGE, table.page * CATALOG_PAGE);
 
   return (
     <div>
@@ -209,7 +209,7 @@ function OfferingsTab() {
             onSort={table.toggleSort}
           />
         )}
-        <Pagination page={table.page} pageSize={CATALOGUE_PAGE} total={sorted.length} onPage={table.setPage} />
+        <Pagination page={table.page} pageSize={CATALOG_PAGE} total={sorted.length} onPage={table.setPage} />
         <p className="text-muted text-2xs mt-3">
           {t('admin.resources.billingNote')}
         </p>
@@ -844,7 +844,7 @@ function PolicyTab({ onEdit }: { onEdit: (p: ResourcePolicy) => void }) {
   const match = (p: ResourcePolicy) => `${p.scope} ${p.scope_id ?? ''}`.toLowerCase();
   const matched = all.filter((r) => !table.query.trim() || match(r).includes(table.query.trim().toLowerCase()));
   const sorted = sortRows(matched, sortAccessor(columns, table.sort), table.dir);
-  const rows = sorted.slice((table.page - 1) * CATALOGUE_PAGE, table.page * CATALOGUE_PAGE);
+  const rows = sorted.slice((table.page - 1) * CATALOG_PAGE, table.page * CATALOG_PAGE);
 
   return (
     <div>
@@ -886,7 +886,7 @@ function PolicyTab({ onEdit }: { onEdit: (p: ResourcePolicy) => void }) {
             onSort={table.toggleSort}
           />
         )}
-        <Pagination page={table.page} pageSize={CATALOGUE_PAGE} total={sorted.length} onPage={table.setPage} />
+        <Pagination page={table.page} pageSize={CATALOG_PAGE} total={sorted.length} onPage={table.setPage} />
         <p className="text-muted text-2xs mt-3">{t('admin.resources.policyMergeNote')}</p>
       </div>
     </div>

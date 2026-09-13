@@ -29,7 +29,7 @@ from app.db.models import (
 
 log = get_logger(__name__)
 
-# The catalogue images: session bases published to Docker Hub under boanlab, registered
+# The catalog images: session bases published to Docker Hub under boanlab, registered
 # idempotently at startup. cuda_version is the real CUDA baked into the registry tag, which the
 # session wizard compares against the offering's min_cuda.
 #
@@ -54,7 +54,7 @@ _BASE_IMAGES = [
     {"name": "TensorFlow NGC 25.02 (GPU, CUDA 12.8)", "registry": "boanlab/gshare-session:tensorflow-ngc25.02-cuda12.8", "cuda_version": "12.8"},
 ]
 
-# The default GPU offering catalogue: one full-card row per model. The session wizard derives the
+# The default GPU offering catalog: one full-card row per model. The session wizard derives the
 # per-model fraction tiers from the full-card VRAM.
 #
 # Host cpu/mem/disk are IDENTICAL across models by policy (host resources are GPU-agnostic;
@@ -105,7 +105,7 @@ _GPU_PRESETS = [
 ]
 # Preset names superseded by the split compute/gpu presets, removed on every re-seed. This also
 # covers GPU presets renamed when the ladder was remapped to XL-L-M-S-SS, and the original
-# Korean-named presets replaced when the catalogue moved to English.
+# Korean-named presets replaced when the catalog moved to English.
 _LEGACY_PRESET_NAMES = [
     "Small (1/4)", "Medium (1/2)", "Large (full)", "XLarge (48G)",
     "GPU S (1/8)", "GPU M (1/4)", "GPU L (1/2)", "GPU SS (1/16)", "GPU SSS (1/32)",
@@ -176,7 +176,7 @@ async def seed_default_policy() -> None:
 
 
 async def seed_offerings() -> None:
-    """Ensure the default GPU offering catalogue exists, skipping duplicates by name.
+    """Ensure the default GPU offering catalog exists, skipping duplicates by name.
 
     One full-card row per model; the wizard derives the fraction tiers. If your fleet reports GPU
     model names that differ from these, adjust gpu_model or nothing will schedule against them.
@@ -253,7 +253,7 @@ async def seed_system_wallet() -> None:
 
 
 async def seed_base_images() -> None:
-    """Ensure the four catalogue images exist, skipping duplicates by registry reference.
+    """Ensure the four catalog images exist, skipping duplicates by registry reference.
 
     This is what lets users and administrators pick an image on the images screen without importing
     anything first. They are registered with import_status=ready, since the base images already
@@ -277,7 +277,7 @@ async def seed_base_images() -> None:
                     if spec.get("gpu_ready") and not (existing.tags or {}).get("gpu_ready"):
                         existing.tags = {**(existing.tags or {}), "gpu_ready": True}
                         log.info("base image marked gpu_ready: %s", spec["registry"])
-                    # The catalogue name is the seed's to own; "(CPU)" was wrong once these
+                    # The catalog name is the seed's to own; "(CPU)" was wrong once these
                     # images became valid GPU choices too.
                     if existing.name != spec["name"]:
                         log.info("base image renamed: %r -> %r", existing.name, spec["name"])

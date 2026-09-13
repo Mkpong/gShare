@@ -10,11 +10,11 @@ numbers behind them stay out of the way.
 
 ![Presets](/img/screens/admin-presets.png)
 
-Two kinds sit in the same catalogue:
+Two kinds sit in the same catalog:
 
 | Kind | What it fixes |
 |---|---|
-| **Compute preset** | CPU cores, memory, scratch disk — *Compute S/M/L/XL* in the seeded catalogue |
+| **Compute preset** | CPU cores, memory, scratch disk — *Compute S/M/L/XL* in the seeded catalog |
 | **GPU tier** | The fraction of a card: XL ½, L ¼, M ⅛, S 1/16, or exclusive |
 
 VRAM and cores for a tier are derived from the selected offering's whole-card figures, so one

@@ -92,7 +92,7 @@ selector is one thing to fix, however many personas hit it.
 
 ## Known gaps
 
-Row selection on the user list and the offering catalogue is reported and not implemented: acting
+Row selection on the user list and the offering catalog is reported and not implemented: acting
 on a selection needs bulk endpoints the API does not offer, and inventing one to satisfy a rule
 would be worse than carrying the item.
 

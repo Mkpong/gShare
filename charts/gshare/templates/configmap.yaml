@@ -28,7 +28,7 @@ data:
   # to ready when reports resume); super_admins are notified on each transition.
   GSHARE_NODE_STALE_SEC: {{ .Values.api.nodeStaleSec | default 300 | quote }}
   # Capacity (GB) of the pool backing user volumes, for the admin dashboard; 0 = unknown.
-  # Seed the Docker Hub session catalogue at startup; false for sites that run their own registry.
+  # Seed the Docker Hub session catalog at startup; false for sites that run their own registry.
   GSHARE_SEED_SESSION_IMAGES: {{ dig "api" "seedSessionImages" true (.Values | toYaml | fromYaml) | quote }}
   GSHARE_STORAGE_POOL_CAPACITY_GB: {{ dig "storage" "poolCapacityGb" 0 (.Values | toYaml | fromYaml) | quote }}
   # Fractional-slice placement across identical cards: binpack (fill the fullest card that

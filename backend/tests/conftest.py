@@ -38,7 +38,7 @@ from app.db.base import Base
 # ``GSHARE_TEST_DATABASE_URL`` to an asyncpg URL and the ``db`` fixture binds to that database
 # instead: the schema is created ONCE per session with ``alembic upgrade head`` (the production
 # path, not create_all) and every table is truncated after each test. Unset, nothing below
-# changes the SQLite behaviour.
+# changes the SQLite behavior.
 PG_TEST_URL = os.environ.get("GSHARE_TEST_DATABASE_URL")
 
 

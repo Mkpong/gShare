@@ -2,7 +2,7 @@ import { useId, type ReactNode } from 'react';
 import { useTranslation } from 'react-i18next';
 
 /**
- * One labelled form control: `<label for>`, required marker, hint and error message, wired to the
+ * One labeled form control: `<label for>`, required marker, hint and error message, wired to the
  * control with `aria-describedby` / `aria-invalid` / `aria-required`.
  */
 export function Field({

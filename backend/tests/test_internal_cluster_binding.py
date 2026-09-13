@@ -2,7 +2,7 @@
 
 Every attached cluster holds a token signed by the same control-plane key. Before this, the
 callbacks checked the audience and nothing else, so the operator of one cluster could report a
-session on another cluster as terminated (settling its hold), rewrite a neighbour's node and card
+session on another cluster as terminated (settling its hold), rewrite a neighbor's node and card
 inventory, or feed the live-usage view of sessions it never ran.
 """
 from __future__ import annotations

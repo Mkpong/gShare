@@ -6,7 +6,7 @@ title: Offerings
 # GPU offerings
 
 An **offering** is one GPU model as a billable product. The session wizard is built from this
-catalogue, and the scheduler prices against it.
+catalog, and the scheduler prices against it.
 
 ![Offerings](/img/screens/admin-resources.png)
 
@@ -24,7 +24,7 @@ catalogue, and the scheduler prices against it.
 
 ![New offering](/img/screens/admin-offering-new.png)
 
-:::caution The model string must match exactly
+:::caution[The model string must match exactly]
 Admission matches `gpu_model` to the string the driver reports, character for character —
 `NVIDIA GeForce RTX 4090`, not `RTX 4090`. **Copy it from [GPU devices](./gpus.md)** rather than
 typing it.

@@ -1276,7 +1276,7 @@ async def delete_user(
 
         svc = SessionService(db)
         for sid in live_ids:
-            # terminate() commits internally (it serialises on the session row); idempotent.
+            # terminate() commits internally (it serializes on the session row); idempotent.
             await svc.terminate(sid, forced=True, reason="admin_stopped")
         # terminate()'s commits expired the identity map; re-fetch the row we mutate below.
         user = await db.get(User, user_id)
@@ -1345,7 +1345,7 @@ async def set_global_role(
         requested = [body.global_role]
     else:
         requested = []
-    # Normalise: deduplicate and validate.
+    # Normalize: deduplicate and validate.
     roles: list[str] = []
     for r in requested:
         if r not in _GLOBAL_ROLES:

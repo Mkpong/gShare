@@ -287,7 +287,7 @@ export function SessionDetail() {
                 </dd>
               </div>
             )}
-            {/* What the session is built from. The catalogue name is what a person recognises;
+            {/* What the session is built from. The catalog name is what a person recognizes;
                 the registry reference is the answer to "which CUDA, which PyTorch". */}
             {(session.image_name || session.image_ref) && (
               <div className="flex justify-between gap-2">

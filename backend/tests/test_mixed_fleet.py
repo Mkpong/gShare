@@ -1,7 +1,7 @@
 """Mixed-fleet placement: a session priced for one GPU model never lands on another model.
 
 The fleet plan runs RTX 4090, RTX PRO 5000, and RTX PRO 6000 side by side; the reservation must
-honour the offering's gpu_model even when a bigger card of another model has free capacity.
+honor the offering's gpu_model even when a bigger card of another model has free capacity.
 """
 from __future__ import annotations
 

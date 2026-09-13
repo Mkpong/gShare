@@ -1,6 +1,6 @@
 name: Publish session images
 
-# The session catalogue images (build/images) are large and change rarely, so they are published
+# The session catalog images (build/images) are large and change rarely, so they are published
 # on demand and on release tags — not on every push to main. The control plane seeds
 # boanlab/gshare-session:<tag> references at startup (app/auth/bootstrap.py), so every tag the
 # seed names must exist here or a fresh install offers images that cannot be pulled.

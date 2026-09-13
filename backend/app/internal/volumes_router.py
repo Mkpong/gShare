@@ -24,7 +24,7 @@ async def sync_volumes(
     db: AsyncSession = Depends(get_db),
 ) -> VolumeSyncResponse:
     # The report's cluster pins volume placement and pool capacity, so it has to be the token's
-    # cluster: no attached cluster may claim a neighbour's PVCs or rewrite its pool figures. An
+    # cluster: no attached cluster may claim a neighbor's PVCs or rewrite its pool figures. An
     # older operator that sends no cluster lands on the token's.
     require_operator_cluster(claims, report.cluster_id, what="volume report")
     if report.cluster_id is None:

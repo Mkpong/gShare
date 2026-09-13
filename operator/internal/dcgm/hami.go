@@ -9,7 +9,7 @@ import (
 	"time"
 )
 
-// hamiUtilMetric is the HAMi vGPU-monitor per-physical-GPU utilization ratio (0–1), labelled by
+// hamiUtilMetric is the HAMi vGPU-monitor per-physical-GPU utilization ratio (0–1), labeled by
 // device_uuid. Already present on any HAMi cluster (the device-plugin monitor Service), so the idle
 // reaper can get per-GPU util without a separate Prometheus/dcgm-exporter.
 const hamiUtilMetric = "hami_host_gpu_utilization_ratio"

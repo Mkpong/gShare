@@ -128,7 +128,7 @@ export function SelectMenu({
         aria-controls={open ? listboxId : undefined}
         onClick={() => setOpen((v) => !v)}
         onKeyDown={onTriggerKey}
-        className={`${bare ? '' : 'gs-input w-auto min-w-[10rem]'} max-w-full inline-flex items-center
+        className={`${bare ? '' : 'gs-input w-auto min-w-40'} max-w-full inline-flex items-center
                    justify-between gap-2 text-left disabled:opacity-50 disabled:cursor-not-allowed
                    ${buttonClassName}`}
       >

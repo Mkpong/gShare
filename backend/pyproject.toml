@@ -51,7 +51,7 @@ ignore = [
     "B008",   # FastAPI Depends() in a default argument is idiomatic
     # Line length is a formatting convention here, not a gate. `line-length` above still drives
     # `ruff format`, and prose (comments and docstrings) is kept within it, but a fair amount of
-    # existing code — notably the tabular catalogue seed data — deliberately runs wider.
+    # existing code — notably the tabular catalog seed data — deliberately runs wider.
     "E501",
 ]
 

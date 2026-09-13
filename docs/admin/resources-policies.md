@@ -68,7 +68,7 @@ from their group, organization and global policies. Two habits keep this tidy:
 
 Rejecting asks for a reason the requester sees. Both decisions are audited and notified.
 
-:::tip Credits or quota?
+:::tip[Credits or quota?]
 If the user's error was *insufficient credits*, this queue is the wrong one — send them to
 [credit requests](./credits-requests.md). A quota increase does not add a single credit.
 :::

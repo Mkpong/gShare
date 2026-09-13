@@ -79,7 +79,7 @@ api:
   # Seconds without an operator inventory report before a node is marked offline (and back to
   # ready when reports resume). super_admins are notified on each transition.
   nodeStaleSec: 300
-  # Seed the boanlab/gshare-session catalogue images at startup. Sites serving session images
+  # Seed the boanlab/gshare-session catalog images at startup. Sites serving session images
   # from a private registry register them by hand and set this to false.
   seedSessionImages: true
   # Placement policy for fractional GPU slices when several cards fit: binpack | spread.
@@ -139,7 +139,7 @@ operator:
   # (--connect-verify-url) point here. Required when controlPlane.enabled is false.
   # It must be reachable from both the operator pod and ingress-nginx.
   controlPlaneUrl: ""
-  # Where the idle reaper gets per-GPU utilisation. With neither set, idle GPU reclamation is
+  # Where the idle reaper gets per-GPU utilization. With neither set, idle GPU reclamation is
   # disabled and only the max-runtime cap applies — on a shared fleet that is the single most
   # expensive switch to leave off, so the HAMi monitor is the DEFAULT. Set hamiMonitorUrl to ""
   # explicitly to disable reclamation.
@@ -166,7 +166,7 @@ operator:
   # Per-card GPU pools (flag-gated rollout): pool membership becomes a per-CARD ledger fact —
   # every GPU session flows through hami-scheduler pinned to the reserved card, exclusive is a
   # 100% HAMi slice, and gshare.io/gpu-mode node labels stop mattering for placement. Off keeps
-  # the legacy node-pool behaviour exactly.
+  # the legacy node-pool behavior exactly.
   perCardMode: false
   # StorageClass for session-volume PVCs (the operator ensures one PVC per volume on first
   # mount). Empty uses the cluster default StorageClass — local-path on the bootstrap cluster,
@@ -180,7 +180,7 @@ operator:
   volumeSyncInterval: 5m
   # imagePullPolicy for session containers. IfNotPresent (the default) lets locally imported and
   # air-gapped images run; set Always to re-check the registry on every session start so that a
-  # re-pushed fixed-tag catalogue image is picked up.
+  # re-pushed fixed-tag catalog image is picked up.
   sessionImagePullPolicy: IfNotPresent
   # Full image reference for the lossless-pause and in-place-yield node agent. Left empty, the
   # checkpointer is disabled: pause falls back to cold, and neither in-place yield nor graceful

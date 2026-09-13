@@ -9,7 +9,7 @@ Everything the console does goes through the public REST API at `/api/v1`. The r
 installation serves the OpenAPI document at `/api/v1/openapi.json` and Swagger UI at
 `/api/v1/docs`; the same document is checked into the repository as `frontend/openapi.json`.
 
-:::note Scope
+:::note[Scope]
 gShare is deliberately console-first: there are no API keys, CLI, or SDK. The API exists for the
 console and for operators automating administration with a user's own token.
 :::
@@ -54,7 +54,7 @@ endpoints until they do.
 | `/queue` | Queue entries, cancel, priority |
 | `/credits`, `/budgets` | Wallets, allocations, requests, refills, ledger; organization budgets |
 | `/storage/volumes`, `/storage/pools` | Volumes, shares, quota, locks; storage pools |
-| `/offerings`, `/resource-presets`, `/images`, `/resource-policies` | The catalogue and policies, including quota requests |
+| `/offerings`, `/resource-presets`, `/images`, `/resource-policies` | The catalog and policies, including quota requests |
 | `/clusters`, `/nodes`, `/gpu-devices`, `/node-pools` | Infrastructure: registration, cordon/drain/delete, cards, pools |
 | `/monitoring`, `/dashboard`, `/metrics` | Metrics proxies and summaries |
 | `/audit-logs` | Audit log with filters and CSV export |

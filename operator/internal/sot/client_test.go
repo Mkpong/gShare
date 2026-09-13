@@ -1,6 +1,6 @@
 /*
 SoT client tests: retry on 5xx / transport errors, no retry on 4xx, 409 as success, the
-short-lived token being re-read (and its expiry honoured) on every attempt.
+short-lived token being re-read (and its expiry honored) on every attempt.
 */
 package sot
 

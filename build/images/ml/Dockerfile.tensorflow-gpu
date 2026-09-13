@@ -1,6 +1,6 @@
 # TensorFlow on GPU: the official TensorFlow GPU image, which guarantees a matching CUDA and cuDNN
 # pair, plus the three GShare connection tools and SciPy.
-# Catalogue entry: name="TensorFlow 2.18 (GPU)", tag=tensorflow2.18-gpu
+# Catalog entry: name="TensorFlow 2.18 (GPU)", tag=tensorflow2.18-gpu
 # Build context: build/images, so session-base/entrypoint.sh can be shared.
 FROM codercom/code-server:4.135.0 AS cs
 

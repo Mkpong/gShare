@@ -1,6 +1,6 @@
 """base image registry tags: drop the -cpu and -gpu suffixes
 
-Realigns the catalogue rows with the simplified build.sh tags (ml-ubuntu24.04-cpu becomes
+Realigns the catalog rows with the simplified build.sh tags (ml-ubuntu24.04-cpu becomes
 ml-ubuntu24.04, ml-cuda12.4-cudnn9-gpu becomes ml-cuda12.4-cudnn9). Seeding deduplicates on the
 registry reference, so without this the next startup would create duplicate rows.
 

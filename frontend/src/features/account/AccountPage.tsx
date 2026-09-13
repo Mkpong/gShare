@@ -227,7 +227,7 @@ function NotificationLogCard() {
                   {n.deleted_at && <span className="gs-tag shrink-0">{t('account.notifDeletedTag')}</span>}
                   <span className="ml-auto shrink-0"><Timestamp value={n.created_at} className="text-muted text-xs" /></span>
                 </div>
-                {n.body && <div className="text-muted text-xs mt-0.5 break-words">{t(`notif.${n.type}.body`, { ...(n.params ?? {}), defaultValue: n.body })}</div>}
+                {n.body && <div className="text-muted text-xs mt-0.5 wrap-break-word">{t(`notif.${n.type}.body`, { ...(n.params ?? {}), defaultValue: n.body })}</div>}
               </li>
             ))}
           </ul>

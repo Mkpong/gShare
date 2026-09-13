@@ -7,7 +7,7 @@ title: Administrator guide
 
 The **administrator console** is where organizations, groups, and users are managed; credits
 allocated and requests decided; sessions monitored; and — for the platform administrator — the
-GPU catalogue, policy, clusters, nodes, storage, images and system settings configured.
+GPU catalog, policy, clusters, nodes, storage, images and system settings configured.
 
 Start with [Roles and scope](./admin/roles.md): what each administrative role sees is the key to
 every page that follows.
@@ -34,16 +34,16 @@ The day-to-day of an organization or group administrator.
 
 Super administrator only.
 
-- [Resources and policy](./admin/resources.md) — catalogue versus quota.
+- [Resources and policy](./admin/resources.md) — catalog versus quota.
   - [Offerings](./admin/resources-offerings.md) — GPU models, model strings, rates.
   - [Presets](./admin/resources-presets.md) — compute shapes and GPU tiers.
   - [Resource policies](./admin/resources-policies.md) — quotas, timeouts, quota requests.
 - [Clusters](./admin/clusters.md) — registering, session domains, deregistering.
   - [Nodes](./admin/nodes.md) — liveness, cordon, drain, delete.
   - [Node pools](./admin/node-pools.md) — dedicated hardware and the spill question.
-- [GPU devices](./admin/gpus.md) — aliases, faulty cards, allocation versus utilisation.
+- [GPU devices](./admin/gpus.md) — aliases, faulty cards, allocation versus utilization.
 - [Storage](./admin/storage.md) — pools, every volume, running out of space.
-- [Images](./admin/images.md) — importing, building, keeping the catalogue small.
+- [Images](./admin/images.md) — importing, building, keeping the catalog small.
 - [Metrics](./admin/platform-monitoring.md) — DCGM and host metrics, and what they tell you.
 - [System settings](./admin/system.md) — branding, sign-up policy, GPU placement.
 

@@ -117,10 +117,10 @@ export function AdminMonitoring() {
   }, [tab, nodes.length]);
   const inventoryQuery = useGpuInventory(live);
   // Stable identity: the ?? [] fallback allocated a new array on every render, which re-ran every
-  // memo below it (and rebuilt the colour map, and with it every chart).
+  // memo below it (and rebuilt the color map, and with it every chart).
   const inventory = useMemo(() => inventoryQuery.data ?? [], [inventoryQuery.data]);
 
-  // Colour is keyed on identity, not order: a card (or node) keeps its colour across every panel,
+  // Color is keyed on identity, not order: a card (or node) keeps its color across every panel,
   // which is what makes ONE legend for the whole tab correct.
   const gpuColors = useMemo(() => {
     const m: Record<string, string> = {};
@@ -151,7 +151,7 @@ export function AdminMonitoring() {
 
   // Same query key as the first panel of the tab, so react-query serves it from the same request:
   // the legend is then generated from the very series the charts draw (identical names, identical
-  // colours) instead of being re-derived from the inventory.
+  // colors) instead of being re-derived from the inventory.
   const legendSource = usePanel(
     tab === 'gpu' ? 'gpu_util' : 'host_cpu', range, node, live, tab === 'gpu' ? gpu : undefined,
   ).data?.series ?? [];
@@ -259,7 +259,7 @@ export function AdminMonitoring() {
         onChange={(v) => set({ tab: v === 'gpu' ? null : v })}
       />
 
-      {/* One legend for the whole tab: every panel shares these series and these colours. */}
+      {/* One legend for the whole tab: every panel shares these series and these colors. */}
       {legendItems.length > 0 && (
         <div className="gs-card mt-4 py-2.5">
           <ChartLegend items={legendItems} />

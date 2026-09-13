@@ -37,7 +37,7 @@ export function ReasonPopover({ reason, label }: { reason: string; label?: strin
         aria-expanded={open}
         // Rows can carry their own click handler (drawer, navigation) — this must not trigger it.
         onClick={(e) => { e.stopPropagation(); setOpen((v) => !v); }}
-        className="text-danger text-2xs underline decoration-dotted underline-offset-2 outline-none focus-visible:ring-1 focus-visible:ring-primary rounded-tag"
+        className="text-danger text-2xs underline decoration-dotted underline-offset-2 outline-hidden focus-visible:ring-1 focus-visible:ring-primary rounded-tag"
       >
         {label ?? t('wallet.viewReason')}
       </button>
@@ -52,7 +52,7 @@ export function ReasonPopover({ reason, label }: { reason: string; label?: strin
             type="button"
             aria-label={t('common.close')}
             onClick={(e) => { e.stopPropagation(); setOpen(false); }}
-            className="absolute top-1 right-1 inline-flex items-center justify-center w-4 h-4 rounded-tag text-muted hover:text-text hover:bg-surface-2 outline-none focus-visible:ring-1 focus-visible:ring-primary"
+            className="absolute top-1 right-1 inline-flex items-center justify-center w-4 h-4 rounded-tag text-muted hover:text-text hover:bg-surface-2 outline-hidden focus-visible:ring-1 focus-visible:ring-primary"
           >
             <X size={10} weight="bold" aria-hidden="true" />
           </button>

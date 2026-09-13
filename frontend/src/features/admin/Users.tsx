@@ -674,7 +674,7 @@ function EditUserForm({
   const orgs = useOrganizations({ enabled: isSuper }).data ?? [];
   const allProjects = useProjects().data ?? [];
 
-  // Initialise from the current membership, taking the first group.
+  // Initialize from the current membership, taking the first group.
   const cur = user?.memberships?.[0];
   const [name, setName] = useState('');
   const [email, setEmail] = useState('');

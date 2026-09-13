@@ -21,7 +21,7 @@ import type { ReactNode } from 'react';
 // trail. One hero KPI band, a per-card GPU grid (the fleet's actual shape), node/compute pressure,
 // and a recent-activity feed — patterned after infra monitoring consoles rather than a card pile.
 
-/** A labelled figure inside a side panel. */
+/** A labeled figure inside a side panel. */
 function Row({ label, value }: { label: string; value: ReactNode }) {
   return (
     <div className="gs-hair flex items-center justify-between gap-4 py-2">
@@ -104,7 +104,7 @@ function DeviceTile({ model, alias, index, freeMemMb, totalMemMb, freeCores, mod
           {/* Next to the name, because that is the thing it qualifies: which cluster's card this
               is. Down by the usage figures it read as another measurement. */}
           {cluster && (
-            <span className="gs-tag shrink-0 truncate max-w-[8rem]" title={cluster}>{cluster}</span>
+            <span className="gs-tag shrink-0 truncate max-w-32" title={cluster}>{cluster}</span>
           )}
         </span>
         <span className={`gs-tag shrink-0 ${out ? 'text-danger' : ''}`}>
@@ -368,7 +368,7 @@ export function AdminDashboard() {
                                     {p.name ?? p.hostname ?? p.id}
                                   </span>
                                   {p.cluster_name && (
-                                    <span className="gs-tag shrink-0 truncate max-w-[8rem]" title={p.cluster_name}>
+                                    <span className="gs-tag shrink-0 truncate max-w-32" title={p.cluster_name}>
                                       {p.cluster_name}
                                     </span>
                                   )}
@@ -381,7 +381,7 @@ export function AdminDashboard() {
                                   </span>
                                 </div>
                                 {cap > 0 && (
-                                  <Meter value={(used / cap) * 100} variant={used > cap ? 'danger' : 'primary'} className="!mt-1.5" />
+                                  <Meter value={(used / cap) * 100} variant={used > cap ? 'danger' : 'primary'} className="mt-1.5!" />
                                 )}
                               </li>
                             );
@@ -420,12 +420,12 @@ export function AdminDashboard() {
                   const changes = changesSummary(r.detail, auditNames);
                   return (
                     <li key={r.id} className="gs-hair flex items-center gap-x-3 gap-y-0.5 py-2 text-sm min-w-0 flex-wrap">
-                      <span className="text-muted text-xs shrink-0 w-[7.5rem] truncate">{r.actor_name ?? '-'}</span>
+                      <span className="text-muted text-xs shrink-0 w-30 truncate">{r.actor_name ?? '-'}</span>
                       <span className="font-semibold shrink-0">{actionLabel(r.action)}</span>
-                      <span className="text-muted text-xs truncate max-w-[26rem]">{targetDisplay(r)}</span>
+                      <span className="text-muted text-xs truncate max-w-104">{targetDisplay(r)}</span>
                       <span className={`gs-pill text-2xs shrink-0 ${meta.tone}`}>{meta.label}</span>
                       {changes && (
-                        <span className="text-muted text-2xs basis-full sm:basis-auto truncate max-w-[34rem]" title={changes}>{changes}</span>
+                        <span className="text-muted text-2xs basis-full sm:basis-auto truncate max-w-136" title={changes}>{changes}</span>
                       )}
                       <Timestamp value={r.at} className="gs-num text-xs text-muted ml-auto shrink-0" />
                     </li>

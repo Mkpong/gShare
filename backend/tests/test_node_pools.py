@@ -1,4 +1,4 @@
-"""Node pools: dedicated nodes per organization / group, honoured by placement.
+"""Node pools: dedicated nodes per organization / group, honored by placement.
 
 Fleet: pool P (dedicated, granted to org A) holds nodes n1–n2; node n3 is unassigned (shared).
 One fractional 16 GB card per node.
@@ -248,7 +248,7 @@ async def test_assert_may_grant_sub_assignment_rule():
     assert_may_grant(su, other, grants, "org", org_b, None)
 
 
-# 9 — active preemption honours pools: never yield a card the preemptor cannot borrow.
+# 9 — active preemption honors pools: never yield a card the preemptor cannot borrow.
 async def _resident_on(db, f, dev_id: str, user_id: str, group: Project) -> SessionRow:
     """A running exclusive yield-mode resident (priority 0) holding ``dev_id``."""
     resident = SessionRow(

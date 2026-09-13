@@ -58,7 +58,7 @@ function Hero() {
             alt={translate({
               id: 'home.hero.shotAlt',
               message:
-                'The administrator dashboard: utilisation, GPU devices, node health and storage servers',
+                'The administrator dashboard: utilization, GPU devices, node health and storage servers',
             })}
           />
         </div>

@@ -38,7 +38,7 @@ export function cachedBranding(): Branding {
 function rememberBranding(b: Branding): void {
   try {
     localStorage.setItem(CACHE_KEY, JSON.stringify(b));
-  } catch { /* nothing to do: the cache is an optimisation, not state */ }
+  } catch { /* nothing to do: the cache is an optimization, not state */ }
 }
 
 export type SignupMode = 'approval' | 'open' | 'closed';

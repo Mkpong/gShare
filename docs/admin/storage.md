@@ -34,7 +34,7 @@ The order is: label the node, install the driver, register the pool.
 | **Pool name** | The linked node's **hostname**, always — typed only for a server the cluster never sees as a node |
 | **Cluster** | The cluster the server sits in. Fixed after registration |
 | **StorageClass** | The class that provisions from it — the same name the operator was given |
-| **Storage node** | Optional. The labelled node; its disk becomes the fallback capacity |
+| **Storage node** | Optional. The labeled node; its disk becomes the fallback capacity |
 | **Stated capacity (GB)** | The real pool size, used until the driver publishes one |
 | **Sharing** | *All clusters* — every cluster may place volumes here; *Selected* — tick the clusters allowed, besides this one |
 
@@ -51,7 +51,7 @@ Each row shows the figure and its source, in order of preference:
 1. **csi** — the driver's own `GetCapacity`, published as `CSIStorageCapacity` and read by the
    operator. The only automatic source.
 2. **manual** — the figure stated on the pool. Set it when the driver publishes nothing.
-3. **node disk** — the storage node's system drive, labelled as the stand-in it is.
+3. **node disk** — the storage node's system drive, labeled as the stand-in it is.
 
 Several servers are several pools. A volume lives on exactly one, so the bound is the
 **largest** usable pool, never the sum. The operator-side detail — driver flags, NFS

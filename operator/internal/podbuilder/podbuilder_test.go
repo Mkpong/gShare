@@ -205,7 +205,7 @@ func TestVolumeNamesAreSanitizedAndReadOnlyHonoured(t *testing.T) {
 		t.Fatalf("rw mount must not be read-only")
 	}
 	if !mounts[1].ReadOnly {
-		t.Fatalf("readOnly mount intent must be honoured on a writable volume")
+		t.Fatalf("readOnly mount intent must be honored on a writable volume")
 	}
 	if pod.Spec.Volumes[1].PersistentVolumeClaim.ReadOnly != true {
 		t.Fatalf("pvc source of a ro mount should be read-only")

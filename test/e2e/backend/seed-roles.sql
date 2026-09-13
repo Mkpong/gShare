@@ -1,5 +1,5 @@
 -- Role seed for the end-to-end tests: super_admin, org_admin, group_admin, and member, plus the
--- catalogue and wallets.
+-- catalog and wallets.
 -- Every password is 'Passw0rd!', with must_change_password false so UI login is a single step.
 
 -- Organization and group
@@ -21,7 +21,7 @@ INSERT INTO membership (id,user_id,group_id,role) VALUES
   ('mbr_mem','usr_mem','grp_e2e','member')
 ON CONFLICT (user_id,group_id) DO UPDATE SET role=EXCLUDED.role;
 
--- Catalogue for the session and queue tests, structured exactly as in seed.sql
+-- Catalog for the session and queue tests, structured exactly as in seed.sql
 INSERT INTO cluster (id,name,role,api_server,runtime,status,kubeconfig_secret_ref)
   VALUES ('clu_fake','fake-lab','primary','','containerd','connected','') ON CONFLICT (id) DO NOTHING;
 INSERT INTO offering (id,name,resource_class,credit_per_hour)

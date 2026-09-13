@@ -33,7 +33,7 @@ TOKEN = os.environ.get("GSHARE_ADMIN_TOKEN", "").strip()
 if not TOKEN:
     sys.exit("GSHARE_ADMIN_TOKEN is required: a super_admin access token.")
 
-# The card catalogue: model, full-card VRAM in MB, and the full-card rate in credits per hour. Adding
+# The card catalog: model, full-card VRAM in MB, and the full-card rate in credits per hour. Adding
 # a card to your fleet means extending this list and nothing else.
 # `model` is the nvidia-smi product name, which the scheduler matches against GpuDevice.model, and
 # the VRAM is the card's nominal full capacity.

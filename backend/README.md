@@ -2,7 +2,7 @@
 
 The FastAPI control plane, and the authority on **money and session state**: REST,
 authentication and RBAC, the credit engine (hold, consume, settle, refund), budget and
-FinOps gates, CRUD for the catalogue, presets, policies, users, and organizations, the
+FinOps gates, CRUD for the catalog, presets, policies, users, and organizations, the
 audit trail, connect-token issuing, and **session admission**.
 
 It pairs with the Go cluster operator in [`../operator`](../operator), which owns

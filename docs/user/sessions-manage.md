@@ -33,8 +33,8 @@ untouched, and keeping them costs nothing.
 cluster is full it waits in the [queue](./sessions-queue.md) and comes up by itself. The
 session keeps its name, its image, and its mounts.
 
-:::note Idle sessions are paused for you
-Your site's policy sets an idle timeout (an hour, in the default catalogue). A GPU session whose
+:::note[Idle sessions are paused for you]
+Your site's policy sets an idle timeout (an hour, in the default catalog). A GPU session whose
 card has been doing nothing that long is paused automatically, so a forgotten notebook does not
 hold a card overnight. Nothing is lost — resume and carry on.
 :::

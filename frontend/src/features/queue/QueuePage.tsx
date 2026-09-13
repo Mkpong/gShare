@@ -81,7 +81,7 @@ export function QueuePage() {
     {
       // The scheduler's own refusal. A position with no reason reads as "nearly there" even when
       // nothing in the fleet can satisfy the request, which is exactly the case a user needs to
-      // recognise: the answer is to ask for less, not to wait longer.
+      // recognize: the answer is to ask for less, not to wait longer.
       key: 'reason',
       header: t('queue.colReason'),
       sortable: false,

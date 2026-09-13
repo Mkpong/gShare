@@ -5,7 +5,7 @@ title: Dashboard
 
 # Administrator dashboard
 
-The first screen of the administrator console summarises what is running **within your scope**.
+The first screen of the administrator console summarizes what is running **within your scope**.
 
 ## As an organization or group administrator
 
@@ -17,7 +17,7 @@ sessions**, **active sessions**, the **VRAM** those sessions hold, and the **CPU
 against the fleet. The sessions themselves are on the [monitor](./monitoring.md), credits on
 the [allocation page](./credits-allocate.md).
 
-Cluster-wide figures — fleet utilisation, node health, storage — are deliberately super_admin
+Cluster-wide figures — fleet utilization, node health, storage — are deliberately super_admin
 only: a tenant administrator manages people, not machines.
 
 ## As the platform administrator
@@ -27,7 +27,7 @@ only: a tenant administrator manages people, not machines.
 | Panel | What it answers |
 |---|---|
 | **Active sessions · Queue** | Is anything waiting, and how much is running |
-| **GPU utilisation · VRAM occupancy** | Allocation against real usage — a fleet allocated to 90% but used at 20% is a policy problem, not a capacity one |
+| **GPU utilization · VRAM occupancy** | Allocation against real usage — a fleet allocated to 90% but used at 20% is a policy problem, not a capacity one |
 | **Empty GPUs** | Cards with nothing on them right now |
 | **Credits in the last 24h** | Spend rate across the platform, with active holds |
 | **GPU devices** | One tile per card: cluster tag, mode, VRAM occupancy, free cores |

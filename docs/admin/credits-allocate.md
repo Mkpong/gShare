@@ -54,7 +54,7 @@ The band under it reconciles the figures: system balance, monthly total, the sum
 organizations, and what is left to allocate. Then one row per organization with the same
 allocate / reclaim / monthly-refill controls.
 
-:::tip Refill beats hand-outs
+:::tip[Refill beats hand-outs]
 For anything recurring — a class, a lab, a standing budget — set a **monthly refill** rather
 than allocating by hand. It keeps working when nobody is watching, and the ledger shows exactly
 the same rows.

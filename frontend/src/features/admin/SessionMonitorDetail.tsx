@@ -61,8 +61,8 @@ export function SessionMonitorOverlay({ sessionId, onClose }: {
         role="dialog"
         aria-modal="true"
         tabIndex={-1}
-        className="relative w-full max-w-[88rem] max-h-[88vh] flex flex-col
-                   bg-surface border border-border rounded-card shadow-raised outline-none"
+        className="relative w-full max-w-352 max-h-[88vh] flex flex-col
+                   bg-surface border border-border rounded-card shadow-raised outline-hidden"
       >
         <div className="flex items-center gap-2.5 px-5 py-3.5 border-b border-border">
           <h2 className="font-bold text-md min-w-0 truncate">{s.name || s.id}</h2>

@@ -27,7 +27,7 @@ title: 오퍼링
 
 ![신규 오퍼링 등록 대화 상자](/img/screens/admin-offering-new.png)
 
-:::caution GPU 모델 문자열 정밀 일치 필수
+:::caution[GPU 모델 문자열 정밀 일치 필수]
 스케줄러의 자원 승인 로직은 `gpu_model` 값을 드라이버가 보고하는 문자열과 대소문자 및 공백을 포함해 글자 단위로 정밀 비교합니다. (예: `RTX 4090` (X) → `NVIDIA GeForce RTX 4090` (O))
 
 오류를 방지하기 위해 임의로 직접 입력하지 말고 **[GPU 디바이스](./gpus.md)** 메뉴에서 드라이버가 인식한 실제 문자열을 복사하여 사용하세요.

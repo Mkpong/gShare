@@ -22,7 +22,7 @@ Changing the name is the quickest way to make a staging instance visibly *not* p
 
 ![Sign-up policy](/img/screens/admin-system-signup.png)
 
-| Mode | Behaviour |
+| Mode | Behavior |
 |---|---|
 | **Closed** | No sign-up tab on the sign-in screen. Administrators create every account |
 | **Approval** | Anyone may register; the account is **pending** until an administrator approves it |
@@ -42,7 +42,7 @@ approved without one can sign in and do nothing.
 
 Which card a fractional session lands on when several qualify:
 
-| Policy | Behaviour | Use when |
+| Policy | Behavior | Use when |
 |---|---|---|
 | **Binpack** | Fills the busiest qualifying card first | You want whole cards left free for large sessions — the usual default |
 | **Spread** | Uses the emptiest card first | You want each session to have the most headroom, at the cost of fragmenting the fleet |

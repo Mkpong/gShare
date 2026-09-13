@@ -4,7 +4,7 @@
   instead of queueing forever (e.g. exclusive against an all-fractional pool).
 - Stop-as-cancel: stopping a session that has not started yet (pending/preparing) cancels it
   (terminate + settle) instead of answering 409 invalid transition.
-- Image catalogue: registry is PATCHable; DELETE removes an unused image and refuses one with
+- Image catalog: registry is PATCHable; DELETE removes an unused image and refuses one with
   session history.
 """
 from __future__ import annotations
@@ -35,7 +35,7 @@ from tests.fkseed import add_ordered, seed, user_row
 
 
 def _seed(db_objs):
-    """Common catalogue seed: org/group, funded wallet, offering, image, one fractional device."""
+    """Common catalog seed: org/group, funded wallet, offering, image, one fractional device."""
     org_id = ids.new("org")
     group = Project(id=ids.new("group"), org_id=org_id, name="p")
     user = user_row()
@@ -113,7 +113,7 @@ async def test_exclusive_without_matching_pool_is_unserviceable(db, fake_handoff
 
 @pytest.mark.asyncio
 async def test_full_fractional_pool_still_queues(db, fake_handoff):
-    """A serviceable-but-currently-full request keeps the existing queue behaviour."""
+    """A serviceable-but-currently-full request keeps the existing queue behavior."""
     objs: list = []
     group, user_id, wallet, cluster_id, offering, image, dev = _seed(objs)
     async with db.begin():

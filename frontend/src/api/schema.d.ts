@@ -2134,7 +2134,7 @@ export interface paths {
          * @description List images/templates/ISOs with optional kind/q/tag/public filters. any authenticated.
          *
          *     ``public=true`` is what the session wizard uses, listing public images only. The administrative
-         *     catalogue passes no filter and sees both public and private images.
+         *     catalog passes no filter and sees both public and private images.
          */
         get: operations["list_images_api_v1_images_get"];
         put?: never;
@@ -2158,7 +2158,7 @@ export interface paths {
         };
         /**
          * Get Image
-         * @description Image detail. any authenticated, for the shared catalogue and one's own images; another
+         * @description Image detail. any authenticated, for the shared catalog and one's own images; another
          *     user's private image answers 404 so its existence is not confirmed either.
          */
         get: operations["get_image_api_v1_images__image_id__get"];
@@ -2166,7 +2166,7 @@ export interface paths {
         post?: never;
         /**
          * Delete Image
-         * @description Delete a catalogue image that no session has ever used. super_admin, gated on image.create.
+         * @description Delete a catalog image that no session has ever used. super_admin, gated on image.create.
          *
          *     Sessions keep a foreign key to their image for the audit trail, so an image with any session
          *     history cannot be deleted — retire it instead by setting ``public: false``.
@@ -2211,7 +2211,7 @@ export interface paths {
          *       only they and admins can see. The same public ref may therefore be imported by many members.
          *
          *     Always answers 202. Deduplication never fails the request: re-importing your own ref, or a ref
-         *     that is already in the shared catalogue, returns that row with ``existing: true`` instead of
+         *     that is already in the shared catalog, returns that row with ``existing: true`` instead of
          *     creating a second one — the caller uses the returned ``id`` either way.
          */
         post: operations["import_image_api_v1_images_import_post"];

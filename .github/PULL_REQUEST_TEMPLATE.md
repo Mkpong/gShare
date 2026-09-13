@@ -6,7 +6,7 @@ Keep the title in Conventional Commits form, e.g.
 
 ## What this changes
 
-<!-- The behaviour before and after. Link the issue with "Fixes #123" when there is one. -->
+<!-- The behavior before and after. Link the issue with "Fixes #123" when there is one. -->
 
 ## Why
 
@@ -28,4 +28,4 @@ Keep the title in Conventional Commits form, e.g.
 - [ ] The `GShareSession` CRD changed — `make -C operator manifests` was re-run and the chart CRD updated
 - [ ] The backend API surface changed — `make gen-openapi` was re-run
 - [ ] User-visible strings changed — both `en` and `ko` bundles are updated
-- [ ] Documentation under `docs/` reflects the new behaviour
+- [ ] Documentation under `docs/` reflects the new behavior

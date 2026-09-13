@@ -38,7 +38,7 @@ test/e2e/
 
 ## Prerequisites
 
-- Real GPU nodes labelled `gshare.io/gpu-mode=exclusive|fractional`, with the NVIDIA
+- Real GPU nodes labeled `gshare.io/gpu-mode=exclusive|fractional`, with the NVIDIA
   runtime and HAMi advertising `nvidia.com/gpumem` and `nvidia.com/gpucores`.
 - `kubectl` pointed at the target context, `helm` v3, a default StorageClass, ingress-nginx.
 - `docker` on the build host, logged in to a registry the cluster can pull from. Override

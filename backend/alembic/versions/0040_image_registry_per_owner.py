@@ -3,7 +3,7 @@
 Imports used to be admin-only, so one row per registry ref was enough. Members may now import a
 public image for themselves, which means two users can legitimately hold the same ref. Uniqueness
 therefore moves to (registry, owner_user_id); because Postgres considers NULL owners distinct, the
-shared catalogue keeps its own partial unique index on registry alone.
+shared catalog keeps its own partial unique index on registry alone.
 
 Any older single-column UNIQUE on image.registry is dropped first (constraint or index — earlier
 deployments differ), so this migration is safe on a database that never had one.

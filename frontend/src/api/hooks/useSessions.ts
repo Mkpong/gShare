@@ -136,7 +136,7 @@ export function useSessionConnections(id: string, enabled = true) {
 }
 
 // Measured live usage of the caller's own session (owner or admin): cadvisor CPU/MEM plus
-// HAMi per-session VRAM and GPU-core utilisation, for the detail page's usage panel.
+// HAMi per-session VRAM and GPU-core utilization, for the detail page's usage panel.
 export interface OwnSessionUsage {
   cpu_cores: number | null;
   mem_bytes: number | null;

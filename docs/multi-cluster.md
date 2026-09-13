@@ -186,7 +186,7 @@ In order, and each reading says which it used:
    only automatic source; nothing else can see past the node's root disk.
 2. **`manual`** — the figure stated on the pool (`manual_capacity_gb`). The control-plane-wide
    `STORAGE_POOL_CAPACITY_GB` still works as a fleet default for a single-pool install.
-3. **`node_disk`** — the storage node's system drive. A stand-in, labelled as one: on a ZFS box it
+3. **`node_disk`** — the storage node's system drive. A stand-in, labeled as one: on a ZFS box it
    is a different disk from the pool and can be off by hundreds of gigabytes either way.
 
 `attach-cluster.sh` sets `csiDriver.storageCapacity=true` so a driver that supports capacity

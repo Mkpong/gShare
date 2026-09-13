@@ -1,7 +1,7 @@
 /**
  * The console's own palette, so the docs and the product read as one thing. Light primary is
  * the console's deep teal; dark mode uses its brighter teal on the same near-black surfaces the
- * console draws on, rather than Docusaurus's default green on grey.
+ * console draws on, rather than Docusaurus's default green on gray.
  */
 
 :root {

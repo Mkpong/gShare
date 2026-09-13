@@ -19,7 +19,7 @@ installs into the `monitoring` namespace:
 
 | Component | Runs on | Provides |
 |---|---|---|
-| dcgm-exporter | every GPU node | `DCGM_FI_DEV_*` per physical card, UUID-labelled |
+| dcgm-exporter | every GPU node | `DCGM_FI_DEV_*` per physical card, UUID-labeled |
 | node-exporter | every node | host CPU, memory, disk, network |
 | kube-state-metrics | one pod | pod and node object state (restarts, phases) |
 | kubelet cAdvisor | scraped in place | per-pod CPU, memory, network, disk |
@@ -32,7 +32,7 @@ which whitelists the queries and enforces the super_admin gate.
 ## Pointing the operator at it
 
 The idle reaper pauses GPU sessions whose card has been idle for the policy's idle timeout. It
-needs a utilisation source:
+needs a utilization source:
 
 - `operator.hamiMonitorUrl` (default) — HAMi's own monitor, no extra infrastructure. On a cluster
   with more than one GPU node the monitor round-robins per-node pods, so use Prometheus instead.

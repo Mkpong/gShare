@@ -67,11 +67,11 @@ hack/cluster-info
 hack/storage-csi-key
 hack/storage-csi-key.pub
 
-# UX audit reports are a point-in-time artefact of a local run, not source.
+# UX audit reports are a point-in-time artifact of a local run, not source.
 test/e2e/ux/out/
 test/e2e/ux/out-*/
 
-# Beta-test findings and their run logs: the same kind of point-in-time artefact.
+# Beta-test findings and their run logs: the same kind of point-in-time artifact.
 beta-report/
 
 # ── Local assistant/agent tooling: workstation config, not project source. ──

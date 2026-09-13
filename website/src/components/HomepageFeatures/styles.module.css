@@ -40,7 +40,7 @@
   border-color: color-mix(in srgb, var(--ifm-color-primary) 45%, var(--ifm-color-emphasis-300));
 }
 
-/* A tile with no screenshot stretches to its neighbour's height, so the space below the text
+/* A tile with no screenshot stretches to its neighbor's height, so the space below the text
    would read as a hole. A wash of the page accent makes it a surface instead. */
 .cellNarrow .tile {
   padding-bottom: 1.6rem;

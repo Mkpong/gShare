@@ -137,7 +137,7 @@ log "runtimeclass/nvidia ready"
 for n in $GPU_NODES; do
   # HAMi's device plugin selects on gpu=on; the gshare.io labels drive placement and the default mode.
   r kubectl label node "$n" gpu=on gshare.io/gpu=true gshare.io/gpu-mode=fractional --overwrite >/dev/null
-  log "$n labelled"
+  log "$n labeled"
 done
 
 step "4/9  HAMi $HAMI_VERSION"

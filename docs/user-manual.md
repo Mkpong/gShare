@@ -33,6 +33,6 @@ screens you use to run sessions, keep data, and manage credits.
 Administrative features — organizations, groups, users, credits, clusters, monitoring — are in
 the [Administrator guide](./admin-manual.md).
 
-:::tip Only GPU time costs credits
+:::tip[Only GPU time costs credits]
 CPU sessions and volumes are free. Your balance never falls while no GPU session is running.
 :::

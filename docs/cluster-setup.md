@@ -40,10 +40,10 @@ cp hack/cluster-info.example hack/cluster-info   # fill in MASTER_NODE and WORKE
 MASTER_NODE=ubuntu@10.0.0.10
 # Workers are user@ip:MODE, where MODE is exclusive or fractional (default: fractional).
 WORKER_NODES=ubuntu@10.10.0.196:exclusive,ubuntu@10.10.0.197:fractional
-# Optional GPU-less workers, comma separated. Labelled `cpu`; the NVIDIA runtime is not installed.
+# Optional GPU-less workers, comma separated. Labeled `cpu`; the NVIDIA runtime is not installed.
 # CPU_WORKERS=ubuntu@10.10.0.200,ubuntu@10.10.0.201
 # Optional storage node: a ZFS pool on the given (empty) block device, exported over NFS through
-# democratic-csi as StorageClass gshare-data. Labelled and tainted `storage`.
+# democratic-csi as StorageClass gshare-data. Labeled and tainted `storage`.
 # STORAGE_NODE=ubuntu@10.10.0.194:/dev/vdb
 # Optional plain-HTTP registry on the LAN, configured for containerd on every node.
 # LOCAL_REGISTRY=10.10.0.191:5001
@@ -53,7 +53,7 @@ WORKER_NODES=ubuntu@10.10.0.196:exclusive,ubuntu@10.10.0.197:fractional
 `up` copies the script to every node and then runs, in order: prerequisites (control plane,
 CPU workers, and GPU workers in parallel) → reboot and reconnect any GPU worker that just
 got a driver → `kubeadm init` on the control plane, harvesting the join command → workers
-join (GPU and CPU in parallel) → addons on the control plane → node labelling (control
+join (GPU and CPU in parallel) → addons on the control plane → node labeling (control
 plane and CPU workers as `cpu`, GPU workers with their configured mode) → verification.
 
 `hack/cluster-info` contains real addresses and is git-ignored; only
@@ -98,7 +98,7 @@ disables swap, and installs kubeadm, kubelet, and kubectl 1.36. When a driver is
 installed the script asks for a reboot; add `NVIDIA_DRIVER_REBOOT=1` to have it reboot
 itself.
 
-### 2. Control plane — initialise
+### 2. Control plane — initialize
 
 ```bash
 sudo ./hack/cluster-bootstrap.sh init
@@ -181,7 +181,7 @@ every node. Two pieces, both optional:
 
 1. **The registry itself** — `deploy/registry/registry.yaml` runs two plain-HTTP registries on the
    storage node (`gshare.io/role=storage`): a push target on `:5000` for locally built session
-   images, and a docker.io **pull-through mirror** on `:5001` so public catalogue images are
+   images, and a docker.io **pull-through mirror** on `:5001` so public catalog images are
    fetched from the LAN after the first pull. `kubectl apply -f deploy/registry/registry.yaml`
    (adjust the nodeSelector / storageClassName in the header if your layout differs).
 2. **Node trust** — containerd on every node must be told about them:
@@ -198,11 +198,11 @@ every node. Two pieces, both optional:
    `LOCAL_REGISTRY` is set in `cluster-info`. Moving to TLS later means dropping the CA next to
    `hosts.toml`; the layout stays.
 
-Build and push the catalogue images to it from any docker host that lists the registry under
+Build and push the catalog images to it from any docker host that lists the registry under
 `"insecure-registries"`:
 
 ```bash
-REG=<storage-ip>:5000 build/images/build.sh push   # builds all catalogue images, pushes to the LAN
+REG=<storage-ip>:5000 build/images/build.sh push   # builds all catalog images, pushes to the LAN
 ```
 
 then register them in the console (Images → the registry reference is
@@ -232,7 +232,7 @@ here interrupts running work: existing nodes are untouched.
    ```
 
 3. **On the control plane — label it.** Skipping this is the usual reason a new GPU node
-   advertises no capacity: HAMi only claims cards on nodes labelled `gpu=on`, and placement
+   advertises no capacity: HAMi only claims cards on nodes labeled `gpu=on`, and placement
    reads `gshare.io/gpu-mode`.
 
    ```bash
@@ -277,7 +277,7 @@ Then, in GShare itself:
 
 8. **Check the offering for that GPU model.** Admission matches `offering.gpu_model` to the
    device model by **string equality**, so a card whose model has no active offering is visible
-   to administrators but unusable — session creation answers `409 unserviceable`. The catalogue
+   to administrators but unusable — session creation answers `409 unserviceable`. The catalog
    row's "in cluster" tag under **Resources → GPU offerings** tells you which models are backed
    by real cards; create or activate an offering for a new model before announcing the capacity.
 
@@ -346,7 +346,7 @@ CloudNativePG, Redis, and external-secrets, use `make prod-deploy` with
   are overwritten, the swap line is not commented twice, and addons use `apply` or
   `helm upgrade -i`. `init` probes the API server's `/healthz` to decide what to do — if it
   is healthy the step is skipped; if only leftovers from a previous init are present
-  (occupied ports, manifests, etcd data) it runs `kubeadm reset -f` and re-initialises. Set
+  (occupied ports, manifests, etcd data) it runs `kubeadm reset -f` and re-initializes. Set
   `INIT_FORCE_RESET=0` to be told about it instead. `join` is skipped when `kubelet.conf`
   exists. One exception: the containerd configuration is regenerated from defaults every
   time, so hand edits there are not preserved.

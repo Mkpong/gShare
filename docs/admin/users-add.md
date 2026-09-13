@@ -57,7 +57,7 @@ able to sign in but unable to run anything, which is a support ticket waiting to
 
 There is no separate reject: to decline a sign-up, **delete** the pending account from its row. The person can register again.
 
-:::tip Restrict the domain
+:::tip[Restrict the domain]
 The sign-up policy also takes a list of **allowed email domains**. Set it to your own
 (`example.com`) so a stray address cannot queue for approval in the first place.
 See [System settings](./system.md#sign-up).

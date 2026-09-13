@@ -27,7 +27,7 @@ class ImageRead(BaseModel):
     # to offer a bare OS for a GPU session.
     gpu_ready: bool = False
     public: bool = True
-    # null = shared catalogue entry; set = a private image its owner (and admins) can see. The
+    # null = shared catalog entry; set = a private image its owner (and admins) can see. The
     # console distinguishes the caller's own images with it, so it has to survive the projection.
     owner_user_id: str | None = None
     created_at: datetime | None = None

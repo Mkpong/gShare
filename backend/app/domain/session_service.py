@@ -370,7 +370,7 @@ class SessionService:
         the hold (reserved) and refunds the unconsumed balance. GPU capacity is reclaimed.
         """
         now = _now()
-        # Serialise concurrent terminations: lock the session row FOR UPDATE and commit the
+        # Serialize concurrent terminations: lock the session row FOR UPDATE and commit the
         # `terminating` claim atomically.
         sess = await self.db.get(Session, session_id, with_for_update=True)
         if sess is None or sess.deleted_at is not None:

@@ -13,7 +13,7 @@ export function HelpTip({ text, align = 'start', className = '' }: {
   className?: string;
 }) {
   return (
-    <span tabIndex={0} aria-label={text} className={`group relative inline-flex cursor-help text-muted/70 hover:text-text focus-visible:text-text outline-none ${className}`}>
+    <span tabIndex={0} aria-label={text} className={`group relative inline-flex cursor-help text-muted/70 hover:text-text focus-visible:text-text outline-hidden ${className}`}>
       <Question size={13} aria-hidden="true" />
       <span
         role="tooltip"

@@ -61,7 +61,7 @@ class OperatorNodeUpsert(BaseModel):
     node_ready: bool | None = None      # see OperatorGpuDeviceUpsert.node_ready
     node_mem_gb: int | None = None
     node_disk_gb: int | None = None
-    lossless_capable: bool = False      # lossless-pause prerequisites (cuda-checkpoint plus CRIU) are labelled ready on the node
+    lossless_capable: bool = False      # lossless-pause prerequisites (cuda-checkpoint plus CRIU) are labeled ready on the node
     role: str | None = None             # master|gpu|cpu|storage, from node labels/devices
 
 

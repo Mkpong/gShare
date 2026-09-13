@@ -2,7 +2,7 @@
 Package inventory implements the node/GpuDevice inventory controller.
 
 It collects GPU total/used from DCGM/NVML + device-plugin capacity per node and
-reflects it into the control plane's ledger (GpuDevice upsert), signalling drift when
+reflects it into the control plane's ledger (GpuDevice upsert), signaling drift when
 Σ session.gpu_mem_mb > GpuDevice.total_mem_mb. The ledger is the single source of
 truth; drift is corrected toward it.
 */
@@ -111,7 +111,7 @@ func (r *InventoryReconciler) Reconcile(ctx context.Context, req ctrl.Request) (
 	// labels read "ready".
 	losslessCapable := node.Labels[labelCRIU] == "ready" && node.Labels[labelCudaCheckpoint] == "ready"
 	// Role for the console's node list: control-plane and storage from their labels, GPU when the
-	// node carries devices (or is pool-labelled for them), plain CPU worker otherwise.
+	// node carries devices (or is pool-labeled for them), plain CPU worker otherwise.
 	role := "cpu"
 	if _, cp := node.Labels["node-role.kubernetes.io/control-plane"]; cp {
 		role = "master"

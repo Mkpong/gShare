@@ -35,7 +35,7 @@ async def upsert_gpu_device(
     db: AsyncSession = Depends(get_db),
 ):
     # The token says which cluster is reporting; a payload that names another one is refused
-    # rather than believed, so no attached cluster can rewrite a neighbour's inventory.
+    # rather than believed, so no attached cluster can rewrite a neighbor's inventory.
     require_operator_cluster(claims, ev.cluster_id, what="inventory report")
     cluster_id = operator_cluster(claims) or ev.cluster_id or str(claims.get("sub", ""))
     await InventorySync(db).upsert_device(ev, cluster_id)
@@ -49,7 +49,7 @@ async def upsert_node(
     db: AsyncSession = Depends(get_db),
 ):
     # The token says which cluster is reporting; a payload that names another one is refused
-    # rather than believed, so no attached cluster can rewrite a neighbour's inventory.
+    # rather than believed, so no attached cluster can rewrite a neighbor's inventory.
     require_operator_cluster(claims, ev.cluster_id, what="inventory report")
     cluster_id = operator_cluster(claims) or ev.cluster_id or str(claims.get("sub", ""))
     await InventorySync(db).upsert_node(ev, cluster_id)

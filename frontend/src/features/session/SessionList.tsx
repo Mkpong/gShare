@@ -299,7 +299,7 @@ export function SessionList() {
         // Three fixed slots so the controls never move between rows: the state-dependent primary
         // action, an optional secondary, then terminate. Only the primary is ever rendered
         // disabled (with the reason), because "why can I not connect yet" is the common question;
-        // every other inapplicable action is simply absent rather than greyed out.
+        // every other inapplicable action is simply absent rather than grayed out.
         <div className="flex justify-end items-center gap-1 whitespace-nowrap">
           <span className="inline-flex justify-end min-w-[64px]">
             {s.status === 'running' && (

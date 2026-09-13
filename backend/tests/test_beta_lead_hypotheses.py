@@ -1,6 +1,6 @@
 """Regression tests for the pre-review hypotheses H-1..H-6 (beta-test pass).
 
-Each test pins one behaviour the review suspected was wrong; every one of them failed on the
+Each test pins one behavior the review suspected was wrong; every one of them failed on the
 code as found and passes with the fix, so a later change that reopens the hole is caught here.
 """
 from __future__ import annotations

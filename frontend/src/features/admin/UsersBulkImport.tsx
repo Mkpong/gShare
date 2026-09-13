@@ -28,7 +28,7 @@ export interface ParsedRow extends BulkUserRow {
   problem: 'invalid_email' | 'duplicate' | 'missing_name' | null;
 }
 
-// A header row is recognised by its first cell naming the column ("email", "E-Mail", "email
+// A header row is recognized by its first cell naming the column ("email", "E-Mail", "email
 // address"), not merely by not being an address: a data row whose address has a typo must show up
 // in the preview as invalid, not silently vanish.
 const isHeaderCell = (cell: string) => !cell.includes('@') && /mail/i.test(cell);
@@ -185,7 +185,7 @@ export function UsersBulkImportPage() {
                 {invalid.length > 50 && <div>…{invalid.length - 50}</div>}
               </div>
             )}
-            <div className="max-h-56 overflow-y-auto border border-border rounded">
+            <div className="max-h-56 overflow-y-auto border border-border rounded-sm">
               <table className="w-full text-xs">
                 <thead><tr className="text-left text-muted">
                   <th className="p-1.5">{t('common.email')}</th><th className="p-1.5">{t('common.name')}</th>

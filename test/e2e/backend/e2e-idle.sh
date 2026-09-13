@@ -5,7 +5,7 @@ set -euo pipefail
 # comes back and the session is preserved. Termination is reserved for the max-runtime cap and idle
 # CPU sessions.
 #
-# Without a DCGM collector, utilisation reads as 0 (always idle), so the session is reaped once the
+# Without a DCGM collector, utilization reads as 0 (always idle), so the session is reaped once the
 # custom resource's idle-timeout-sec elapses.
 #
 # This script shortens GSHARE_IDLE_TIMEOUT_SEC to 20 seconds, creates a session, confirms the

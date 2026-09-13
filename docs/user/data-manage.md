@@ -53,7 +53,7 @@ What happens next:
 
 Within that window an administrator can still recover the data. After it, nothing can.
 
-:::caution There is no undo in the console
+:::caution[There is no undo in the console]
 The confirmation is the last stop. Copy anything you are unsure about into another volume
 first — a volume costs you nothing but quota.
 :::

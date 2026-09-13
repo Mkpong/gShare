@@ -1,19 +1,19 @@
 # GShare cluster node definitions. Copy this to hack/cluster-info and fill it in.
 # Requires SSH key authentication from the control machine to each node, and passwordless remote sudo.
 #
-# MASTER_NODE is the control plane, labelled cpu. WORKER_NODES lists the GPU workers, comma
+# MASTER_NODE is the control plane, labeled cpu. WORKER_NODES lists the GPU workers, comma
 # separated, as user@ip:MODE where MODE is exclusive or fractional (fractional if omitted).
 
 MASTER_NODE=ubuntu@10.0.0.10
 WORKER_NODES=ubuntu@10.10.0.196:exclusive,ubuntu@10.10.0.197:fractional
 
-# Optional CPU_WORKERS: GPU-less workers as comma-separated user@ip, with no mode, labelled cpu. The
+# Optional CPU_WORKERS: GPU-less workers as comma-separated user@ip, with no mode, labeled cpu. The
 # NVIDIA runtime is not installed on them.
 # CPU_WORKERS=ubuntu@10.10.0.200,ubuntu@10.10.0.201
 
 # Optional STORAGE_NODE: one node holding a ZFS pool exported over NFS for user volumes, as
 # user@ip:/dev/<device>. The device is taken whole (VM: a second virtio disk; hardware: a spare
-# NVMe/SATA disk). It is labelled and tainted `storage` so nothing else schedules there.
+# NVMe/SATA disk). It is labeled and tainted `storage` so nothing else schedules there.
 # STORAGE_NODE=ubuntu@10.10.0.194:/dev/vdb
 # Several devices as a mirror or raidz: STORAGE_VDEVS="mirror /dev/sdb /dev/sdc"
 

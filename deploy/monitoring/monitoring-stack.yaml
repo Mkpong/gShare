@@ -4,7 +4,7 @@
 #   kubectl apply -f deploy/monitoring/monitoring-stack.yaml
 #
 # What runs:
-#   dcgm-exporter      DaemonSet on GPU nodes  -> DCGM_FI_DEV_* per physical card (UUID labelled)
+#   dcgm-exporter      DaemonSet on GPU nodes  -> DCGM_FI_DEV_* per physical card (UUID labeled)
 #   node-exporter      DaemonSet on every node -> host CPU / memory / disk / network
 #   kube-state-metrics Deployment              -> pod/node object state (restarts, phases)
 #   kubelet cAdvisor   scraped in-place        -> per-pod CPU / memory / net / disk

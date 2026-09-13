@@ -43,7 +43,7 @@ async def report_build_status(
     if build is None or ev.phase not in _PHASES:
         return {"accepted": False}
     # Only the operator of the cluster running the kaniko Job may finish this build: a
-    # neighbouring cluster's token could otherwise mark it succeeded with an image ref of its
+    # neighboring cluster's token could otherwise mark it succeeded with an image ref of its
     # choosing, which becomes a private Image row the owner then runs sessions from.
     require_operator_cluster(claims, build.cluster_id, what="image build")
     if build.status in _TERMINAL:                    # terminal never regresses (retried callbacks)

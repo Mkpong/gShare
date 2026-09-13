@@ -145,7 +145,7 @@ function SpendChart({ days, empty }: { days: { key: string; label: string; spend
       {/* The browser's native title tooltip is flaky over fast-moving hovers, so each column
           carries its own CSS bubble (group-hover); edge columns pin the bubble to their side so
           it never clips outside the card. The half-height hairline gives the eye a scale. */}
-      {/* The compact strip of the original design: ~32px columns packed with 2px gaps, centred in
+      {/* The compact strip of the original design: ~32px columns packed with 2px gaps, centered in
           the card. Bars and axis labels live in the same wrapper, so the labels span exactly the
           strip and day k sits at the k/n mark; on narrow screens the strip fills the card and the
           columns shrink together. */}
@@ -303,7 +303,6 @@ export function WalletPage() {
       cur.setDate(cur.getDate() + 1);
     }
     return out;
-  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [spendQ.data, spendRange, lang]);
   const recentReqs = useMemo(
     () => [...myReqs].sort((a, b) => new Date(b.created_at ?? 0).getTime() - new Date(a.created_at ?? 0).getTime()).slice(0, 5),

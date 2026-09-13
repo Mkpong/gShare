@@ -37,7 +37,7 @@ billed at all.
 | The session's record, event log, and bill in your history | The container, its processes, and its connect links |
 | Volumes themselves, and what they cost (nothing) | The GPU reservation |
 
-:::caution Check your volumes first
+:::caution[Check your volumes first]
 Work saved in the home directory of a JupyterLab session is on the scratch disk, not on a
 volume, unless you put it there. Copy anything you want to keep to a mounted path before you
 terminate.

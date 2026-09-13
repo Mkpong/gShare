@@ -28,6 +28,19 @@ updates:
     open-pull-requests-limit: 5
     labels: [dependencies, frontend]
     groups:
+      # These four families declare peer ranges on each other, so a package raised on its own is
+      # simply uninstallable: npm refuses the tree and the PR fails at the install step before a
+      # test ever runs. Grouping them means one PR that can actually be evaluated.
+      vite:
+        patterns: ["vite", "@vitejs/*", "vitest", "@vitest/*", "jsdom"]
+      i18n:
+        patterns: ["i18next", "i18next-*", "react-i18next"]
+      eslint:
+        patterns: ["eslint", "eslint-*", "@typescript-eslint/*"]
+      tailwind:
+        patterns: ["tailwindcss", "@tailwindcss/*", "postcss", "postcss-*", "autoprefixer"]
+      # Everything else, minor and patch only. A major outside the families above still arrives
+      # as its own PR, which is what you want for something like React.
       frontend-minor:
         update-types: [minor, patch]
 

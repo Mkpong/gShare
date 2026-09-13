@@ -39,7 +39,7 @@ export function DetailDrawer({ open, title, tag, onClose, children, footer }: {
         aria-modal="true"
         tabIndex={-1}
         className="absolute inset-y-0 right-0 w-full max-w-[440px] bg-surface border-l border-border
-                   shadow-raised flex flex-col outline-none"
+                   shadow-raised flex flex-col outline-hidden"
       >
         <div className="flex items-center gap-2.5 px-5 py-4 border-b border-border">
           <h2 className="font-bold text-md min-w-0 truncate">{title}</h2>

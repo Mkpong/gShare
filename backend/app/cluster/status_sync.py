@@ -133,7 +133,7 @@ class StatusSync:
                 # reason-less Paused right after a resume is the echo of the backend stop that
                 # resume overtook. Reading it as an idle pause released the new reservation and
                 # left the session "paused" while its pod ran for free. Older operators that send
-                # no reason are still honoured outside this window.
+                # no reason are still honored outside this window.
                 log.info("paused echo without a reason for freshly resumed session %s ignored", sess.id)
                 return
             if phase == "paused" and sess.status == "paused":
@@ -567,7 +567,7 @@ class StatusSync:
         if sess is None:
             # The operator addresses the custom resource by its RFC 1123 name (lower-cased with `_`
             # replaced by `-`; see crd._cr_name), which does not equal the original session id
-            # (ses_<ULID>), so the same normalisation is applied to match back.
+            # (ses_<ULID>), so the same normalization is applied to match back.
             sess = (
                 await self.db.execute(
                     select(Session).where(

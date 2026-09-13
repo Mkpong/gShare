@@ -35,7 +35,7 @@ in **fractional** or **exclusive** mode — and accounts for what they use in **
 - [**User manual**](user-manual.md) — login, dashboard, sessions, wallet, volumes, and
   account settings, screen by screen.
 - [**Administrator manual**](admin-manual.md) — organizations, groups, users, resource
-  catalogue and policy, credit allocation, clusters and nodes, session monitoring, audit.
+  catalog and policy, credit allocation, clusters and nodes, session monitoring, audit.
 
 ### Deploying and operating
 
@@ -59,5 +59,5 @@ in **fractional** or **exclusive** mode — and accounts for what they use in **
   needs only the control plane.
 
 > The root [`README.md`](../README.md) and the code are the authority on current
-> behaviour. These documents sit on top of that to help you learn, use, and operate the
+> behavior. These documents sit on top of that to help you learn, use, and operate the
 > platform.

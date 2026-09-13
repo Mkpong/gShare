@@ -124,7 +124,7 @@ class SessionRead(ORMModel):
     gpu_model: str | None = None
     # The bound card's operator-given alias ("lab-A-01"), when one is set.
     gpu_alias: str | None = None
-    # WHICH image the session runs: the catalogue name a person recognises, and the registry
+    # WHICH image the session runs: the catalog name a person recognizes, and the registry
     # reference behind it. Without these the only clue was the image id, so nobody could tell
     # what a running session was actually built from.
     image_name: str | None = None

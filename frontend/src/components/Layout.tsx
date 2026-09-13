@@ -145,7 +145,7 @@ function NavRow({ item, onNavigate, end, count }: {
       {count ? (
         // Waiting-for-you count: it only clears when the request is decided, never on visiting.
         <span
-          className="gs-nav-label ml-auto shrink-0 min-w-[1.25rem] px-1 rounded-tag bg-warn-soft text-warn text-2xs font-bold text-center"
+          className="gs-nav-label ml-auto shrink-0 min-w-5 px-1 rounded-tag bg-warn-soft text-warn text-2xs font-bold text-center"
           aria-label={t('nav.pendingCount', { count })}
         >
           {count > 9 ? '9+' : count}
@@ -317,7 +317,7 @@ export function Layout({ children, variant = 'user' }: { children: ReactNode; va
         {/* The wordmark is the console's home button: user shell → /, admin shell → /admin. */}
         <Link
           to={isAdminConsole ? '/admin' : '/'}
-          className="flex items-center gap-2.5 min-w-0 rounded-ctl focus-visible:outline focus-visible:outline-2 focus-visible:outline-primary"
+          className="flex items-center gap-2.5 min-w-0 rounded-ctl focus-visible:outline-solid focus-visible:outline-2 focus-visible:outline-primary"
           aria-label={t('nav.brandHome')}
           title={t('nav.brandHome')}
         >

@@ -43,7 +43,7 @@ policy.
 - monitor and force-terminate their members' sessions,
 - read the group's audit entries.
 
-They cannot create groups, touch other groups, or change the catalogue; the only policies
+They cannot create groups, touch other groups, or change the catalog; the only policies
 they can set are their own group's and its members'.
 
 ## Deactivating and deleting

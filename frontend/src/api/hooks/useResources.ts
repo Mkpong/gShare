@@ -1,7 +1,7 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { api } from '@/api/client';
 
-// CRUD for the offering catalogue, presets, and resource policies (quotas).
+// CRUD for the offering catalog, presets, and resource policies (quotas).
 // These use the loose accessor so the response envelopes can be typed locally.
 const raw = api as unknown as {
   GET: (path: string, init?: { params?: { query?: Record<string, unknown>; path?: Record<string, string> } }) => Promise<{ data?: unknown }>;

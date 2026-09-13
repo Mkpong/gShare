@@ -402,7 +402,7 @@ export function Dashboard() {
                       </Link>
                       <span className="block text-2xs text-muted mt-0.5">
                         {formatDateTime(x.terminated_at)}
-                        {/* Peak GPU utilisation is the honest verdict on a run: a session that
+                        {/* Peak GPU utilization is the honest verdict on a run: a session that
                             held a card at 4% cost the same as one that saturated it. */}
                         {peak != null && ` · ${t('dashboard.recentPeak', { pct: Math.round(peak) })}`}
                       </span>
@@ -463,7 +463,7 @@ export function Dashboard() {
             </p>
           ) : (
             <>
-              {/* A labelled band opens the list, so what follows is unmistakably the volumes
+              {/* A labeled band opens the list, so what follows is unmistakably the volumes
                   themselves and not more totals. */}
               <div className="gs-quota-band mt-5">
                 {t('dashboard.storageVolumes', { count: storage?.volumes ?? myVolumes.length })}
