@@ -76,9 +76,9 @@ ensure_nvidia_driver(){
 # ── Lossless tooling on GPU nodes: CRIU for process checkpoint/restore, cuda-checkpoint for VRAM
 #    eviction ──
 # These are what in-place yield and graceful demotion require. Failure here is not fatal: yield falls
-# back to cold and the node simply is not labelled.
+# back to cold and the node simply is not labeled.
 # When both are ready the script leaves /tmp/gshare-lossless-ready, which the control plane reads
-# before labelling.
+# before labeling.
 ensure_lossless(){
   [ "$LOSSLESS" = skip ] && { log "LOSSLESS=skip: not installing CRIU or cuda-checkpoint; yield falls back to cold"; return 0; }
   rm -f /tmp/gshare-lossless-ready
@@ -107,7 +107,7 @@ ensure_lossless(){
     : >/tmp/gshare-lossless-ready
     log "  lossless tooling ready (CRIU and cuda-checkpoint); the control plane will label this node."
   else
-    log "  ⚠ lossless tooling incomplete (CRIU or cuda-checkpoint missing); yield falls back to cold and the node is not labelled."
+    log "  ⚠ lossless tooling incomplete (CRIU or cuda-checkpoint missing); yield falls back to cold and the node is not labeled."
   fi
 }
 
@@ -186,7 +186,7 @@ EOF
       >/etc/apt/sources.list.d/nvidia-container-toolkit.list
     apt-get update -y && apt-get install -y nvidia-container-toolkit
     # Register nvidia as containerd's *default* runtime. The HAMi device plugin sets no
-    # runtimeClassName, so NVML only initialises when the default is nvidia; otherwise it
+    # runtimeClassName, so NVML only initializes when the default is nvidia; otherwise it
     # CrashLoopBackOffs with ERROR_LIBRARY_NOT_FOUND.
     # containerd 2.x (config v3) takes this as a drop-in at /etc/containerd/conf.d/99-nvidia.toml,
     # loaded through config.toml's imports.
@@ -408,7 +408,7 @@ cmd_storage_csi(){
   log "storage class ${STORAGE_CLASS} ready. Set operator.volumeStorageClass=${STORAGE_CLASS} on the GShare release."
 }
 
-# ── Node labelling: HAMi's gpu=on plus GShare's gshare.io/* ─────────────────────────────
+# ── Node labeling: HAMi's gpu=on plus GShare's gshare.io/* ─────────────────────────────
 cmd_label(){
   have kubectl || die "kubectl is required"
   local node="${1:-}" mode="${2:-}"
@@ -425,7 +425,7 @@ cmd_label(){
       kubectl taint node "$node" gshare.io/role=storage:NoSchedule --overwrite ;;
     *) die "mode must be cpu, exclusive, fractional, or storage" ;;
   esac
-  log "labelling $node as $mode"
+  log "labeling $node as $mode"
 }
 
 # ── Verification ────────────────────────────────────────────────────────────
@@ -453,7 +453,7 @@ for n in json.load(sys.stdin)['items']:
   make deploy-incluster                # all-in-one: the chart brings up the data tier, secrets, CRDs,
                                        # namespaces, the operator token, and the local cluster
                                        # registration, with the operator webhook and the lossless
-                                       # agent enabled. On nodes labelled ready, yield is lossless.
+                                       # agent enabled. On nodes labeled ready, yield is lossless.
   # Front it with a reverse proxy that terminates TLS for the console domain and forwards to the
   # ingress-nginx NodePort (:30080, plain HTTP).
   # (opt-in) workload-aware idle : make deploy-monitoring + helm --set operator.prometheusUrl=http://prometheus.monitoring.svc:9090
@@ -477,7 +477,7 @@ load_cluster_info(){
   . "$f"
   [ -n "${MASTER_NODE:-}" ]  || die "cluster-info must define MASTER_NODE as user@ip"
   [ -n "${WORKER_NODES:-}" ] || die "cluster-info must define WORKER_NODES as user@ip[:mode], comma separated"
-  CPU_WORKERS="${CPU_WORKERS:-}"   # optional GPU-less workers as comma-separated user@ip, labelled cpu
+  CPU_WORKERS="${CPU_WORKERS:-}"   # optional GPU-less workers as comma-separated user@ip, labeled cpu
   STORAGE_NODE="${STORAGE_NODE:-}" # optional storage node as user@ip:/dev/<device>; ZFS pool + NFS behind democratic-csi
   SSH_OPTS="${SSH_OPTS:--o StrictHostKeyChecking=accept-new -o ConnectTimeout=10}"
 }
@@ -576,7 +576,7 @@ cmd_up(){
     rsh "$MASTER_NODE" "${RENV} bash ${REMOTE_PATH} storage-csi $(host_ip "$STORAGE_NODE") /tmp/gshare-csi-key; rm -f /tmp/gshare-csi-key"
   fi
 
-  log "[5/6] labelling the nodes"
+  log "[5/6] labeling the nodes"
   local mname; mname="$(node_name "$MASTER_NODE")"
   rsh "$MASTER_NODE" "bash ${REMOTE_PATH} label ${mname} cpu"
   for w in "${WORKERS[@]}"; do
@@ -586,7 +586,7 @@ cmd_up(){
     # which is what the operator's lossless gate checks.
     if rsh "$wa" 'test -f /tmp/gshare-lossless-ready'; then
       rsh "$MASTER_NODE" "kubectl label node ${wname} gshare.io/criu=ready gshare.io/cuda-checkpoint=ready --overwrite"
-      log "  ${wname}: labelled ready for lossless operation (CRIU and cuda-checkpoint)"
+      log "  ${wname}: labeled ready for lossless operation (CRIU and cuda-checkpoint)"
     fi
   done
   for c in "${CPU_WK[@]}"; do

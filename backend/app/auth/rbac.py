@@ -80,7 +80,7 @@ _ACTION_MATRIX: dict[str, tuple] = {
     "policy.delete": ("super_admin", ("scoped", "group_admin")),
     # Monitoring — raw fleet telemetry (measured GPU/host metrics) is system-admin only.
     "monitoring.read": ("super_admin",),
-    # Images — catalogue management is super_admin only; building is project work, member and above
+    # Images — catalog management is super_admin only; building is project work, member and above
     "image.create": ("super_admin",),
     "image.build": ("super_admin", ("scoped", "member")),
     # Sessions — create/read member+, force-terminate group_admin+, monitor group_admin+

@@ -29,7 +29,7 @@ describe('parseCsv', () => {
     expect(rows.map((r) => [r.line, r.problem])).toEqual([[1, 'invalid_email'], [2, null]]);
   });
 
-  it('recognises common header spellings', () => {
+  it('recognizes common header spellings', () => {
     for (const header of ['email,name', 'Email,Name', 'E-Mail,Full name', 'email address,name']) {
       expect(parseCsv(`${header}\na@u.ac.kr,Kim`).map((r) => r.email), header).toEqual(['a@u.ac.kr']);
     }

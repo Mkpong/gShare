@@ -153,7 +153,7 @@ function PoolForm({ pool, onDone }: { pool?: StoragePool; onDone: () => void }) 
   const [serverError, setServerError] = useState<string | null>(null);
   const effectiveCluster = clusterId || clusters[0]?.id || '';
   // Only this cluster's nodes can be the pool's server; storage-role nodes are what an operator
-  // labelled for the job, so they lead the list.
+  // labeled for the job, so they lead the list.
   const { data: nodes = [] } = useNodes(effectiveCluster ? { cluster_id: effectiveCluster } : {}, { enabled: !!effectiveCluster });
   const nodeOptions = useMemo(
     () => [...nodes].sort((a, b) => Number(b.role === 'storage') - Number(a.role === 'storage') || a.hostname.localeCompare(b.hostname)),

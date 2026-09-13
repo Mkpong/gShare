@@ -12,8 +12,8 @@ export interface Series {
   points: [number, number | null][];   // [unix seconds, value]
 }
 
-/** Distinct hues that stay legible on both themes. Colour is assigned by a STABLE key (a card's
- *  UUID, a node's name) rather than by array position, so one card keeps one colour across every
+/** Distinct hues that stay legible on both themes. Color is assigned by a STABLE key (a card's
+ *  UUID, a node's name) rather than by array position, so one card keeps one color across every
  *  panel — that is what lets the page carry a single shared legend instead of six. */
 export const CHART_COLORS = [
   '#38bdf8', '#f59e0b', '#34d399', '#f472b6', '#a78bfa', '#fb7185', '#22d3ee', '#facc15',
@@ -99,7 +99,7 @@ export function TimeSeriesChart({ series, unit, height = 180, seriesLabel, color
   unit: string;
   height?: number;
   seriesLabel: (s: Series, i: number) => string;
-  /** Stable colour per series; falls back to position when not supplied. */
+  /** Stable color per series; falls back to position when not supplied. */
   colorOf?: (s: Series, i: number) => string;
   /** Short ranges (a few hours at most): x-axis ticks as HH:MM only, no date line. */
   timeOnly?: boolean;
@@ -187,7 +187,7 @@ export function TimeSeriesChart({ series, unit, height = 180, seriesLabel, color
     const ro = new ResizeObserver(() => plot.setSize({ width: host.clientWidth, height }));
     ro.observe(host);
     return () => { ro.disconnect(); plot.destroy(); plotRef.current = null; };
-    // Rebuild when the series set changes (labels/colours are baked into the plugin); plain data
+    // Rebuild when the series set changes (labels/colors are baked into the plugin); plain data
     // updates go through setData below so the cursor is not dropped.
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [labels.join('|'), colors.join('|'), unit, height, timeOnly, hideXAxis, zeroAnchored]);
@@ -200,7 +200,7 @@ export function TimeSeriesChart({ series, unit, height = 180, seriesLabel, color
 }
 
 /** The page-level legend: one row for the whole tab, since every panel uses the same series and
- *  the same colour per series. */
+ *  the same color per series. */
 export function ChartLegend({ items }: { items: { key: string; label: string; color: string }[] }) {
   return (
     <div className="flex flex-wrap gap-x-4 gap-y-1.5">

@@ -28,7 +28,7 @@ export interface ParsedRow extends BulkUserRow {
   problem: 'invalid_email' | 'duplicate' | 'missing_name' | null;
 }
 
-// A header row is recognised by its first cell naming the column ("email", "E-Mail", "email
+// A header row is recognized by its first cell naming the column ("email", "E-Mail", "email
 // address"), not merely by not being an address: a data row whose address has a typo must show up
 // in the preview as invalid, not silently vanish.
 const isHeaderCell = (cell: string) => !cell.includes('@') && /mail/i.test(cell);

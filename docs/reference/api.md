@@ -54,7 +54,7 @@ endpoints until they do.
 | `/queue` | Queue entries, cancel, priority |
 | `/credits`, `/budgets` | Wallets, allocations, requests, refills, ledger; organization budgets |
 | `/storage/volumes`, `/storage/pools` | Volumes, shares, quota, locks; storage pools |
-| `/offerings`, `/resource-presets`, `/images`, `/resource-policies` | The catalogue and policies, including quota requests |
+| `/offerings`, `/resource-presets`, `/images`, `/resource-policies` | The catalog and policies, including quota requests |
 | `/clusters`, `/nodes`, `/gpu-devices`, `/node-pools` | Infrastructure: registration, cordon/drain/delete, cards, pools |
 | `/monitoring`, `/dashboard`, `/metrics` | Metrics proxies and summaries |
 | `/audit-logs` | Audit log with filters and CSV export |

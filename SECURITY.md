@@ -24,7 +24,7 @@ enough detail to reproduce. A proof of concept helps but is not required.
 
 What to expect:
 
-- Acknowledgement within 5 working days.
+- Acknowledgment within 5 working days.
 - An assessment, and a fix or mitigation plan, within 30 days for confirmed issues.
 - Credit in the release notes unless you ask otherwise.
 
@@ -45,7 +45,7 @@ Out of scope:
   `third_party/`).
 - Findings that require cluster-admin on the hosting cluster, which is already a full compromise.
 - Denial of service caused by a tenant exhausting the credits or quota assigned to them —
-  that is the intended accounting behaviour.
+  that is the intended accounting behavior.
 
 ## Hardening expectations for operators
 

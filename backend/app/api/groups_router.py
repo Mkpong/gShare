@@ -655,7 +655,7 @@ async def create_project(
 async def _cascade_group_users(
     db: AsyncSession, group_ids: list[str], to_status: str, actor: str,
 ) -> int:
-    """Deactivate/reactivate the users of the given groups, honouring multi-membership.
+    """Deactivate/reactivate the users of the given groups, honoring multi-membership.
 
     Deactivate: only users whose EVERY OTHER group membership is in an inactive/archived or
     deleted group go inactive — someone also in an active department keeps working.

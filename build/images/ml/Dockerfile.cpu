@@ -1,7 +1,7 @@
 # CPU session image on Ubuntu 24.04: code-server, JupyterLab, ttyd, and a data-science stack. No GPU.
-# It honours the same connection contract as session-base — the same ports, paths, and entrypoint —
+# It honors the same connection contract as session-base — the same ports, paths, and entrypoint —
 # and runs as non-root (uid 1000), which satisfies restricted Pod Security.
-# Catalogue entry: name="Python ML (CPU · Ubuntu 24.04)", tag=ubuntu24.04-cpu-ml
+# Catalog entry: name="Python ML (CPU · Ubuntu 24.04)", tag=ubuntu24.04-cpu-ml
 # Build context: build/images, so session-base/entrypoint.sh can be shared.
 FROM codercom/code-server:4.135.0 AS cs
 

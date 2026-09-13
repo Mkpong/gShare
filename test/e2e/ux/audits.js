@@ -70,7 +70,7 @@ export async function auditSemantics(page, ctx) {
     const add = (rule, severity, message, selector, evidence) => f.push({ rule, severity, message, selector, evidence });
 
     const title = document.title.trim();
-    if (!title) add('page.title.missing', 'major', 'The document has no <title>, so browser tabs, history and bookmarks are unlabelled.', 'head > title');
+    if (!title) add('page.title.missing', 'major', 'The document has no <title>, so browser tabs, history and bookmarks are unlabeled.', 'head > title');
     else if (/^GShare$/i.test(title)) {
       add('page.title.notPerScreen', 'major',
         `Every screen shares the title "${title}". A user with several tabs open cannot tell which is which, and history entries are indistinguishable.`,
@@ -125,8 +125,8 @@ export async function auditForms(page) {
 
       if (el.required && !el.getAttribute('aria-required')) add('form.field.requiredNotAnnounced', 'minor', `Required field "${name || ph}" is not marked aria-required.`, sel);
       if (el.required) {
-        const labelled = el.id ? document.querySelector('label[for="' + CSS.escape(el.id) + '"]') : null;
-        const wrap = el.closest('label') || labelled || el.parentElement;
+        const labeled = el.id ? document.querySelector('label[for="' + CSS.escape(el.id) + '"]') : null;
+        const wrap = el.closest('label') || labeled || el.parentElement;
         const marked = /\*|required|필수/i.test((wrap?.textContent || '') + ' ' + name);
         if (!marked) add('form.field.requiredNoMarker', 'major', `Required field "${name || ph}" carries no visible required marker, so the user only discovers it on submit.`, sel);
       }
@@ -272,7 +272,7 @@ export async function auditAffordance(page, ctx) {
       tsChecked++;
       const t = el.getAttribute('title') || el.closest('[title]')?.getAttribute('title') || '';
       if (el.tagName !== 'TIME') {
-        add('affordance.timestampNotSemantic', 'polish', `Timestamp "${txt.slice(0, 40)}" is plain text rather than <time datetime>, so it cannot be localised or machine-read.`, window.__ux.path(el));
+        add('affordance.timestampNotSemantic', 'polish', `Timestamp "${txt.slice(0, 40)}" is plain text rather than <time datetime>, so it cannot be localized or machine-read.`, window.__ux.path(el));
       }
       if (abs && !rel && !t) add('affordance.absoluteTimeOnly', 'minor', `"${txt.slice(0, 40)}" gives an absolute time with no "how long ago", which is what the user is actually asking.`, window.__ux.path(el));
       if (rel && !abs && !t) add('affordance.relativeTimeNoExact', 'minor', `"${txt.slice(0, 40)}" is relative only, with no exact timestamp on hover — impossible to correlate with a log.`, window.__ux.path(el));

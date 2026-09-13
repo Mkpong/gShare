@@ -21,7 +21,7 @@ import type { ReactNode } from 'react';
 // trail. One hero KPI band, a per-card GPU grid (the fleet's actual shape), node/compute pressure,
 // and a recent-activity feed — patterned after infra monitoring consoles rather than a card pile.
 
-/** A labelled figure inside a side panel. */
+/** A labeled figure inside a side panel. */
 function Row({ label, value }: { label: string; value: ReactNode }) {
   return (
     <div className="gs-hair flex items-center justify-between gap-4 py-2">

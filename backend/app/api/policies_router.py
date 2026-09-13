@@ -215,7 +215,7 @@ async def effective_policy(
         "max_concurrent": pol.max_concurrent,
         "max_queued": pol.max_queued,
         # Runtime/idle windows belong here too: this card is the ONLY place a user can learn
-        # when their session will be reaped. 0 = unlimited (same semantics the reaper honours).
+        # when their session will be reaped. 0 = unlimited (same semantics the reaper honors).
         "max_runtime_min": pol.max_runtime,
         "idle_timeout_sec": pol.idle_timeout,
         "limits": limits,
@@ -496,7 +496,7 @@ async def _propagate_reaper_policy(db: AsyncSession, scope: str, scope_id: str) 
     """Re-stamp idle/max-runtime on every ACTIVE session the (scope, scope_id) policy touches.
 
     Without this a policy edit reached live sessions only on their next resume; the reaper kept
-    honouring the creation-time window. Best-effort per session — a cluster hiccup must not fail
+    honoring the creation-time window. Best-effort per session — a cluster hiccup must not fail
     the policy write itself (it already committed)."""
     from app.cluster.crd import GShareSessionCRD
     from app.db.models import Membership as _M

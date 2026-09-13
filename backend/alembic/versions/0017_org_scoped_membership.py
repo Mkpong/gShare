@@ -31,7 +31,7 @@ def upgrade() -> None:
         "fk_membership_org_id_organization", "membership", "organization", ["org_id"], ["id"]
     )
 
-    # 2. Drop the (user_id, group_id) unique constraint in favour of two partial unique indexes.
+    # 2. Drop the (user_id, group_id) unique constraint in favor of two partial unique indexes.
     op.drop_constraint("uq_membership_user_id", "membership", type_="unique")
     op.create_index(
         "uq_membership_user_group", "membership", ["user_id", "group_id"],

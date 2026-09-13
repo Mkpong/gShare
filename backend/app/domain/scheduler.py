@@ -392,7 +392,7 @@ class SchedulerService:
             return
         mem_mb = req.gpu_mem_mb or 0
         # Minimum VRAM floor: a slice below 1 GB cannot even hold a CUDA context. The frontend
-        # disables such tiers; this is defence in depth against direct API calls. (Exclusive has
+        # disables such tiers; this is defense in depth against direct API calls. (Exclusive has
         # already returned above.)
         if mem_mb < settings.GPU_MIN_FRACTIONAL_MEM_MB:
             raise VramBelowMinimum(
@@ -1294,7 +1294,7 @@ class SchedulerService:
     def _mig_rounded(dev, req_mem: int, req_cores: int):
         """Round a request UP to the card's smallest fitting MIG instance, or None.
 
-        Profiles are modelled as the 1/4, 1/2, and full fractions of the card (RTX PRO 6000
+        Profiles are modeled as the 1/4, 1/2, and full fractions of the card (RTX PRO 6000
         Blackwell: 1g.24gb / 2g.48gb / 4g.96gb; A100/H100 quarters land on the same fractions
         closely enough for capacity accounting — HAMi's knownMigGeometries does the real carving).
         """
@@ -1355,9 +1355,9 @@ class SchedulerService:
         """Occupancy-aware 2D best-fit (VRAM + cores) for a fractional slice.
 
         Candidates are cards that fit in both dimensions. The score is the headroom left after
-        placement, as (dominant dimension, total). binpack, the default, minimises it: work
+        placement, as (dominant dimension, total). binpack, the default, minimizes it: work
         consolidates onto the fullest card, empty cards stay available for exclusive or large jobs,
-        and both fragmentation and dominant-resource skew stay low. spread maximises it, picking the
+        and both fragmentation and dominant-resource skew stay low. spread maximizes it, picking the
         emptiest card to balance load and reduce interference.
         """
         candidates = [

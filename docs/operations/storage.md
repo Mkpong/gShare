@@ -52,7 +52,7 @@ as the bound, never the sum.
    topology the objects churn and nothing usable is published.
 2. **`manual`** — the figure stated on the pool. `STORAGE_POOL_CAPACITY_GB`
    (`storage.poolCapacityGb` in the chart) still works as a fleet-wide default.
-3. **`node_disk`** — the storage node's system drive, labelled as a stand-in.
+3. **`node_disk`** — the storage node's system drive, labeled as a stand-in.
 
 The dashboard's storage tile names the source it used.
 

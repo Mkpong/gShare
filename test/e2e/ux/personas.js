@@ -16,7 +16,7 @@ export const VIEWPORTS = {
 export const PERSONAS = [
   {
     id: 'platform-admin',
-    // Runs the platform: clusters, nodes, the catalogue, images, audit.
+    // Runs the platform: clusters, nodes, the catalog, images, audit.
     role: 'super_admin',
     email: env('UX_ADMIN_EMAIL', 'admin@example.com'),
     password: env('UX_ADMIN_PASSWORD', 'GshareUx!2026'),

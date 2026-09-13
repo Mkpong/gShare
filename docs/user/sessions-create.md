@@ -41,7 +41,7 @@ four steps, and no credits.
 
 ![Session name](/img/screens/wiz-name.png)
 
-A name is suggested (`gpu-MMDD-HHMM`). Replace it with something you will recognise in a list a
+A name is suggested (`gpu-MMDD-HHMM`). Replace it with something you will recognize in a list a
 week from now — `resnet-finetune` beats `gpu-0911`.
 
 ### Cluster
@@ -71,7 +71,7 @@ inside the session. Leave it off unless you need it.
 ![Compute presets](/img/screens/wiz-compute.png)
 
 The preset is the CPU, memory, and scratch disk of the container — independent of the GPU
-choice. The seeded catalogue runs from **Compute S** (2 vCPU · 4 GiB · 20 GiB) to
+choice. The seeded catalog runs from **Compute S** (2 vCPU · 4 GiB · 20 GiB) to
 **Compute XL** (16 vCPU · 24 GiB · 200 GiB); your site may have its own.
 
 ![Custom compute](/img/screens/wiz-compute-custom.png)
@@ -150,7 +150,7 @@ asking for 14 GB and 5% cores is billed on the VRAM, not the cores.
 
 ## Step 3 — Image
 
-![Image catalogue](/img/screens/wiz-step3.png)
+![Image catalog](/img/screens/wiz-step3.png)
 
 ![Image tiles](/img/screens/wiz-image.png)
 
@@ -166,7 +166,7 @@ The tags on each tile tell you what you are getting:
   yourself.
 
 Images marked **My image** are ones registered for you alone rather than for everyone; see
-[Images](../admin/images.md) for how the catalogue is filled.
+[Images](../admin/images.md) for how the catalog is filled.
 
 ---
 

@@ -195,9 +195,9 @@ class InventorySync:
 
 
 async def align_offering_models(db: AsyncSession, reported: str) -> None:
-    """Make the catalogue speak the fleet's exact model string.
+    """Make the catalog speak the fleet's exact model string.
 
-    Admission matches ``offering.gpu_model == device.model`` verbatim. The seeded catalogue carries
+    Admission matches ``offering.gpu_model == device.model`` verbatim. The seeded catalog carries
     the marketing name ("NVIDIA RTX PRO 6000 Blackwell"); the driver reports the full SKU
     ("NVIDIA RTX PRO 6000 Blackwell Max-Q Workstation Edition"). Until an administrator noticed
     and retyped it, every session on such a fleet answered ``409 unserviceable``. When a device

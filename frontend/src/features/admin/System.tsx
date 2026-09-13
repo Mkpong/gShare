@@ -29,7 +29,7 @@ export function AdminSystem() {
   const active: Section = (SECTIONS as readonly string[]).includes(raw) ? (raw as Section) : 'branding';
 
   return (
-    // Settings read as a document, not a dashboard: one centred column, so the panel does not
+    // Settings read as a document, not a dashboard: one centered column, so the panel does not
     // strand itself against the left edge of a wide screen.
     <div className="mx-auto w-full max-w-[1040px]">
       <PageHeader title={t('admin.system.title')} description={t('admin.system.subtitle')} />

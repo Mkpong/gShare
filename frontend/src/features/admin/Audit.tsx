@@ -43,7 +43,7 @@ export const actionLabel = (a: string) =>
 
 const detailKeyLabel = (k: string) => i18n.t(`admin.audit.detailKey.${k}`, { defaultValue: k });
 
-/** Audit result codes to a label and a colour. Only error, fail, denied, and reject read as failure. */
+/** Audit result codes to a label and a color. Only error, fail, denied, and reject read as failure. */
 // Every result the backend writes gets a translated label; an unknown code still renders, but as
 // itself in a neutral tone rather than leaking raw English into a Korean screen.
 const RESULT_TONES: Record<string, { key: string; tone: string }> = {

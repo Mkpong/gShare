@@ -3,7 +3,7 @@
 #
 #   registry  (:5000, hostPort on gshare-storage) — push target for locally built session images.
 #   mirror    (:5001, hostPort on gshare-storage) — pull-through cache of docker.io, so public
-#             catalogue images are fetched from the LAN after the first pull.
+#             catalog images are fetched from the LAN after the first pull.
 #
 # Plain HTTP on a trusted LAN (same layout as the bootstrap script's LOCAL_REGISTRY support);
 # moving to TLS later only changes the certs.d contents, not this manifest. Node trust lives in
@@ -11,7 +11,7 @@
 # LOCAL_REGISTRY=<node-ip>:5000 and LOCAL_REGISTRY_MIRROR=<node-ip>:5001). GC: `registry
 # garbage-collect` can be run in the pod.
 #
-# Pinning: the storage node labelled by `cluster-bootstrap.sh label <node> storage`
+# Pinning: the storage node labeled by `cluster-bootstrap.sh label <node> storage`
 # (gshare.io/role=storage). No storage node? Point nodeSelector at any node with disk and adjust
 # storageClassName below (gshare-data comes from the optional ZFS/democratic-csi step).
 apiVersion: v1

@@ -208,7 +208,7 @@ export async function flowDialog(page) {
     f.push({ rule: 'dialog.notModal', severity: 'minor', selector: '[role=dialog]', message: 'The dialog is not marked aria-modal, so a screen reader keeps reading the page behind it.' });
   }
   if (!(await dlg.getAttribute('aria-label')) && !(await dlg.getAttribute('aria-labelledby'))) {
-    f.push({ rule: 'dialog.unnamed', severity: 'major', selector: '[role=dialog]', message: 'The dialog has no accessible name, so it opens as an unlabelled region.' });
+    f.push({ rule: 'dialog.unnamed', severity: 'major', selector: '[role=dialog]', message: 'The dialog has no accessible name, so it opens as an unlabeled region.' });
   }
   const focusInside = await page.evaluate(() => {
     const d = document.querySelector('[role="dialog"], [role="alertdialog"], dialog[open]');

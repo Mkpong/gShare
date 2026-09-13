@@ -1,7 +1,7 @@
 // Pure formatting helpers for currency, time, and capacity.
 //
 // These run outside React, so they read the active language from the i18n singleton rather than
-// from a hook. Enum codes stay as the API returns them; only the rendered label is localised.
+// from a hook. Enum codes stay as the API returns them; only the rendered label is localized.
 import i18n, { currentLocale } from '@/i18n';
 
 /** Internal role code (`super_admin` and friends) to a display label. */

@@ -92,7 +92,7 @@ cp hack/cluster-info.example hack/cluster-info   # fill in MASTER_NODE, WORKER_N
 ./hack/cluster-bootstrap.sh up                   # kubeadm + flannel + HAMi + ingress-nginx(:30080) + local-path
 ```
 
-`up` labels the nodes according to the modes in `cluster-info`; manual labelling is only
+`up` labels the nodes according to the modes in `cluster-info`; manual labeling is only
 needed on the step-by-step path.
 
 ### Step 1 — decide the domain and TLS
@@ -145,7 +145,7 @@ example in [`domain.example.yaml`](../deploy/values/domain.example.yaml)):
 
 - **Monitoring** — `make deploy-monitoring` installs Prometheus with the dcgm / node /
   kube-state exporters. It powers the admin monitoring page, the per-session live-usage
-  panels, and (via `operator.prometheusUrl`) the idle reaper's utilisation source — on a
+  panels, and (via `operator.prometheusUrl`) the idle reaper's utilization source — on a
   cluster with more than one GPU node, set `prometheusUrl`; the HAMi-monitor fallback
   round-robins per-node pods and idle sessions are then never auto-paused. Prometheus keeps its data on a PVC of the cluster's **default StorageClass** — it does not need the optional storage node. (If an earlier install left a PVC pinned to `gshare-data`, delete that PVC before re-applying: `storageClassName` is immutable.)
 - **Mixed GPU fleet** — different card models in one cluster need
@@ -171,9 +171,9 @@ kubectl get secret -n gshare-system gshare-bootstrap-admin -o jsonpath='{.data.p
 Open **https://gshare.example.com** through your reverse proxy and log in with
 `bootstrapAdmin.email` and that password. You will be asked to change it immediately.
 
-### Step 4 — check the catalogue (administrator)
+### Step 4 — check the catalog (administrator)
 
-A default catalogue is seeded idempotently at startup: GPU offerings (RTX, A100, H100),
+A default catalog is seeded idempotently at startup: GPU offerings (RTX, A100, H100),
 base images, compute and GPU presets, a global resource policy, and the system wallet. As
 an administrator you only edit and extend it, from the console or through
 `POST /api/v1/offerings` and `POST /api/v1/images` / `/images/import`.
@@ -182,7 +182,7 @@ an administrator you only edit and extend it, from the console or through
   The seeded rates are suggestions — adjust them in the console.
 - An **image** is the session container image. The GShare session images ship JupyterLab,
   a web terminal, and code-server.
-- Users are not limited to the shared catalogue: a member can register images of their own
+- Users are not limited to the shared catalog: a member can register images of their own
   through the API (`POST /api/v1/images/import` for a public registry reference,
   `POST /api/v1/image-builds` for a build). Those rows are private to their owner, tagged
   **My image** in the wizard, and one member may hold at most 20 of them.

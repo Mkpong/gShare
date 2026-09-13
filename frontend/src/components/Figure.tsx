@@ -26,7 +26,7 @@ export function Figure({ label, value, unit, foot, bar, hero, help }: {
         {help && <HelpTip text={help} />}
       </div>
       {/* Wraps and steps down below lg: a 7-digit balance in a quarter-width tile overran its
-          neighbour at tablet widths. */}
+          neighbor at tablet widths. */}
       <div className="mt-2 flex flex-wrap items-baseline gap-x-1.5 gap-y-0.5">
         <span className={`gs-num text-kpi max-lg:text-2xl leading-none tracking-[-0.03em] break-all ${hero ? 'text-primary' : ''}`}>{value}</span>
         {unit && <span className="text-muted text-xs font-semibold">{unit}</span>}

@@ -37,7 +37,7 @@ bootstrapLocalCluster: false
 operator:
   # clusterId and controlPlaneUrl differ per cluster and are injected with --set by
   # `make deploy-dataplane`.
-  # The idle reaper reads utilisation from the stock HAMi vGPU monitor that cluster-bootstrap
+  # The idle reaper reads utilization from the stock HAMi vGPU monitor that cluster-bootstrap
   # installs, so no Prometheus is required.
   hamiMonitorUrl: "http://hami-device-plugin-monitor.kube-system.svc:31992"
   # With a storage node (cluster-info STORAGE_NODE): the democratic-csi class that gives volumes a

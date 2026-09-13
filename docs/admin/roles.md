@@ -34,7 +34,7 @@ The [Tenant administration](./dashboard.md) pages are what an org_admin or group
 with day to day: [people](./users.md), [credits](./credits.md), what is
 [running](./monitoring.md), [what happened](./audit.md). The
 [Platform administration](./resources.md) pages are super_admin only and describe the machine
-side: the [GPU catalogue](./resources-offerings.md), [clusters](./clusters.md) and
+side: the [GPU catalog](./resources-offerings.md), [clusters](./clusters.md) and
 [nodes](./nodes.md), [storage](./storage.md), [images](./images.md),
 [system settings](./system.md).
 

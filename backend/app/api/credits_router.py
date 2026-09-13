@@ -1232,7 +1232,7 @@ async def reject_allocation_request(
 
 # ── ledger reads ───────────────────────────────────────────────
 async def _resolve_ref_names(db: AsyncSession, refs: set[str]) -> dict[str, str]:
-    """Map a transaction ref to something a person recognises: the session's name, or a label."""
+    """Map a transaction ref to something a person recognizes: the session's name, or a label."""
     out: dict[str, str] = {}
     ses_ids = {r for r in refs if r.startswith("ses_")}
     if ses_ids:

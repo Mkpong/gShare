@@ -1,6 +1,6 @@
 # PyTorch on GPU: the official PyTorch image, which guarantees a matching CUDA and cuDNN pair, plus
 # the three GShare connection tools and SciPy.
-# Catalogue entry: name="PyTorch 2.6 · CUDA 12.4 (GPU)", tag=pytorch2.6-cuda12.4-cudnn9
+# Catalog entry: name="PyTorch 2.6 · CUDA 12.4 (GPU)", tag=pytorch2.6-cuda12.4-cudnn9
 # Build context: build/images, so session-base/entrypoint.sh can be shared.
 FROM codercom/code-server:4.135.0 AS cs
 

@@ -113,7 +113,7 @@ class Settings(BaseSettings):
     # Placement policy for fractional slices: binpack (tightest two-dimensional fit, consolidating
     # onto cards and keeping empty ones free) or spread (balance the load).
     GPU_PACKING: str = "binpack"
-    PROMETHEUS_URL: str = "http://prometheus.monitoring.svc:9090"  # source of aggregated DCGM utilisation
+    PROMETHEUS_URL: str = "http://prometheus.monitoring.svc:9090"  # source of aggregated DCGM utilization
     # ── Host admission headroom ──
     # Host headroom kept out of admission on every node, covering the kubelet/system reserve and
     # daemonset pods, so a session admitted against inventory capacity still schedules. A card only
@@ -124,9 +124,9 @@ class Settings(BaseSettings):
     NODE_STALE_SEC: int = 300
     # Capacity of the volume backing pool (GB) for the admin dashboard's storage panel. The
     # operator only sees a node's root disk, which is not the ZFS pool the volumes live on; 0 =
-    # unknown, and the panel then shows the storage nodes' disk, labelled as such.
+    # unknown, and the panel then shows the storage nodes' disk, labeled as such.
     STORAGE_POOL_CAPACITY_GB: int = 0
-    # Seed the boanlab/gshare-session catalogue images at startup. A site that serves session
+    # Seed the boanlab/gshare-session catalog images at startup. A site that serves session
     # images from its own registry registers them by hand and turns this off, or the Docker Hub
     # references would sit next to the local ones and fail to pull.
     SEED_SESSION_IMAGES: bool = True

@@ -4,8 +4,9 @@
 # the result straight to Pages, so there is no gh-pages branch to keep in sync.
 #
 # Before the first run, an administrator has to set Settings → Pages → Source to "GitHub Actions"
-# on this repository. The site is then served at https://boanlab.github.io/gshare/ as a project
+# on this repository. The site is then served at https://boanlab.github.io/gShare/ as a project
 # site, which is per-repository and does not occupy the organization's single boanlab.github.io.
+# Pages paths are case-sensitive, so the base path matches the repository name exactly.
 name: Docs site
 
 on:
@@ -30,7 +31,7 @@ concurrency:
 
 env:
   SITE_URL: https://boanlab.github.io
-  SITE_BASE_URL: /gshare/
+  SITE_BASE_URL: /gShare/
 
 jobs:
   build:
@@ -54,15 +55,24 @@ jobs:
       # Nothing here needs editing to preview a fork.
       - name: Resolve the site address
         run: |
-          if [ "$GITHUB_REPOSITORY" != "boanlab/gshare" ]; then
+          if [ "$GITHUB_REPOSITORY" != "boanlab/gShare" ]; then
             owner="${GITHUB_REPOSITORY%%/*}"
             name="${GITHUB_REPOSITORY##*/}"
             echo "SITE_URL=https://${owner}.github.io" >> "$GITHUB_ENV"
             echo "SITE_BASE_URL=/${name}/" >> "$GITHUB_ENV"
           fi
 
-      - name: Build
-        run: npm run build
+      # One build per locale. Korean is served at the site root and English at /en, so the two
+      # locales write to different paths and a single combined build would have the second
+      # overwrite the first. The trees are merged into build/ for upload.
+      - name: Build both locales
+        run: |
+          rm -rf build build-ko build-en
+          npx docusaurus build --locale ko --out-dir build-ko
+          npx docusaurus build --locale en --out-dir build-en
+          mv build-ko build
+          mv build-en/en build/en
+          rmdir build-en
 
       - uses: actions/configure-pages@v5
 

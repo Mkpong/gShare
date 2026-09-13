@@ -437,7 +437,7 @@ async def test_list_images_member_never_sees_other_users_private_images(db):
     res = await list_images(pagination=Pagination(1, 50), kind=None, q=None, tag=None,
                             public=None, mine=False, principal=me, db=db)
     assert {r["id"] for r in res["data"]} == {"img_pub", "img_mine"}
-    # super_admin catalogue view is unchanged.
+    # super_admin catalog view is unchanged.
     res = await list_images(pagination=Pagination(1, 50), kind=None, q=None, tag=None,
                             public=None, mine=False, principal=_super(), db=db)
     assert len(res["data"]) == 4

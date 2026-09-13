@@ -1,8 +1,8 @@
-"""Image imports are an administrator's tool: the catalogue is curated, not user-supplied.
+"""Image imports are an administrator's tool: the catalog is curated, not user-supplied.
 
 Members used to be able to register a public registry reference as a private image of their own;
 that path is closed for security — everything a session can run comes from the admin-curated
-catalogue. These tests pin the new contract: members are refused outright, admin imports stay
+catalog. These tests pin the new contract: members are refused outright, admin imports stay
 shared, deduplicated, and validated.
 """
 from __future__ import annotations

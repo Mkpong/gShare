@@ -76,7 +76,7 @@ def _offering_view(o: Offering) -> dict:
 
 
 def _normalize_cuda(raw: str | None) -> str | None:
-    """Normalise a min_cuda input: an empty string clears it, a malformed one is 422."""
+    """Normalize a min_cuda input: an empty string clears it, a malformed one is 422."""
     if raw is None:
         return None
     raw = raw.strip()

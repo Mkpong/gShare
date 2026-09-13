@@ -280,7 +280,7 @@ function SystemTotalsCard({ system, orgPools, childrenOf }: {
         </label>
         <label className="text-2xs text-muted">
           {/* The next-run readout rides on the LABEL line: as a footer it pushed the controls up
-              out of line with the neighbouring fields. */}
+              out of line with the neighboring fields. */}
           <span className="inline-flex items-center gap-1 flex-wrap">
             {t('admin.credits.refillAt')}<HelpTip text={t('admin.credits.refillAtHelp')} />
             {sched?.next_at && (

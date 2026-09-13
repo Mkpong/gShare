@@ -14,7 +14,7 @@ Every card the fleet reports, with what is on it right now.
 | **Node / cluster** | Where the card is |
 | **Model** | The driver's exact string — this is what an [offering](./resources-offerings.md) must match |
 | **Alias** | A human name you can give the card |
-| **VRAM (used / total) · cores** | Allocation, not live utilisation |
+| **VRAM (used / total) · cores** | Allocation, not live utilization |
 | **Mode** | fractional or exclusive |
 | **Bound sessions** | The sessions holding slices of it |
 | **Target pool** | The [pool](./node-pools.md) it is moving to, if any |
@@ -57,9 +57,9 @@ for a dead card.
 Fatal Xid events reported by DCGM cordon the **whole node** automatically. The card action is
 for the narrower case: one card of several is bad, and the rest of the machine is fine.
 
-## Allocation is not utilisation
+## Allocation is not utilization
 
 The VRAM figure here is what the ledger **reserved**. What the card is actually doing comes from
-DCGM on the [monitoring page](./platform-monitoring.md). A fleet allocated to 90% and utilised
+DCGM on the [monitoring page](./platform-monitoring.md). A fleet allocated to 90% and utilized
 at 15% is not short of hardware — it is short of idle timeouts and smaller
 [tiers](./resources-presets.md).

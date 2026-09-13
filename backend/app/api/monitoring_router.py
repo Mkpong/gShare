@@ -3,13 +3,13 @@
 The console never talks to Prometheus directly. It names a PANEL; this router owns the PromQL.
 Two reasons, both load-bearing:
 
-* Authorisation. Prometheus has no notion of GShare tenancy, so an arbitrary-PromQL passthrough
-  would be an authorisation hole. Every request here goes through ``monitoring.read``
+* Authorization. Prometheus has no notion of GShare tenancy, so an arbitrary-PromQL passthrough
+  would be an authorization hole. Every request here goes through ``monitoring.read``
   (super_admin only today).
 * Stability. The panel ids are the contract with the console; the queries behind them can be
   retuned (or swapped from DCGM to HAMi) without touching the frontend.
 
-Measured utilisation lives HERE and is labelled as measured. The admin dashboard's GPU figure is
+Measured utilization lives HERE and is labeled as measured. The admin dashboard's GPU figure is
 deliberately allocation-based — a card can be fully allocated and sit at 0% — and the two must not
 be confused (see infra_router._cluster_metrics).
 """
@@ -188,7 +188,7 @@ def _session_pod_selector(session_id: str) -> str:
 
 
 async def session_usage_payload(session_id: str) -> dict[str, float | None]:
-    """Instant measured usage of one session's pod. The caller owns authorisation."""
+    """Instant measured usage of one session's pod. The caller owns authorization."""
     sel = _session_pod_selector(session_id)
     queries = {
         # irate = the last two samples: with a 5 s scrape the readout follows a load change within
@@ -223,7 +223,7 @@ async def session_usage_series(
     session_id: str, range_: str, *, window: tuple[int, int] | None = None,
 ) -> dict[str, Any]:
     """The four usage metrics over a range, or over ``window`` (a finished session's whole run).
-    The caller owns authorisation."""
+    The caller owns authorization."""
     if window is None and range_ not in _RANGES:
         raise _BadPanel("unknown range", {"range": range_})
     sel = _session_pod_selector(session_id)

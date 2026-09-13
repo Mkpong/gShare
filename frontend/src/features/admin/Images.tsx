@@ -56,7 +56,7 @@ interface BuildRow {
 export function AdminImages() {
   const { t } = useTranslation();
   const [importOpen, setImportOpen] = useState(false);
-  // Tab, kind and search in the URL, so a catalogue view is shareable and survives Back.
+  // Tab, kind and search in the URL, so a catalog view is shareable and survives Back.
   const table = useTableState('', { sort: 'name', dir: 'asc', tab: 'images' });
   const tab = (table.tab ?? 'images') as 'images' | 'builds';
   const setTab = (v: 'images' | 'builds') => table.setTab(v);

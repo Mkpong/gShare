@@ -30,7 +30,7 @@ export default defineConfig({
           if (!id.includes('node_modules')) return undefined;
           // uplot is the one dependency with no React import, so it is safe to isolate. Everything
           // else stays in one vendor chunk: splitting React away from libraries that import it
-          // (icons, i18n, zustand) let a dependent chunk evaluate before React had initialised and
+          // (icons, i18n, zustand) let a dependent chunk evaluate before React had initialized and
           // took the login page down with "Cannot read properties of undefined (reading 'useState')".
           if (id.includes('uplot')) return 'uplot';
           return 'vendor';

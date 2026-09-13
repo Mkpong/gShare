@@ -3,7 +3,7 @@
 Policies live at four scopes (user > group > org > global). Resolution is **per-field**
 most-specific-wins: each field comes from the most specific policy that sets it, so a user-scoped
 policy that only lowers ``max_concurrent`` no longer silently discards the group's runtime and
-idle limits (the old first-matching-ROW-wins behaviour, which was also implemented three times in
+idle limits (the old first-matching-ROW-wins behavior, which was also implemented three times in
 three modules). ``limits`` merges per key the same way.
 
 Consumers: the scheduler admission gate, the ``/resource-policies/effective`` endpoint, and the

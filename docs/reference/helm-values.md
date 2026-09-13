@@ -40,7 +40,7 @@ knob).
 | `buildRegistry` | | Registry prefix for console-built images. |
 | `auditRetentionDays` | 180 | 0 disables pruning. |
 | `nodeStaleSec` | 300 | Silence before a node goes offline. |
-| `seedSessionImages` | true | Seed the `boanlab/gshare-session` catalogue. |
+| `seedSessionImages` | true | Seed the `boanlab/gshare-session` catalog. |
 | `gpuPacking` | binpack | `binpack` or `spread` for fractional placement. |
 | `volumeReclaimGraceHours` | 24 | Keep a deleted volume's data this long. |
 | `forwardedAllowIps` | `*` | Peers uvicorn trusts to set `X-Forwarded-*` (`--forwarded-allow-ips`); narrow to the ingress controller's addresses where possible. |
@@ -57,7 +57,7 @@ knob).
 | `clusterId` | The cluster this operator reports as (`clu_local` for the all-in-one install). |
 | `controlPlaneUrl` | Where callbacks go when the control plane is elsewhere. |
 | `internalJwtSecret`, `internalJwtTokenTtlSec` | The operator's token and its TTL (re-signed daily by a CronJob). |
-| `hamiMonitorUrl`, `prometheusUrl` | Utilisation source for the idle reaper; see [Observability](../operations/observability.md). |
+| `hamiMonitorUrl`, `prometheusUrl` | Utilization source for the idle reaper; see [Observability](../operations/observability.md). |
 | `perCardMode` | Pin each session to the exact card reserved — required for a mixed-model fleet. |
 | `volumeStorageClass`, `volumeSyncInterval` | The pool's StorageClass and how often PVCs and capacity are reconciled. |
 | `sessionImagePullPolicy` | For session pods. |

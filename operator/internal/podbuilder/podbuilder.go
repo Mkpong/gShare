@@ -54,7 +54,7 @@ type Builder struct {
 	HAMiYieldExtender bool
 	// SessionImagePullPolicy is the pull policy for session containers. IfNotPresent (the
 	// default) lets air-gapped sites and locally imported images run; Always forces a registry
-	// manifest check so a re-pushed fixed-tag catalogue image is picked up.
+	// manifest check so a re-pushed fixed-tag catalog image is picked up.
 	SessionImagePullPolicy corev1.PullPolicy
 	// PerCardMode drops the gshare.io/gpu-mode nodeSelector pools: every GPU session flows
 	// through hami-scheduler pinned to the ledger-reserved card (spec.pinnedGpuUuid), and

@@ -64,4 +64,4 @@ everything.
 | Who ended other people's sessions this week? | Action = `session.force_terminate`, period = 1 week |
 | Where did this organization's credits go? | Actor = the org admin, action = `credit.*` |
 | Is someone probing for access they lack? | Result = denied |
-| Who changed the GPU catalogue? | Action = `offering.*` |
+| Who changed the GPU catalog? | Action = `offering.*` |

@@ -1,5 +1,5 @@
 name: Feature request
-description: Propose a capability or a change in behaviour.
+description: Propose a capability or a change in behavior.
 labels: [enhancement, needs-triage]
 body:
   - type: textarea

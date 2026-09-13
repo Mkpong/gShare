@@ -134,11 +134,11 @@ class TopupRejectBody(BaseModel):
 
 
 class TopupRequestRead(BaseModel):
-    # Mirrors the serialised shape of GET /credits/topup-requests, which is assembled as a dict
+    # Mirrors the serialized shape of GET /credits/topup-requests, which is assembled as a dict
     # rather than mapped from the ORM.
     id: str
     wallet_id: str
-    amount: str                     # serialised as a string, from Decimal
+    amount: str                     # serialized as a string, from Decimal
     status: str
     requester_id: str | None = None
     requester_name: str | None = None

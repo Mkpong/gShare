@@ -10,7 +10,7 @@ confusion:
 
 | | What it is | Page |
 |---|---|---|
-| **Catalogue** | What users may *choose* — GPU models and session sizes | [Offerings](./resources-offerings.md) · [Presets](./resources-presets.md) |
+| **Catalog** | What users may *choose* — GPU models and session sizes | [Offerings](./resources-offerings.md) · [Presets](./resources-presets.md) |
 | **Policy** | What users may *hold* — quotas, timeouts, pool access | [Policies](./resources-policies.md) |
 
 Both are super_admin territory, except policy requests, which a tenant administrator can see for
@@ -34,10 +34,10 @@ flowchart LR
 - A **preset** is a ready-made size: compute shape plus a fraction of a card.
 - A **policy** decides whether this user may hold that much at all.
 
-A session is admitted only when the catalogue offers it, the policy allows it, and the wallet
+A session is admitted only when the catalog offers it, the policy allows it, and the wallet
 covers it.
 
-![Offering catalogue](/img/screens/admin-resources.png)
+![Offering catalog](/img/screens/admin-resources.png)
 
 ## The order to set things up
 

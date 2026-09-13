@@ -61,7 +61,7 @@ class _Validation(DomainError):
 
 class _ImageLimit(DomainError):
     # A member may own only MAX_USER_IMAGES images; the cap keeps one user from filling the
-    # catalogue (and the build registry) on their own.
+    # catalog (and the build registry) on their own.
     code, http = "image_limit_reached", 409
 
 
@@ -126,7 +126,7 @@ def _serialize_image(img: Image) -> dict[str, Any]:
         # GPUs.
         "cuda_version": (img.tags or {}).get("cuda_version"),
         "gpu_ready": bool((img.tags or {}).get("gpu_ready", False)),
-        # A private image is hidden from the session wizard, though the admin catalogue always lists
+        # A private image is hidden from the session wizard, though the admin catalog always lists
         # it.
         "public": getattr(img, "public", True),
         "owner_user_id": img.owner_user_id,
@@ -168,11 +168,11 @@ async def list_images(
     """List images/templates/ISOs with optional kind/q/tag/public filters. any authenticated.
 
     ``public=true`` is what the session wizard uses, listing public images only. The administrative
-    catalogue passes no filter and sees both public and private images.
+    catalog passes no filter and sees both public and private images.
     """
     base = select(Image)
-    # Only the catalogue administrators (image.create) see every row. Everyone else is limited to
-    # the shared catalogue plus their own private images, whatever filter they pass — a private
+    # Only the catalog administrators (image.create) see every row. Everyone else is limited to
+    # the shared catalog plus their own private images, whatever filter they pass — a private
     # image built by another user (its registry path included) is not theirs to list.
     if not rbac_allows(principal, "image.create"):
         base = base.where(or_(Image.public.is_(True), Image.owner_user_id == principal.user_id))
@@ -276,7 +276,7 @@ async def get_image(
     principal: Principal = Depends(get_current_principal),
     db: AsyncSession = Depends(get_db),
 ):
-    """Image detail. any authenticated, for the shared catalogue and one's own images; another
+    """Image detail. any authenticated, for the shared catalog and one's own images; another
     user's private image answers 404 so its existence is not confirmed either."""
     img = await db.get(Image, image_id)
     if img is None:
@@ -359,7 +359,7 @@ async def delete_image(
     principal: Principal = Depends(get_current_principal),
     db: AsyncSession = Depends(get_db),
 ):
-    """Delete a catalogue image that no session has ever used. super_admin, gated on image.create.
+    """Delete a catalog image that no session has ever used. super_admin, gated on image.create.
 
     Sessions keep a foreign key to their image for the audit trail, so an image with any session
     history cannot be deleted — retire it instead by setting ``public: false``.
@@ -452,7 +452,7 @@ async def import_image(
       only they and admins can see. The same public ref may therefore be imported by many members.
 
     Always answers 202. Deduplication never fails the request: re-importing your own ref, or a ref
-    that is already in the shared catalogue, returns that row with ``existing: true`` instead of
+    that is already in the shared catalog, returns that row with ``existing: true`` instead of
     creating a second one — the caller uses the returned ``id`` either way.
     """
     if getattr(body, "registry_auth", None):
@@ -477,7 +477,7 @@ async def import_image(
             raise _Conflict("registry already registered", {"registry": ref})
     else:
         # Users may not bring their own images any more: everything a session can run comes
-        # from the administrator-curated catalogue (build or import on the admin side). A
+        # from the administrator-curated catalog (build or import on the admin side). A
         # member import used to mint a private row here; that path is closed for security.
         raise Forbidden("importing images is restricted to administrators")
 

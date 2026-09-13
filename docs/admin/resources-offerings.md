@@ -6,7 +6,7 @@ title: Offerings
 # GPU offerings
 
 An **offering** is one GPU model as a billable product. The session wizard is built from this
-catalogue, and the scheduler prices against it.
+catalog, and the scheduler prices against it.
 
 ![Offerings](/img/screens/admin-resources.png)
 

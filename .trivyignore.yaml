@@ -6,8 +6,8 @@
 misconfigurations:
   # ── Observability agents: they exist to read host and GPU state ──────────────────────────
   # node-exporter and dcgm-exporter are upstream DaemonSets. Host namespaces, hostPath mounts
-  # and SYS_ADMIN are what let them export node metrics and per-process GPU utilisation; the
-  # scheduler's idle reaper depends on that utilisation signal. Removing the access does not
+  # and SYS_ADMIN are what let them export node metrics and per-process GPU utilization; the
+  # scheduler's idle reaper depends on that utilization signal. Removing the access does not
   # harden the deployment, it disables monitoring.
   - id: AVD-KSV-0005          # SYS_ADMIN capability added (DCGM profiling counters)
     paths:

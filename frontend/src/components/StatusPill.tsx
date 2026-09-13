@@ -1,7 +1,7 @@
 /**
- * The console's ONLY status rendering: a small coloured dot and the label in the same status
- * colour, no filled pill background. Transitional states breathe through `.gs-dot-pulse`
- * (disabled under prefers-reduced-motion). Status colours live here and in Meter, nowhere else.
+ * The console's ONLY status rendering: a small colored dot and the label in the same status
+ * color, no filled pill background. Transitional states breathe through `.gs-dot-pulse`
+ * (disabled under prefers-reduced-motion). Status colors live here and in Meter, nowhere else.
  */
 
 export type StatusKind =

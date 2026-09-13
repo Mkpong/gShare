@@ -1,7 +1,7 @@
 """allocation.kind terminology: owner becomes resident, borrow becomes spot
 
 Aligns the code identifier (Allocation.kind) with the terminology used in the design notes. Updates
-both the existing rows and the server default. Behaviour is unchanged; only the role labels move.
+both the existing rows and the server default. Behavior is unchanged; only the role labels move.
 
 Revision ID: 0029_alloc_kind_resident_spot
 Revises: 0028_webhook_org

@@ -40,7 +40,7 @@ sitting on it.
   the card; billing stops entirely. Resuming re-acquires a card and rebuilds the pod. Volumes
   are kept and are not billed.
 - **Idle reaping.** Sessions that stop using their GPU can be paused automatically, driven
-  by real per-GPU utilisation from DCGM or the HAMi device-plugin monitor.
+  by real per-GPU utilization from DCGM or the HAMi device-plugin monitor.
 - **Multi-tenancy with three role planes.** Organization → group → user, with `super_admin`,
   `org_admin`, `group_admin`, and `member`/`guest` memberships.
 - **Multi-cluster.** One control plane can drive several GPU clusters, each running its own
@@ -57,8 +57,8 @@ sitting on it.
 | `frontend/` | The console: a React + TypeScript single-page app with live updates over SSE |
 | `charts/gshare/` | The Helm chart for the whole platform |
 | `deploy/` | Values overlays (`values/`), security baselines, monitoring, supply-chain policy, secret examples |
-| `build/` | Image build contexts: catalogue session images (`images/`) and the patched HAMi scheduler (`hami-fork/`) |
-| `hack/` | Developer and operator scripts: cluster bootstrap, secret generation, OpenAPI generation, catalogue seeding |
+| `build/` | Image build contexts: catalog session images (`images/`) and the patched HAMi scheduler (`hami-fork/`) |
+| `hack/` | Developer and operator scripts: cluster bootstrap, secret generation, OpenAPI generation, catalog seeding |
 | `test/e2e/` | End-to-end assets: real-GPU suites, plus role and UX checks that need only the control plane |
 | `docs/` | User manual, administrator manual, deployment and design documentation |
 

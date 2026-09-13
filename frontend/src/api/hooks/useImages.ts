@@ -27,7 +27,7 @@ const rawImg = api as unknown as {
   PATCH: (path: string, init?: { body?: unknown; params?: { path?: Record<string, string> } }) => Promise<{ data?: unknown }>;
 };
 
-// GET /images — the catalogue, by registry and tag.
+// GET /images — the catalog, by registry and tag.
 export function useImages(filter: ImageFilter = {}) {
   return useQuery({
     queryKey: imageKeys.list(filter),
@@ -52,7 +52,7 @@ export interface ImportImageBody {
 }
 
 // What /images/import answers with. `existing: true` means the reference was already registered —
-// by this caller earlier, or in the shared catalogue — and `id` is the row to use as-is.
+// by this caller earlier, or in the shared catalog — and `id` is the row to use as-is.
 export interface ImportedImage {
   id: string;
   name: string;

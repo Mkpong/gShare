@@ -43,7 +43,7 @@ A tenant whose dedicated pool is full falls back to shared nodes **only if their
 decision:
 
 - **Spill allowed** — the department always gets its own cards first but can borrow idle shared
-  capacity. Best utilisation.
+  capacity. Best utilization.
 - **Spill denied** — the department is strictly capped at its own hardware. Predictable for
   everyone else, and the department's queue is entirely their own to manage.
 

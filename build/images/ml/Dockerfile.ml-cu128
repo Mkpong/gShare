@@ -1,7 +1,7 @@
 # Base ML image on GPU: a CUDA runtime plus the three GShare connection tools and a data-science
 # stack. A GPU-capable Python environment with no deep-learning framework pinned, so users install
 # PyTorch or TensorFlow themselves if they want one.
-# Catalogue entry: name="Python ML · CUDA 12.4 · cuDNN 9 (GPU)", tag=ml-cuda12.4-cudnn9-gpu
+# Catalog entry: name="Python ML · CUDA 12.4 · cuDNN 9 (GPU)", tag=ml-cuda12.4-cudnn9-gpu
 # Build context: build/images, so session-base/entrypoint.sh can be shared.
 FROM codercom/code-server:4.135.0 AS cs
 

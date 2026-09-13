@@ -5,9 +5,9 @@
 # PyTorch build installs it themselves on top of a clean OS. 22.04 exists alongside 24.04 because
 # some vendor toolchains still pin to jammy.
 #
-# It honours the same connection contract as session-base — the same ports, paths, and entrypoint —
+# It honors the same connection contract as session-base — the same ports, paths, and entrypoint —
 # and runs as non-root (uid 1000), which satisfies restricted Pod Security.
-# Catalogue entry: name="Ubuntu 22.04", tag=ml-ubuntu22.04
+# Catalog entry: name="Ubuntu 22.04", tag=ml-ubuntu22.04
 # Build context: build/images, so session-base/entrypoint.sh can be shared.
 FROM codercom/code-server:4.135.0 AS cs
 

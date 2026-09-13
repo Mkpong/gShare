@@ -113,7 +113,7 @@ def test_reserve_exclusive_none_when_no_free_card():
 
 def test_reserve_fractional_best_fit():
     """Fractional: among the cards the slice fits on, pick the one with the least VRAM left, which
-    minimises fragmentation."""
+    minimizes fragmentation."""
     roomy = _dev(used_mem=0, used_cores=0, total_mem=40000, did="roomy")       # 40000 free
     tight = _dev(used_mem=30000, used_cores=0, total_mem=40000, did="tight")   # 10000 free
     target, eff_mem, eff_cores = SchedulerService._reserve_target(

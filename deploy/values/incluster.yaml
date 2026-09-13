@@ -38,7 +38,7 @@ operator:
   # failurePolicy=Ignore.
   webhook:
     enabled: true
-  # The idle reaper reads utilisation from HAMi's vGPU monitor, which the stock HAMi installed by
+  # The idle reaper reads utilization from HAMi's vGPU monitor, which the stock HAMi installed by
   # cluster-bootstrap already runs. That gives workload-aware idle reclamation with no separate
   # monitoring stack. If you run your own Prometheus, use prometheusUrl instead.
   hamiMonitorUrl: "http://hami-device-plugin-monitor.kube-system.svc:31992"

@@ -5,6 +5,10 @@ import type * as Preset from '@docusaurus/preset-classic';
 // The documentation site. A static build, published to GitHub Pages by CI — it has nothing to do
 // with the Helm release and never runs inside a cluster. The pages themselves are the markdown
 // under ../docs, which stays the single source of truth so a docs PR is still a markdown diff.
+// The path the site is served from. The workflow sets it per repository so a fork previews at
+// <owner>.github.io/<repo>/ without editing this file.
+const siteBaseUrl = process.env.SITE_BASE_URL ?? '/gShare/';
+
 const config: Config = {
   title: 'gShare',
   tagline: 'GPU sharing for interactive workloads on Kubernetes',
@@ -14,7 +18,7 @@ const config: Config = {
   // Published as a project site: one per repository, so it does not use up the organization's
   // single boanlab.github.io slot. The workflow overrides both when a fork builds a preview.
   url: process.env.SITE_URL ?? 'https://boanlab.github.io',
-  baseUrl: process.env.SITE_BASE_URL ?? '/gshare/',
+  baseUrl: siteBaseUrl,
   organizationName: 'boanlab',
   projectName: 'gshare',
   trailingSlash: false,
@@ -33,9 +37,17 @@ const config: Config = {
   themes: ['@docusaurus/theme-mermaid'],
 
   i18n: {
+    // The markdown under ../docs is written in English, which is what defaultLocale names: it is
+    // the source language, not the one served first. The readers are Korean, so the baseUrls below
+    // put Korean at the site root and move English to /en. Because the two locales then share no
+    // output path, each has to be built on its own and the trees merged; see .github/workflows/
+    // docs.yml, and use `--locale` when serving one of them locally.
     defaultLocale: 'en',
     locales: ['en', 'ko'],
-    localeConfigs: { en: { label: 'English' }, ko: { label: '한국어' } },
+    localeConfigs: {
+      ko: { label: '한국어', baseUrl: siteBaseUrl },
+      en: { label: 'English', baseUrl: `${siteBaseUrl}en/` },
+    },
   },
 
   presets: [

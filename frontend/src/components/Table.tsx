@@ -221,7 +221,7 @@ export function Table<T>({
   );
 }
 
-/** Toolbar above a list: labelled search, clear control, and a live match count. */
+/** Toolbar above a list: labeled search, clear control, and a live match count. */
 export function TableToolbar({
   query, onQueryChange, placeholder, total, shown, children, onClear, showCount = true, trailing,
 }: {

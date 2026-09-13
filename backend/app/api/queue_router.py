@@ -177,7 +177,7 @@ async def my_queue(
         ).all()
         owners = {sid: oid for sid, oid in owner_rows}
     # Rough wait estimate from the median of the last realized queue waits: position × median.
-    # Deliberately labelled an estimate in the UI; None until enough samples exist.
+    # Deliberately labeled an estimate in the UI; None until enough samples exist.
     median_wait_sec: float | None = None
     try:
         samples = [float(x) for x in await get_redis().lrange("gshare:queue:wait_samples", 0, 99)]

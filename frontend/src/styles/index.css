@@ -134,7 +134,7 @@
   &:hover:not(:disabled) {
     @apply bg-surface-2;
   }
-  /* Physical press. Reduced-motion users get the colour change only. */
+  /* Physical press. Reduced-motion users get the color change only. */
   &:active:not(:disabled) {
     transform: translateY(1px);
   }
@@ -407,7 +407,7 @@
      true circles only .................. status dots, notification count, step markers
      pills .............................. full, STATUS meaning only
 
-   Colour rule: ONE accent (--primary, cyan). Green/amber/red are reserved for
+   Color rule: ONE accent (--primary, cyan). Green/amber/red are reserved for
    status meaning (running, warning, danger) and are never used decoratively.
    Every foreground below is checked for WCAG AA against the surface it sits on.
 --------------------------------------------------------------------------- */

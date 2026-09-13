@@ -1,6 +1,6 @@
 # TensorFlow with Blackwell (sm_120) support: NVIDIA NGC's TF build (25.xx line supports Blackwell),
 # plus the three GShare connection tools. Hub's tensorflow/tensorflow images ship an older CUDA and
-# do not run on RTX PRO 5000/6000. Catalogue entry: cuda_version=12.8.
+# do not run on RTX PRO 5000/6000. Catalog entry: cuda_version=12.8.
 # Build context: build/images, so session-base/entrypoint.sh can be shared.
 FROM codercom/code-server:4.135.0 AS cs
 

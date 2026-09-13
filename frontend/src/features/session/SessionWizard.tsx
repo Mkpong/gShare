@@ -149,10 +149,10 @@ export function SessionWizard() {
     : ['compute', 'image', 'volumes', 'review'];
   const stepKey: StepKey = wizardSteps[Math.min(step, wizardSteps.length) - 1];
 
-  // Catalogue lookups (offerings, images, cluster, wallet). Without the advanced panel these supply
+  // Catalog lookups (offerings, images, cluster, wallet). Without the advanced panel these supply
   // the defaults.
   const offerings = useOfferings().data ?? [];
-  // The wizard lists public images only; private ones belong to the admin catalogue.
+  // The wizard lists public images only; private ones belong to the admin catalog.
   const myId = useAuthStore((st) => (st.claims as { sub?: string }).sub);
   const imagesRes = useImages({ public: true }).data as { data?: { id: string; name: string; registry?: string | null; owner_user_id?: string | null; supported_gpus?: string[]; cuda_version?: string | null; gpu_ready?: boolean }[] } | undefined;
   const images = imagesRes?.data ?? [];
@@ -162,7 +162,7 @@ export function SessionWizard() {
   const availModels = new Set((availQuery.data ?? []).map((a) => a.gpu_model));
   // GPU models are the intersection of the GPU offerings with real inventory, deduplicated by model
   // name (keeping the largest VRAM) and excluding inactive offerings. Before availability has loaded
-  // the whole catalogue is shown; afterwards it narrows to models with real devices.
+  // the whole catalog is shown; afterwards it narrows to models with real devices.
   const gpuModels = (() => {
     const m = new Map<string, (typeof offerings)[number]>();
     for (const o of offerings) {
@@ -1157,7 +1157,7 @@ function ModeOpt({ active, title, desc, onClick, disabled, badge }: {
   );
 }
 
-/** One ceiling in the policy band: label above, figure below, a hairline between cells. Colour is
+/** One ceiling in the policy band: label above, figure below, a hairline between cells. Color is
  *  inherited from the band (muted, or danger when the concurrency limit is hit); hierarchy comes
  *  from size and weight only, so the band informs without shouting. */
 function PolicyCell({ label, value, unit }: { label: string; value: string; unit?: string }) {

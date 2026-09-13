@@ -19,7 +19,7 @@ export function useUnsavedGuard(dirty: boolean, dirtyNow?: () => boolean) {
 
   useEffect(() => {
     if (blocker.state !== 'blocked') return;
-    // Native dialog: the only prompt the browser honours for a navigation decision.
+    // Native dialog: the only prompt the browser honors for a navigation decision.
     if (window.confirm(t('common.unsavedWarning'))) blocker.proceed();
     else blocker.reset();
   }, [blocker, t]);

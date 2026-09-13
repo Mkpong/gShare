@@ -27,7 +27,7 @@ resources, so that many organizations, groups, and users can share one cluster.
       ▼
   control plane (backend, Python/FastAPI) ── owns state and money: authentication,
       │   ├ gshare-api    : admission, CRUD, token issuing      authorization, credits,
-      │   └ gshare-worker : billing, budget rollup, queue,      budgets, catalogue,
+      │   └ gshare-worker : billing, budget rollup, queue,      budgets, catalog,
       │                     refills                             policy, scheduling
       │  applies GShareSession CR (via kubeconfig)   ▲ signed status and inventory
       ▼                                             │ callbacks (internal JWT)
@@ -53,9 +53,9 @@ about money and state are made only in the control plane.
 
 ## Core concepts
 
-- **Offering** — the catalogue of GPU models. One row per full-card model, carrying the
+- **Offering** — the catalog of GPU models. One row per full-card model, carrying the
   hourly credit rate. Chosen when a session is created.
-- **Preset** — the catalogue of session sizes: compute (CPU, memory, disk) plus a GPU
+- **Preset** — the catalog of session sizes: compute (CPU, memory, disk) plus a GPU
   fraction tier (XL ½, L ¼, M ⅛, S 1/16) or an exclusive full card. VRAM and
   core limits are derived by applying the tier fraction to the offering's full-card VRAM.
 - **Session** — an interactive working environment, backed by a pod. Its mode is either

@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 set -euo pipefail
-# Build the catalogue session images, and optionally push them.
+# Build the catalog session images, and optionally push them.
 #   ./build.sh             # build all four images
 #   REG=myreg ./build.sh   # registry namespace (default: boanlab)
 #   REG=10.0.0.5:5000 ./build.sh push   # push to a LAN registry instead of Docker Hub

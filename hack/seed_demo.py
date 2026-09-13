@@ -3,7 +3,7 @@
 
 Creates one organization, two groups (the Vision and NLP teams), six users, and the credit
 allocations down the hierarchy: system to organization to group to individual. Offerings and images
-are already seeded at bootstrap and are not touched here; the GPU catalogue lives in
+are already seeded at bootstrap and are not touched here; the GPU catalog lives in
 hack/seed_resources.py.
 
 The scenario is the fictional company *Nexus AI Lab*. Organizations, groups, and users are idempotent —
@@ -157,7 +157,7 @@ def main() -> None:
         if uw and gw:
             allocate(gw["id"], uw["id"], amt, f"seed: {grp}→{email}")
 
-    print("Done. Offerings and images come from the bootstrap seed; the GPU catalogue is in hack/seed_resources.py.")
+    print("Done. Offerings and images come from the bootstrap seed; the GPU catalog is in hack/seed_resources.py.")
 
 
 if __name__ == "__main__":

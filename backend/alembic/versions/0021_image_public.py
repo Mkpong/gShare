@@ -1,6 +1,6 @@
 """image: add a public column
 
-Private images are hidden from the session wizard, while the administrative catalogue always shows
+Private images are hidden from the session wizard, while the administrative catalog always shows
 them. Existing rows are marked public.
 
 Revision ID: 0021_image_public

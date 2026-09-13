@@ -73,13 +73,13 @@ spec:
             - "--lossless-agent-image={{ . }}"
             {{- end }}
             {{- with .Values.operator.hamiMonitorUrl }}
-            # Where the idle reaper reads per-GPU utilisation: HAMi's vGPU monitor, which stock HAMi
+            # Where the idle reaper reads per-GPU utilization: HAMi's vGPU monitor, which stock HAMi
             # already runs, so no Prometheus is required. Activity-based and workload-aware, and it
             # takes precedence over prometheus-url.
             - "--hami-monitor-url={{ . }}"
             {{- end }}
             {{- with .Values.operator.prometheusUrl }}
-            # The alternative utilisation source: DCGM_FI_DEV_GPU_UTIL from Prometheus, used when
+            # The alternative utilization source: DCGM_FI_DEV_GPU_UTIL from Prometheus, used when
             # hami-monitor-url is unset.
             - "--prometheus-url={{ . }}"
             {{- end }}
@@ -124,7 +124,7 @@ spec:
             {{- with .Values.operator.sessionImagePullPolicy }}
             # imagePullPolicy for session containers. IfNotPresent (the flag default) supports
             # air-gapped sites and locally imported images; Always re-checks the registry so a
-            # re-pushed fixed-tag catalogue image is picked up.
+            # re-pushed fixed-tag catalog image is picked up.
             - "--session-image-pull-policy={{ . }}"
             {{- end }}
           env:

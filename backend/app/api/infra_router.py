@@ -139,7 +139,7 @@ async def _node_allocations(db: AsyncSession, node_ids: list[str]) -> dict[str, 
 def _node_out(
     n: GpuNode, devices: list[GpuDevice] | None = None, pool_name: str | None = None
 ) -> dict:
-    """Serialise a node in the same shape as a list item; shared by the cordon, drain, register and
+    """Serialize a node in the same shape as a list item; shared by the cordon, drain, register and
     set-pool responses."""
     nd = devices or []
     gpu_mode, mode_counts = _mode_summary(nd)
@@ -341,7 +341,7 @@ async def register_node(
         hostname=body.hostname, cluster_id=cluster_id,
     )
     await db.commit()
-    await db.refresh(node)  # pick up server defaults such as updated_at before serialising, avoiding MissingGreenlet
+    await db.refresh(node)  # pick up server defaults such as updated_at before serializing, avoiding MissingGreenlet
     return _node_out(node, [])
 
 
@@ -472,7 +472,7 @@ async def cordon_node(
         cordon=body.cordon, reason=body.reason,
     )
     await db.commit()
-    # updated_at (onupdate=now) is expired by the flush, so refresh before serialising; a
+    # updated_at (onupdate=now) is expired by the flush, so refresh before serializing; a
     # synchronous lazy load here would raise MissingGreenlet.
     await db.refresh(node)
     return _node_out(node, devs)
@@ -589,7 +589,7 @@ async def drain_node(
 
 
 # ── Node pools ──────────────────────────────────────────────────────────────────────────────────
-# Dedicated nodes per organization / group, honoured by placement (app.domain.node_pools). Pools and
+# Dedicated nodes per organization / group, honored by placement (app.domain.node_pools). Pools and
 # node assignment are super_admin only; an org_admin sees the pools granted to their organization
 # and may sub-assign them to groups in that organization. CPU-only sessions and lending idle
 # dedicated cards to the shared pool are out of scope here.
@@ -627,7 +627,7 @@ async def _group_orgs(db: AsyncSession, group_ids: set[str]) -> dict[str, str]:
 
 
 async def _pool_reads(db: AsyncSession, pools: list[NodePool]) -> list[dict]:
-    """Serialise pools with their nodes and grants (batched: one query per relation)."""
+    """Serialize pools with their nodes and grants (batched: one query per relation)."""
     if not pools:
         return []
     pool_ids = [p.id for p in pools]
@@ -1400,8 +1400,8 @@ async def metrics_cluster(
     } if (pools or bound_gb) else None
 
     # ALLOCATION based, deliberately: this dashboard answers "how much of the fleet is handed out",
-    # the same basis as vram_load_pct beside it. Measured utilisation (DCGM) is a different question
-    # — an allocated card can sit at 0% — and lives on the monitoring page, where it is labelled as
+    # the same basis as vram_load_pct beside it. Measured utilization (DCGM) is a different question
+    # — an allocated card can sit at 0% — and lives on the monitoring page, where it is labeled as
     # measured. Mixing the two bases in one row made 17% flip to 0% with no visible cause.
     avg_util = round(cores_used / cores_total * 100, 1) if cores_total else 0.0
 
@@ -1445,7 +1445,7 @@ _TWO_DP = Decimal("0.01")
 
 
 def _money(v: Decimal) -> str:
-    """Serialise as a money-style string, rounded to two decimal places."""
+    """Serialize as a money-style string, rounded to two decimal places."""
     return str(Decimal(v).quantize(_TWO_DP, rounding=ROUND_HALF_UP))
 
 
@@ -1598,7 +1598,7 @@ async def billing_report(
             ).all():
                 name_by[oid] = oname
     elif group_by == "wallet":
-        # A wallet key is labelled "owner_type · owner_id"; the name comes from the owner lookup.
+        # A wallet key is labeled "owner_type · owner_id"; the name comes from the owner lookup.
         oids = {ow[1] for ow in wallet_owner.values()}
         # The wallet key here is wallet.id, so enrich it with the owner label.
         u = {i: n for i, n in (await db.execute(select(User.id, User.name).where(User.id.in_(oids)))).all()} if oids else {}

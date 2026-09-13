@@ -286,7 +286,7 @@ class Image(Base, TimestampMixin):
     # null owner = shared catalog entry; set = a user-built private image (owner + admins only)
     owner_user_id: Mapped[str | None] = mapped_column(String, index=True, default=None)
     # The same public ref may be imported by many members, so uniqueness is per owner. Postgres
-    # treats NULL owners as distinct rows, so shared catalogue refs need the second, partial index
+    # treats NULL owners as distinct rows, so shared catalog refs need the second, partial index
     # to stay unique among themselves.
     __table_args__ = (
         Index("uq_image_registry_owner", "registry", "owner_user_id", unique=True),
@@ -373,7 +373,7 @@ class GpuNode(Base, TimestampMixin):
     disk: Mapped[int | None] = mapped_column(Integer, default=None)       # node ephemeral storage in GiB
     role: Mapped[str | None] = mapped_column(String, default=None)       # master|gpu|cpu|storage (operator-derived)
     region: Mapped[str | None] = mapped_column(String, default=None)
-    # Whether the lossless-pause prerequisites (cuda-checkpoint plus CRIU) are labelled ready on the
+    # Whether the lossless-pause prerequisites (cuda-checkpoint plus CRIU) are labeled ready on the
     # node; reported by the operator's inventory controller.
     lossless_capable: Mapped[bool] = mapped_column(Boolean, default=False, server_default=text("false"))
     # Node pool membership. NULL behaves as "shared": usable by every tenant. See NodePool.
@@ -410,7 +410,7 @@ class StoragePool(Base, TimestampMixin, SoftDeleteMixin):
     Capacity is measured, not typed in: the operator reads the CSI driver's own answer
     (CSIStorageCapacity, published by the external-provisioner) and reports it here. A site whose
     driver does not publish capacity falls back to `manual_capacity_gb`, and failing that to the
-    storage node's root disk — which is not the pool and is labelled as such.
+    storage node's root disk — which is not the pool and is labeled as such.
     """
     __tablename__ = "storage_pool"
     id: Mapped[str] = mapped_column(String, primary_key=True)            # stp_ULID

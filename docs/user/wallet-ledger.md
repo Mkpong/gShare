@@ -39,7 +39,7 @@ Two tags appear on usage rows:
 - **billing now** — the session is still running, so this row is not final yet.
 - **settled** — the session has ended and this row will not change.
 
-A long-running session is summarised rather than written second by second: one row per billing
+A long-running session is summarized rather than written second by second: one row per billing
 period, with the number of underlying entries in its tooltip.
 
 ## Finding things

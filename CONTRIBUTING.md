@@ -52,7 +52,7 @@ prerequisites are in [`test/e2e/README.md`](./test/e2e/README.md).
 - Commit messages and pull request titles follow
   [Conventional Commits](https://www.conventionalcommits.org/): `feat:`, `fix:`, `docs:`,
   `refactor:`, `test:`, `chore:`, with an optional scope such as `feat(scheduler):`.
-- Keep a pull request to one concern. A refactor and a behaviour change in the same diff
+- Keep a pull request to one concern. A refactor and a behavior change in the same diff
   are two pull requests.
 
 ## Code style
@@ -100,7 +100,7 @@ CI fails the build if the operator's generated files are stale.
   domain layer, `fakeredis` for idempotency and queue paths.
 - Anything that needs real compute, real VRAM isolation, or numerical accuracy is marked
   `realgpu` and only runs against a real GPU cluster from `test/e2e/`.
-- New behaviour needs a test. Bug fixes need a test that fails before the fix.
+- New behavior needs a test. Bug fixes need a test that fails before the fix.
 
 ```bash
 make test                                    # everything that runs without a GPU
