@@ -105,6 +105,7 @@ class ProjectCreate(BaseModel):
     org_id: str
     name: DisplayName
     status: str | None = None
+    # Accepted for older clients and ignored: a group wallet is always created.
     create_project_wallet: bool = True
     # Credits minted into each new member's personal wallet on first join (0 = off).
     default_member_credit: str | None = None
@@ -631,21 +632,23 @@ async def create_project(
     db.add(project)
     await db.flush()
 
-    if body.create_project_wallet:
-        db.add(
-            CreditWallet(
-                id=ids.new("wallet"),
-                owner_type="group",
-                owner_id=project.id,
-                balance=Decimal("0"),
-                reserved=Decimal("0"),
-            )
+    # Always, exactly like an organization gets one. A group without a wallet cannot be allocated
+    # credits at all, and nothing here could create one afterwards, so the old opt-in turned a
+    # single unchecked box at creation time into a department that had to be recreated.
+    db.add(
+        CreditWallet(
+            id=ids.new("wallet"),
+            owner_type="group",
+            owner_id=project.id,
+            balance=Decimal("0"),
+            reserved=Decimal("0"),
         )
+    )
     if body.create_node_pool:
         await _auto_create_pool(db, principal.user_id, "group", project.id, project.name)
     await AuditService(db).record(
         actor=principal.user_id, action="group.create", target=project.id, result="ok",
-        org_id=body.org_id, name=project.name, wallet=body.create_project_wallet,
+        org_id=body.org_id, name=project.name, wallet=True,
     )
     await db.commit()
     return await _project_out(db, project)

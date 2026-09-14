@@ -451,7 +451,6 @@ function NewGroupForm({ onDone }: { onDone: () => void }) {
   const { data: orgs = [] } = useOrganizations({ enabled: canListOrgs });
   const [name, setName] = useState('');
   const [orgId, setOrgId] = useState('');
-  const [withWallet, setWithWallet] = useState(true);
   const [withPool, setWithPool] = useState(false);
   const [welcomeCredit, setWelcomeCredit] = useState('0');
   const valid = name.trim().length > 0 && orgId.length > 0;
@@ -461,7 +460,7 @@ function NewGroupForm({ onDone }: { onDone: () => void }) {
   const submit = () => {
     if (!valid) return;
     create.mutate(
-      { org_id: orgId, name: name.trim(), create_project_wallet: withWallet, create_node_pool: withPool, default_member_credit: welcomeCredit.trim() || '0' },
+      { org_id: orgId, name: name.trim(), create_node_pool: withPool, default_member_credit: welcomeCredit.trim() || '0' },
       {
         onSuccess: () => { pushToast('success', t('admin.groups.created', { name })); onDone(); },
         onError: (e) => pushToast('error', humanizeError(asApiError(e))),
@@ -490,10 +489,6 @@ function NewGroupForm({ onDone }: { onDone: () => void }) {
           <Field label={t('admin.groups.nameLabel')} required hint={t('admin.groups.nameHint')}>
             {(ids) => <input {...ids} className="gs-input w-full" maxLength={80} value={name} onChange={(e) => setName(e.target.value)} placeholder="ml-lab" autoFocus autoComplete="off" />}
           </Field>
-          <label className="flex items-center gap-2 text-sm">
-            <input type="checkbox" checked={withWallet} onChange={(e) => setWithWallet(e.target.checked)} />
-            {t('admin.groups.createWallet')}
-          </label>
           <label className="flex items-center gap-2 text-sm">
             <input type="checkbox" checked={withPool} onChange={(e) => setWithPool(e.target.checked)} />
             <span>{t('admin.groups.createPool')} <span className="text-muted text-2xs block">{t('admin.groups.createPoolHint')}</span></span>

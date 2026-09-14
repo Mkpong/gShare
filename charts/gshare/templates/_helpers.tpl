@@ -20,7 +20,21 @@ The canonical registry host is registry.gshare.internal.
 */}}
 {{- define "gshare.image" -}}
 {{- $reg := .root.Values.global.imageRegistry -}}
-{{- printf "%s/%s:%s" $reg .img.repository .img.tag -}}
+{{- $repo := .img.repository -}}
+{{- /*
+A repository that already names its own registry is used as it stands. Only a bare name like
+"gshare-backend" is prefixed with global.imageRegistry. Without this, pointing one image at another
+registry (the agent is pulled from the LAN registry, not Docker Hub) renders
+"docker.io/boanlab/10.10.0.162:5000/gshare-agent" and the pod fails with InvalidImageName.
+A first path segment carrying a dot or a colon is a host, which is the rule the OCI reference
+grammar itself uses; "localhost" is the one host without either.
+*/ -}}
+{{- $head := (splitList "/" $repo) | first -}}
+{{- if and (contains "/" $repo) (or (contains "." $head) (contains ":" $head) (eq $head "localhost")) -}}
+{{- printf "%s:%s" $repo .img.tag -}}
+{{- else -}}
+{{- printf "%s/%s:%s" $reg $repo .img.tag -}}
+{{- end -}}
 {{- end -}}
 
 {{- define "gshare.imagePullSecrets" -}}

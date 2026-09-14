@@ -252,6 +252,38 @@ async def seed_system_wallet() -> None:
             log.info("system credit wallet seeded (monthly total holder)")
 
 
+async def seed_group_wallets() -> None:
+    """Give every live group the wallet it needs to receive credits.
+
+    Group wallets used to be an opt-in checkbox on the create form, so a department created with
+    the box cleared could never be allocated anything and there was no way to add one afterwards.
+    Creation now always makes one; this fills in the groups that predate that.
+    """
+    from app.db.base import get_sessionmaker
+    from app.db.models import Project
+
+    sm = get_sessionmaker()
+    async with sm() as db:
+        async with db.begin():
+            owned = select(CreditWallet.owner_id).where(CreditWallet.owner_type == "group")
+            missing = list(
+                (
+                    await db.scalars(
+                        select(Project.id).where(
+                            Project.deleted_at.is_(None), Project.id.not_in(owned)
+                        )
+                    )
+                ).all()
+            )
+            for group_id in missing:
+                db.add(CreditWallet(
+                    id=ids.new("wallet"), owner_type="group", owner_id=group_id,
+                    balance=Decimal("0"), reserved=Decimal("0"),
+                ))
+            if missing:
+                log.info("group credit wallets seeded for %d group(s)", len(missing))
+
+
 async def seed_base_images() -> None:
     """Ensure the four catalog images exist, skipping duplicates by registry reference.
 

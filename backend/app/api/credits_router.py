@@ -963,16 +963,84 @@ async def _notify(db: AsyncSession, user_ids, ntype: str, payload: dict) -> None
             pass
 
 
-async def _fulfiller_user_ids(db: AsyncSession, scope: str, fid: str | None) -> list[str]:
-    """User ids of the administrators who can approve this request; the notification recipients."""
-    if scope == "system":
-        rows = await db.scalars(
-            select(User.id).where(
-                User.global_role == "super_admin",
-                User.deleted_at.is_(None),
-            )
+async def _super_admin_ids(db: AsyncSession) -> list[str]:
+    rows = await db.scalars(
+        select(User.id).where(User.global_role == "super_admin", User.deleted_at.is_(None))
+    )
+    return list(rows.all())
+
+
+async def _org_admin_ids(db: AsyncSession, org_id: str | None) -> list[str]:
+    """Administrators of one organization, in both membership shapes.
+
+    An organization admin is appointed at the organization level (org_id set, group_id NULL). Older
+    rows put the same role on a group membership instead, and those still carry the authority — see
+    the legacy branch in resolve_principal — so both shapes have to be looked up or a real
+    administrator is silently missed.
+    """
+    if not org_id:
+        return []
+    rows = await db.scalars(
+        select(Membership.user_id)
+        .outerjoin(Project, Project.id == Membership.group_id)
+        .where(
+            Membership.role == "org_admin",
+            or_(Membership.org_id == org_id, Project.org_id == org_id),
         )
-        return list(rows.all())
+    )
+    return list(rows.all())
+
+
+def _orgs_with_an_admin():
+    """Sub-selects naming every organization that has at least one administrator, in both shapes."""
+    org_level = select(Membership.org_id).where(
+        Membership.role == "org_admin", Membership.org_id.is_not(None)
+    )
+    legacy = (
+        select(Project.org_id)
+        .join(Membership, Membership.group_id == Project.id)
+        .where(Membership.role == "org_admin", Project.org_id.is_not(None))
+    )
+    return org_level, legacy
+
+
+def _unstaffed_tier_conditions():
+    """Pending requests whose own tier has nobody to decide them.
+
+    These are what a system administrator has to answer for. The rule mirrors the notification
+    recipients exactly, so the inbox holds precisely the requests a system administrator was told
+    about, and stays quiet while a closer administrator exists.
+    """
+    org_level, legacy = _orgs_with_an_admin()
+    staffed_groups = select(Membership.group_id).where(
+        Membership.role.in_(["group_admin", "org_admin"]), Membership.group_id.is_not(None)
+    )
+    groups_under_a_staffed_org = select(Project.id).where(
+        or_(Project.org_id.in_(org_level), Project.org_id.in_(legacy))
+    )
+    return [
+        and_(
+            CreditAllocationRequest.fulfiller_scope == "org",
+            CreditAllocationRequest.fulfiller_id.not_in(org_level),
+            CreditAllocationRequest.fulfiller_id.not_in(legacy),
+        ),
+        and_(
+            CreditAllocationRequest.fulfiller_scope == "group",
+            CreditAllocationRequest.fulfiller_id.not_in(staffed_groups),
+            CreditAllocationRequest.fulfiller_id.not_in(groups_under_a_staffed_org),
+        ),
+    ]
+
+
+async def _fulfiller_user_ids(db: AsyncSession, scope: str, fid: str | None) -> list[str]:
+    """User ids of the administrators who can approve this request; the notification recipients.
+
+    Each tier falls back to the one above it when nobody holds the role, and finally to the system
+    administrators. Without that, a request against a tier with no administrator is stored as
+    pending and notifies nobody, so it waits for a decision that no one knows to make.
+    """
+    if scope == "system":
+        return await _super_admin_ids(db)
     if scope == "group":
         rows = await db.scalars(
             select(Membership.user_id).where(
@@ -980,14 +1048,15 @@ async def _fulfiller_user_ids(db: AsyncSession, scope: str, fid: str | None) -> 
                 Membership.role.in_(["group_admin", "org_admin"]),
             )
         )
-        return list(rows.all())
+        out = list(rows.all())
+        if out:
+            return out
+        # No administrator in the group: the organization's administrators answer for it.
+        prj = await db.get(Project, fid) if fid else None
+        out = await _org_admin_ids(db, prj.org_id if prj else None)
+        return out or await _super_admin_ids(db)
     if scope == "org":
-        rows = await db.scalars(
-            select(Membership.user_id)
-            .join(Project, Project.id == Membership.group_id)
-            .where(Project.org_id == fid, Membership.role == "org_admin")
-        )
-        return list(rows.all())
+        return await _org_admin_ids(db, fid) or await _super_admin_ids(db)
     return []
 
 
@@ -1064,6 +1133,10 @@ async def list_allocation_requests(
         conds = []
         if principal.global_role == "super_admin":
             conds.append(CreditAllocationRequest.fulfiller_scope == "system")
+            # A request against a tier with no administrator is notified to the system tier, so it
+            # has to be visible here too; otherwise the notification opens an inbox that does not
+            # contain it and the request can only be decided through the API.
+            conds.extend(_unstaffed_tier_conditions())
         if principal.org_admin_orgs:
             conds.append(and_(
                 CreditAllocationRequest.fulfiller_scope == "org",

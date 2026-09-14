@@ -8,6 +8,7 @@ import {
   useUser,
   useCreateUser,
   useUpdateUser,
+  useResetUserPassword,
   useUserUsage,
   useSetUserDepartment,
   useDeleteUser,
@@ -34,8 +35,9 @@ import { Dialog } from '@/components/Dialog';
 import { useConfirm } from '@/components/ConfirmDialog';
 
 // User management: list and add, plus edit (name, email, group, status, password reset) and delete.
-// What each role may change: super_admin edits email, name, organization, group, and password;
-// org_admin edits group and password; group_admin resets the password only.
+// What each role may change: super_admin edits email, name, organization, group; org_admin edits
+// group and status; every administrator down to group_admin may issue a new password. Nobody picks
+// someone else's password — the reset issues a random one the user has to replace at first sign-in.
 
 // Matches the backend's email validation: at least one dot after the @, and no trailing dot.
 const emailOk = (e: string) => /\S+@\S+\.\S+/.test(e.trim()) && !e.trim().endsWith('.');
@@ -88,7 +90,7 @@ export function AdminUsers() {
   const orgAdminOrgs = useAuthStore((s) => s.orgAdminOrgs);
   const isSuper = claims.global_role === 'super_admin';
   const isOrgAdmin = isSuper || orgAdminOrgs.length > 0 || memberships.some((m) => m.role === 'org_admin');
-  // Reaching this screen requires group_admin or above, which permits a password reset.
+  // Reaching this screen requires group_admin or above, which permits issuing a new password.
   const canCreate = isOrgAdmin;
 
   // Options for the org/group filter selects. Groups narrow to the chosen organization.
@@ -669,6 +671,9 @@ function EditUserForm({
   const { t } = useTranslation();
   const update = useUpdateUser();
   const setDept = useSetUserDepartment();
+  const resetPw = useResetUserPassword();
+  // The issued password is shown once, here, and never again: the API does not keep it readable.
+  const [issued, setIssued] = useState<string | null>(null);
   const pushToast = useUiStore((s) => s.pushToast);
 
   const orgs = useOrganizations({ enabled: isSuper }).data ?? [];
@@ -678,7 +683,6 @@ function EditUserForm({
   const cur = user?.memberships?.[0];
   const [name, setName] = useState('');
   const [email, setEmail] = useState('');
-  const [password, setPassword] = useState('');
   const [orgId, setOrgId] = useState('');
   const [groupId, setGroupId] = useState('');
   const [status, setStatus] = useState<'active' | 'suspended'>('active');
@@ -687,7 +691,7 @@ function EditUserForm({
   useEffect(() => {
     setName(user?.name ?? '');
     setEmail(user?.email ?? '');
-    setPassword('');
+    setIssued(null);
     setOrgId(cur?.org_id ?? '');
     setGroupId(cur?.group_id ?? '');
     setStatus(user?.status === 'suspended' ? 'suspended' : 'active');
@@ -705,13 +709,13 @@ function EditUserForm({
 
   const submit = async () => {
     try {
-      // 1. Base fields (name, email, password): only send what this caller may change.
-      const patch: { id: string; name?: string; email?: string; password?: string; status?: 'active' | 'suspended' } = { id: user.id };
+      // 1. Base fields (name, email, status): only send what this caller may change. A password
+      // is never set from here; the reset action below issues one instead.
+      const patch: { id: string; name?: string; email?: string; status?: 'active' | 'suspended' } = { id: user.id };
       if (isSuper && name.trim() && name.trim() !== user.name) patch.name = name.trim();
       if (isSuper && email.trim() && email.trim().toLowerCase() !== user.email) patch.email = email.trim();
-      if (password) patch.password = password;
       if (canEditDept && status !== curStatus) patch.status = status;  // status: super_admin and org_admin
-      const didPatch = !!(patch.name || patch.email || patch.password || patch.status);
+      const didPatch = !!(patch.name || patch.email || patch.status);
       if (didPatch) await update.mutateAsync(patch);
       // 2. Group change: super_admin or org_admin, and only for a single membership.
       const didDept = canEditDept && !multipleMemberships && groupId !== curGroupId;
@@ -725,7 +729,6 @@ function EditUserForm({
 
   const pending = update.isPending || setDept.isPending;
   const dirty = (isSuper && (name.trim() !== user.name || email.trim().toLowerCase() !== user.email))
-    || !!password
     || (canEditDept && status !== curStatus)
     || (canEditDept && !multipleMemberships && groupId !== curGroupId);
   useUnsavedGuard(dirty && !pending);
@@ -793,20 +796,39 @@ function EditUserForm({
           </label>
         )}
 
-        <Field
-          label={`${t('admin.users.resetPassword')} (${t('admin.users.resetPasswordHint')})`}
-          hint={t('auth.passwordRule')}
-          error={password.length > 0 && password.length < 8 ? t('admin.users.passwordTooShort') : null}
-        >
-          {(ids) => (
-            <input {...ids} className="gs-input w-full" type="password" autoComplete="new-password" value={password} onChange={(e) => setPassword(e.target.value)} placeholder={t('admin.users.resetPasswordPlaceholder')} />
+        {/* Locked out of an account: issue a new password rather than choosing one. Saving the
+            form is a separate action, so this runs on its own and shows the result immediately. */}
+        <div className="gs-hair pt-3">
+          <div className="text-sm font-semibold">{t('admin.users.resetPassword')}</div>
+          <p className="text-muted text-xs mt-1">{t('admin.users.resetNote')}</p>
+          {issued ? (
+            <div className="mt-2 flex items-center gap-2 flex-wrap">
+              <code className="gs-num bg-surface-2 rounded-ctl px-2 py-1 text-sm">{issued}</code>
+              <CopyButton value={issued} label={t('common.copy')} />
+              <span className="text-warn text-xs">{t('admin.users.resetShownOnce')}</span>
+            </div>
+          ) : (
+            <button
+              type="button"
+              className="gs-btn mt-2"
+              disabled={resetPw.isPending}
+              onClick={async () => {
+                try {
+                  const out = await resetPw.mutateAsync({ id: user.id });
+                  setIssued(out.temporary_password);
+                } catch (e) {
+                  pushToast('error', humanizeError(asApiError(e)));
+                }
+              }}
+            >
+              {resetPw.isPending ? t('admin.users.saving') : t('admin.users.resetPasswordAction')}
+            </button>
           )}
-        </Field>
-        <p className="text-muted text-xs"><Trans i18nKey="admin.users.resetNote" components={{ 1: <b /> }} /></p>
+        </div>
       </div>
       <div className="flex justify-end items-center gap-3 mt-4 flex-wrap">
         <DisabledReason reasons={emailInvalid ? [t('admin.users.invalidEmail')] : dirty ? [] : [t('account.noChanges')]} />
-        <button type="submit" className="gs-btn gs-btn-primary disabled:opacity-50" disabled={pending || emailInvalid || !dirty || (password.length > 0 && password.length < 8)}>
+        <button type="submit" className="gs-btn gs-btn-primary disabled:opacity-50" disabled={pending || emailInvalid || !dirty}>
           {pending ? t('admin.users.saving') : t('common.save')}
         </button>
         <button type="button" className="gs-btn" onClick={onDone}>{t('common.cancel')}</button>

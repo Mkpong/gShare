@@ -8,7 +8,7 @@ from __future__ import annotations
 
 from collections.abc import Iterable
 
-from sqlalchemy import select
+from sqlalchemy import or_, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core import ids
@@ -73,12 +73,21 @@ class NotificationService:
         return list(rows.all())
 
     async def org_admins(self, org_id: str | None) -> list[str]:
+        """Administrators of one organization, in both membership shapes.
+
+        The role is appointed at the organization level (org_id set, group_id NULL). Older rows put
+        it on a group membership instead and still carry the authority, so looking at only one
+        shape silently misses real administrators and the notification reaches nobody.
+        """
         if not org_id:
             return []
         rows = await self.db.scalars(
             select(Membership.user_id)
-            .join(Project, Project.id == Membership.group_id)
-            .where(Project.org_id == org_id, Membership.role == "org_admin")
+            .outerjoin(Project, Project.id == Membership.group_id)
+            .where(
+                Membership.role == "org_admin",
+                or_(Membership.org_id == org_id, Project.org_id == org_id),
+            )
         )
         return list(rows.all())
 
