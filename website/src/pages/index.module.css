@@ -54,7 +54,7 @@
 .heroInner {
   position: relative;
   display: grid;
-  grid-template-columns: minmax(0, 9fr) minmax(0, 14fr);
+  grid-template-columns: minmax(0, 10fr) minmax(0, 13fr);
   gap: clamp(2rem, 4vw, 4rem);
   align-items: center;
   max-width: 1560px;
@@ -66,13 +66,19 @@
 
 .heroTitle {
   margin: 0 0 1rem;
-  font-size: clamp(2.1rem, 4.4vw, 3.1rem);
+  /* Sized so the Korean headline's first line fits the copy column at every width it is a
+     two-column layout: the line is about 13 Korean characters, and the column about 0.42 of
+     the container, which puts the ceiling near 2.9vw. */
+  font-size: clamp(1.8rem, 2.9vw, 2.6rem);
   line-height: 1.2;
   letter-spacing: -0.022em;
   text-wrap: balance;
-  /* Korean breaks at word boundaries, not between syllables of one word. */
+  /* Korean breaks at word boundaries, not between syllables of one word. A translation may also
+     carry its own newline to split the headline where the meaning splits; pre-line honours that
+     without forcing the same break on languages that read better as one line. */
   word-break: keep-all;
   overflow-wrap: break-word;
+  white-space: pre-line;
 }
 
 .heroSub {

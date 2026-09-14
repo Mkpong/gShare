@@ -9,13 +9,13 @@
     "message": "인터랙티브 GPU 세션"
   },
   "home.f1.desc": {
-    "message": "콘솔에서 GPU 조각 위에 Jupyter, VS Code, 터미널을 엽니다. API 키도 배치 큐도 익힐 필요가 없습니다."
+    "message": "복잡한 API 키나 배치 큐 설정 없이, 콘솔에서 Jupyter, VS Code, 터미널을 바로 실행합니다."
   },
   "home.f2.title": {
     "message": "GPU 분할과 정직한 정산"
   },
   "home.f2.desc": {
-    "message": "티어는 카드 한 장의 몇 분의 몇이고, 요금은 실제 점유율을 따릅니다. 노는 GPU는 일시정지하고 카드를 돌려줍니다."
+    "message": "GPU 자원을 필요한 비율로 나누어 쓰고 실제 점유율만큼 과금됩니다. 유휴 GPU는 일시 정지되어 자원을 자동으로 반납합니다."
   },
   "home.f3.title": {
     "message": "크레딧, 한도, 테넌트"
@@ -30,11 +30,11 @@
     "message": "스크립트 하나로 두 번째 GPU 클러스터를 붙입니다. 세션은 데이터가 있는 곳에, 용량이 측정된 스토리지 풀 위에 뜹니다."
   },
   "home.hero.title": {
-    "message": "GPU 한 장을 여러 사람이 함께 씁니다",
+    "message": "GPU 자원 공유부터 관리까지,\n단 하나의 콘솔로",
     "description": "홈 히어로 제목"
   },
   "home.hero.sub": {
-    "message": "HAMi가 카드를 나누고, gShare가 세션을 배치하고 과금하고 카드를 회수합니다. 전부 콘솔 하나에서 합니다.",
+    "message": "HAMi가 GPU를 분할하고, gShare가 세션 배치, 과금, 자원 회수를 알아서 처리합니다.",
     "description": "홈 히어로 본문"
   },
   "home.hero.shotAlt": {

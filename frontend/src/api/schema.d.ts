@@ -228,10 +228,13 @@ export interface paths {
          * Update User
          * @description Update a user. What may be changed depends on the caller's role.
          *
-         *     - super_admin: email, name, status, and password reset. Group membership has its own endpoint.
-         *     - org_admin: password reset (and group) for users in their organization. Not email or name.
-         *     - group_admin: password reset only, for users in their group.
-         *     - The user themselves: their display name only.
+         *     - super_admin: email, name and status. Group membership has its own endpoint.
+         *     - org_admin: status (and group) for users in their organization. Not email or name.
+         *     - group_admin: nothing here; their reach is the password reset below.
+         *     - The user themselves: their display name and their own password.
+         *
+         *     Resetting someone else's password is POST /users/{user_id}/password-reset, which issues a
+         *     random one rather than letting an administrator choose it.
          */
         patch: operations["update_user_api_v1_users__user_id__patch"];
         trace?: never;
@@ -253,6 +256,35 @@ export interface paths {
         get: operations["get_user_usage_api_v1_users__user_id__usage_get"];
         put?: never;
         post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/users/{user_id}/password-reset": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Reset User Password
+         * @description Issue a new temporary password for someone who cannot sign in, and force a change at first
+         *     use. Returns the password ONCE, in this response; it is never stored in readable form and
+         *     cannot be retrieved again.
+         *
+         *     The administrator does not choose the secret. A chosen password is one the administrator can
+         *     reuse quietly, so the value is random, single-use in practice (the target must replace it at
+         *     the next sign-in), and the issue is written to the audit trail against the administrator.
+         *
+         *     Permitted to a super_admin, and to an org_admin or group_admin who shares an administered
+         *     group with the target. Nobody may reset an account that outranks them.
+         */
+        post: operations["reset_user_password_api_v1_users__user_id__password_reset_post"];
         delete?: never;
         options?: never;
         head?: never;
@@ -6185,6 +6217,43 @@ export interface operations {
         };
     };
     get_user_usage_api_v1_users__user_id__usage_get: {
+        parameters: {
+            query?: {
+                /** @description Token fallback for clients that cannot set custom headers, such as EventSource (SSE) */
+                access_token?: string | null;
+            };
+            header?: {
+                /** @description Bearer <jwt> */
+                authorization?: string | null;
+            };
+            path: {
+                user_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": unknown;
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    reset_user_password_api_v1_users__user_id__password_reset_post: {
         parameters: {
             query?: {
                 /** @description Token fallback for clients that cannot set custom headers, such as EventSource (SSE) */

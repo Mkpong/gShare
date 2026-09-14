@@ -13,9 +13,9 @@ title: Managing an account
 
 | You are | You may change |
 |---|---|
-| **super_admin** | Email, name, organization, group, password |
-| **org_admin** | Group (within your organization), password |
-| **group_admin** | Password only |
+| **super_admin** | Email, name, organization, group, status, and a password reset |
+| **org_admin** | Group (within your organization), status, and a password reset |
+| **group_admin** | A password reset only |
 
 Adding a group gives the user that group's credits and policy; removing one takes them away.
 Sessions already running are unaffected until they end.
@@ -32,11 +32,17 @@ Every change is written to the [audit log](./audit.md) with before and after val
 
 ## Resetting a password
 
-Set a new password in the edit dialog; the user is forced to change it at their next sign-in.
-You never see their current password — nobody does, it is stored hashed.
+Someone who has forgotten their password cannot recover it themselves, and neither can you: it is
+stored hashed and nobody, super_admin included, can read it back.
 
-Do this over a channel you trust, and prefer a one-time value: the temporary password is a
-credential until the user replaces it.
+**Issue a new password** in the edit dialog. The system picks a random one, shows it to you once,
+and the old one stops working immediately. The user is forced to replace it at their next sign-in.
+
+Nobody chooses another person's password, not even a system administrator. The API refuses it, so
+the only way back in for a locked-out account is this reset.
+
+Copy the value before you close the dialog — it is not stored in readable form and cannot be shown
+again. Hand it over on a channel you trust: until the user replaces it, it is a working credential.
 
 ## Deactivating
 

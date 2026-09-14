@@ -1,5 +1,5 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
-import { api } from '@/api/client';
+import { api, idemKey } from '@/api/client';
 
 // Listing, creating (inviting), and updating users, plus their global roles.
 // Uses the loose accessor so the response envelopes can be typed locally.
@@ -155,6 +155,24 @@ export function useCreateUser() {
 
 // PATCH /users/{id} — name, email, status, and password reset. Which fields a caller may change is
 // enforced by the backend, per role.
+/**
+ * Issue a new temporary password for a user who cannot sign in. The API picks the secret and
+ * returns it once; there is no way to read it back, so the caller has to show it immediately.
+ */
+export function useResetUserPassword() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: async ({ id }: { id: string }) => {
+      const { data } = await raw.POST('/api/v1/users/{user_id}/password-reset', {
+        params: { path: { user_id: id } },
+        headers: { 'Idempotency-Key': idemKey() },
+      });
+      return data as { user_id: string; email: string; temporary_password: string };
+    },
+    onSuccess: () => qc.invalidateQueries({ queryKey: userKeys.all }),
+  });
+}
+
 export function useUpdateUser() {
   const qc = useQueryClient();
   return useMutation({
@@ -163,7 +181,6 @@ export function useUpdateUser() {
       name?: string;
       email?: string;
       status?: 'active' | 'suspended';
-      password?: string;
     }) => {
       const { data } = await raw.PATCH('/api/v1/users/{user_id}', { params: { path: { user_id: id } }, body });
       return data as AdminUser;

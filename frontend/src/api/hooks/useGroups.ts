@@ -194,7 +194,7 @@ export function useProjects(orgId?: string) {
 export function useCreateProject() {
   const qc = useQueryClient();
   return useMutation({
-    mutationFn: async (body: { org_id: string; name: string; status?: ProjectStatus; create_project_wallet?: boolean; create_node_pool?: boolean; default_member_credit?: string }) => {
+    mutationFn: async (body: { org_id: string; name: string; status?: ProjectStatus; create_node_pool?: boolean; default_member_credit?: string }) => {
       const { data } = await raw.POST('/api/v1/projects', { body });
       return data as Project;
     },

@@ -1045,10 +1045,13 @@ async def update_user(
 ):
     """Update a user. What may be changed depends on the caller's role.
 
-    - super_admin: email, name, status, and password reset. Group membership has its own endpoint.
-    - org_admin: password reset (and group) for users in their organization. Not email or name.
-    - group_admin: password reset only, for users in their group.
-    - The user themselves: their display name only.
+    - super_admin: email, name and status. Group membership has its own endpoint.
+    - org_admin: status (and group) for users in their organization. Not email or name.
+    - group_admin: nothing here; their reach is the password reset below.
+    - The user themselves: their display name and their own password.
+
+    Resetting someone else's password is POST /users/{user_id}/password-reset, which issues a
+    random one rather than letting an administrator choose it.
     """
     user = await db.get(User, user_id)
     if user is None or user.deleted_at is not None:
@@ -1163,6 +1166,51 @@ async def update_user(
             if user is None:
                 raise NotFound("user", {"user_id": user_id})
     return _serialize(user)
+
+
+@router.post("/users/{user_id}/password-reset")
+async def reset_user_password(
+    user_id: str,
+    principal: Principal = Depends(get_current_principal),
+    db: AsyncSession = Depends(get_db),
+):
+    """Issue a new temporary password for someone who cannot sign in, and force a change at first
+    use. Returns the password ONCE, in this response; it is never stored in readable form and
+    cannot be retrieved again.
+
+    The administrator does not choose the secret. A chosen password is one the administrator can
+    reuse quietly, so the value is random, single-use in practice (the target must replace it at
+    the next sign-in), and the issue is written to the audit trail against the administrator.
+
+    Permitted to a super_admin, and to an org_admin or group_admin who shares an administered
+    group with the target. Nobody may reset an account that outranks them.
+    """
+    user = await db.get(User, user_id)
+    if user is None or user.deleted_at is not None:
+        raise NotFound("user", {"user_id": user_id})
+
+    is_super = "super_admin" in principal.global_roles
+    admin_group_ids = {
+        gid for gid, r in principal.memberships.items() if r in ("org_admin", "group_admin")
+    }
+    tgt_groups = await _target_group_ids(db, user_id)
+    if not (is_super or admin_group_ids & tgt_groups):
+        raise Forbidden("not permitted: user.reset_password")
+    target_global_roles = list(user.global_roles or []) + (
+        [user.global_role] if user.global_role else []
+    )
+    if not is_super and "super_admin" in target_global_roles:
+        raise Forbidden("not permitted: target outranks caller")
+
+    password = secrets.token_urlsafe(9)
+    user.password_hash = await hash_password_async(password)
+    user.must_change_password = True
+    await AuditService(db).record(
+        actor=principal.user_id, action="user.password_reset", target=user.id, result="ok",
+        email=user.email,
+    )
+    await db.commit()
+    return {"user_id": user.id, "email": user.email, "temporary_password": password}
 
 
 @router.put("/users/{user_id}/department")

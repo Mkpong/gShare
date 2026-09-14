@@ -27,6 +27,7 @@ async def _lifespan(app: FastAPI):  # noqa: ANN202
             seed_base_images,
             seed_bootstrap_admin,
             seed_default_policy,
+            seed_group_wallets,
             seed_local_cluster,
             seed_offerings,
             seed_presets,
@@ -37,6 +38,7 @@ async def _lifespan(app: FastAPI):  # noqa: ANN202
         if settings.SEED_SESSION_IMAGES:
             await seed_base_images()
         await seed_system_wallet()
+        await seed_group_wallets()
         await seed_offerings()
         await seed_presets()
         await seed_default_policy()
